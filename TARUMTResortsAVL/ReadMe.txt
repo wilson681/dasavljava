@@ -28,11 +28,10 @@ MAC / LINUX - QUICK RUN
 -----------------------
 在这个 assignment 目录执行：
 
-  ./scripts/test.sh
   ./scripts/run.sh
 
-第一个命令跑 19 个 AVL regression/invariant tests，这是基础架构的验证方式。
-第二个命令目前只印 placeholder 提示；等 module 整合后才有主菜单。
+这个命令会先重新编译源码，再启动 main.Main。目前只印 placeholder 提示；
+等 module 整合后才有主菜单。
 
 MANUAL TERMINAL RUN
 -------------------
@@ -46,7 +45,6 @@ NETBEANS RUN
 1. File > Open Project，选择整个 assignment folder。
 2. 确认 Project Properties > Libraries 使用 tutor 认可的 JDK。
 3. Main Class 应为 main.Main。
-4. 测试用 ./scripts/test.sh 最直接。
 
 FOLDER RESPONSIBILITIES
 -----------------------
@@ -57,8 +55,13 @@ FOLDER RESPONSIBILITIES
 - src/dao      : 真的需要 seed data / file persistence 才建 class
 - src/utility  : 之后放共享 static helper（例如自写 sort）
 - src/main     : 只启动顶层 Control（现在是 placeholder）
-- test/adt     : 不依赖 JUnit 的 AVL regression tests
-- data         : 程序实际使用的数据文件（若有，才须随 final project 提交）
+- data         : resort-seed.json 大型 synthetic seed（当前尚未接 loader）
+
+VALIDATION NOTE
+---------------
+清理精简前，当前 AVL implementation 已通过 19 组 regression/invariant tests，
+包含 LL/RR/LR/RL insertion/deletion、duplicate、traversal、200-key stress 和
+fixed-seed mixed operations。按本次要求，test/ 与 scripts/test.sh 已从正式项目移除。
 
 IMPORTANT TEAM RULES
 --------------------
@@ -88,4 +91,12 @@ BEFORE FINAL SUBMISSION
 - 不得把本 reference 改作者名后提交；学生须独立完成核心、保留 implementation
   过程、能在 Week 11-12 demo 解释自己的代码。
 
-完整设计与协作说明：docs/AVL_ARCHITECTURE_CN.md
+完整设计与协作说明：
+../output/pdf/TARUMT_Resorts_AVL_ECB_Baomu_Guideline_CN.pdf
+
+DATASET STATUS
+--------------
+data/resort-seed.json 包含 1,200 members、240 rooms、2,400 bookings 和
+3,600 point transactions，全部是 synthetic data，没有真实住客资料。
+当前代码尚未实现 JSON loader；使用前请依指南在 dao/ 加载，并先跟 tutor
+确认外部 JSON dependency 与 Java Collections Framework 限制的口径。
