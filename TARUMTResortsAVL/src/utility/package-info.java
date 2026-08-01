@@ -1,5 +1,6 @@
 /**
- * Utility：多个模块共同使用的无状态 helper，例如自写 sorting algorithm。
- * 按题目要求，Utility class 只能包含 static method 与 static variable。
+ * Stateless helpers shared across modules, for example self-written sorting
+ * algorithms. Utility classes may contain only static methods and static
+ * variables.
  */
 package utility;

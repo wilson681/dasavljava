@@ -1,4 +1,4 @@
 /**
- * Application entry point。Main 只负责组装并启动顶层 Control。
+ * Application entry point. Main only assembles and launches the top-level Control.
  */
 package main;

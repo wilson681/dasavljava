@@ -3,14 +3,16 @@ package control;
 import boundary.MainMenuCLI;
 
 /**
- * 控制主画面的启动流程。
+ * MainMenuControl.java - Controls the main screen startup flow.
+ *
+ * @author Wilson
  */
 public class MainMenuControl {
 
     private final MainMenuCLI mainMenuCLI;
 
-    /**
-     * @param mainMenuCLI 负责显示主画面的 Boundary
+   /**
+     * @param mainMenuCLI the boundary responsible for displaying the main screen
      */
     public MainMenuControl(MainMenuCLI mainMenuCLI) {
         if (mainMenuCLI == null) {
@@ -19,8 +21,8 @@ public class MainMenuControl {
         this.mainMenuCLI = mainMenuCLI;
     }
 
-    /**
-     * 启动主画面。
+ /**
+     * Launches the main screen.
      */
     public void run() {
         mainMenuCLI.displayWelcome();

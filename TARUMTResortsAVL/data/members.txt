@@ -1,0 +1,11 @@
+# memberId|name|tier|points|active
+M001001|Alice Tan|DIAMOND|15200|true
+M001002|Ben Lim|DIAMOND|13800|true
+M001003|Chloe Wong|PLATINUM|9600|true
+M001004|Daniel Ng|PLATINUM|8900|true
+M001005|Elaine Yap|ELITE|6200|true
+M001006|Farid Rahman|ELITE|5800|true
+M001007|Grace Teoh|GOLD|3400|true
+M001008|Hakim Idris|GOLD|2900|true
+M001009|Irene Chan|SILVER|1200|true
+M001010|Jason Loh|DIAMOND|400|false

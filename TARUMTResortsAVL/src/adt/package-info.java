@@ -1,5 +1,6 @@
 /**
- * 全队共享的自定义 Collection ADT。
- * 这里只放 generic interface、AVL implementation 与 traversal callback，不能 import 业务层。
+ * Custom collection ADTs shared by the whole team.
+ * Contains only generic interfaces, the AVL implementation and the traversal
+ * callback. Must never import from the business layers.
  */
 package adt;

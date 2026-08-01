@@ -1,5 +1,5 @@
 /**
- * ECB Entity：只保存系统资料的 POJO，例如 Booking、Member、Room。
- * 不得出现 Scanner、菜单、System.out、AVL rotation 或跨层业务流程。
+ * ECB Entity layer: plain data POJOs such as Booking, Member and Room.
+ * Must not contain Scanner, menus, System.out, AVL rotations or cross-layer flow.
  */
 package entity;

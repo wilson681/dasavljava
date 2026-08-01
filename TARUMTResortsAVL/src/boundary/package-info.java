@@ -1,5 +1,6 @@
 /**
- * ECB Boundary：负责 Actor 的输入与输出。
- * Scanner、console menu 和显示格式放这里；不得直接操作 AVL Node 或决定业务规则。
+ * ECB Boundary layer: handles all actor input and output.
+ * Scanner, console menus and display formatting live here. Must not touch AVL
+ * nodes directly or decide business rules.
  */
 package boundary;
