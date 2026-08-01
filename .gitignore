@@ -1,5 +1,4 @@
 .DS_Store
-/tmp/
-/TARUMTResortsAVL/nbproject/private/
-/TARUMTResortsAVL/dist/
-/TARUMTResortsAVL/build/
+/build/
+/dist/
+/nbproject/private/
