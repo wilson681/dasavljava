@@ -35,6 +35,13 @@ public interface QueueInterface<T> {
     public T getFront();
 
     /**
+     * 移除队伍中间跟给定条目相等的那一笔(不一定是队头),用在"中途取消排队"这种场景。
+     * @param anEntry 要移除的条目(用equals()比对)
+     * @return 找到并移除了就回传true,找不到回传false
+     */
+    public boolean remove(T anEntry);
+
+    /**
      * 检查这个队伍是否为空。
      * @return 是空的则返回 true
      */
