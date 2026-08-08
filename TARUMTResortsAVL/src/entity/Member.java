@@ -21,7 +21,8 @@ public class Member {
     // ========== 数据字段 ==========
     private String memberId;           // 会员ID,唯一识别这位会员
     private String name;                // 会员姓名
-    private String tier;                // 会员等级(Silver/Gold/Platinum/Diamond)
+    private String phone;               // 会员联系电话
+    private String tier;                // 会员等级(Elite/Platinum/Diamond)
     private int currentPoints;          // 当前可兑换的积分余额
     private int totalPointsEarned;      // 历史累计总积分(只用来判断升级,不受兑换影响)
     private ListInterface<PointsLedgerEntry> pointsLedger;   // 这位会员的积分批次明细,给到期提醒/降级判断用
@@ -32,10 +33,11 @@ public class Member {
      *
      * 注意: 这里的 List 实现类名称待team确定最终ADT实现方式后替换
      */
-    public Member(String memberId, String name, String tier,
+    public Member(String memberId, String name, String phone, String tier,
                   int currentPoints, int totalPointsEarned) {
         this.memberId = memberId;
         this.name = name;
+        this.phone = phone;
         this.tier = tier;
         this.currentPoints = currentPoints;
         this.totalPointsEarned = totalPointsEarned;
@@ -49,6 +51,10 @@ public class Member {
 
     public String getName() {
         return name;
+    }
+
+    public String getPhone() {
+        return phone;
     }
 
     public String getTier() {
@@ -69,6 +75,10 @@ public class Member {
 
     // ========== Setters ==========
     // memberId、name 创建后不会改变,所以不提供setter
+
+    public void setPhone(String phone) {
+        this.phone = phone;
+    }
 
     public void setTier(String tier) {
         // 由Control层判断是否达到升级门槛后,调用这个方法更新等级

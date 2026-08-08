@@ -15,7 +15,7 @@ public class Guest {
     private String name;                  // 客人姓名
     private String phone;                 // 联系电话
     private String memberId;              // 关联的会员ID(如果不是会员,则为null)
-    private String tier;                  // 客人当前等级(Standard/Silver/Gold/Platinum/Diamond)
+    private String tier;                  // 客人当前等级(Standard/Elite/Platinum/Diamond)
     private String registrationTime;      // 登记时间,格式如 "2026-08-01 09:00",用于VIP同等级时的排序依据
     private String checkInDate;           // 入住日期,给报表统计入住率用
     private String checkOutDate;          // 预计退房日期,给报表统计入住率用

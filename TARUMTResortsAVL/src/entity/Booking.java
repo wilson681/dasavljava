@@ -15,17 +15,22 @@ package entity;
  * - arrivalSequence 给模块1(Walk-In FIFO排队)用,tierRankAtRequest 给模块2(VIP优先级分房)用
  * - 分房成功后,由Control层负责把结果同步写回 Guest.bookedRooms 和 Room.status,
  *   这两件事不属于 Booking 自己的职责
+ * - implements Comparable<Booking>:给模块2的 AVL Tree 排序用,规则是
+ *   tierRank 越高越优先(反过来比,让compareTo值越小),同 tierRank 再比 arrivalSequence
+ *   (越早到,compareTo值越小)——这样 in-order 遍历天生就是"优先级由高到低"
  */
-public class Booking {
+public class Booking implements Comparable<Booking> {
 
     // ========== 数据字段 ==========
     private String bookingId;            // Booking自己专属的唯一编号,一人多笔Booking时用来互相区分
     private String confirmationNumber;   // 关联哪位客人(对应 Guest 的 key),同一位客人的多笔Booking会共用同一个
     private String guestNameSnapshot;    // 客人姓名快照,方便直接打印,不用反查 Guest
+    private String phoneSnapshot;        // 客人电话快照,登记时收集(VIP从Member.phone抄过来),分到房建Guest时要用
+    private String memberId;             // 关联的会员ID,WALK_IN来源的Booking是null,分到房建Guest时要用
     private String requestedRoomType;    // 要什么房型(Standard / Deluxe / Suite)
     private BookingStatus status;        // 订房状态(见 BookingStatus 枚举)
     private String source;               // 这单从哪来的(例如 WALK_IN / VIP)
-    private int arrivalSequence;         // 到达顺序,模块1 FIFO排队用
+    private int arrivalSequence;         // 到达顺序,模块1 FIFO排队/模块2同等级比较用
     private int tierRankAtRequest;       // 会员等级排名,模块2插队优先级用
     private String assignedRoomNo;       // 分到的房号,还没分是 null
 
@@ -34,11 +39,13 @@ public class Booking {
      * 新建的订房请求,预设还没有分配到房间,所以 assignedRoomNo 初始化为 null
      */
     public Booking(String bookingId, String confirmationNumber, String guestNameSnapshot,
-                   String requestedRoomType, BookingStatus status, String source,
-                   int arrivalSequence, int tierRankAtRequest) {
+                   String phoneSnapshot, String memberId, String requestedRoomType,
+                   BookingStatus status, String source, int arrivalSequence, int tierRankAtRequest) {
         this.bookingId = bookingId;
         this.confirmationNumber = confirmationNumber;
         this.guestNameSnapshot = guestNameSnapshot;
+        this.phoneSnapshot = phoneSnapshot;
+        this.memberId = memberId;
         this.requestedRoomType = requestedRoomType;
         this.status = status;
         this.source = source;
@@ -58,6 +65,14 @@ public class Booking {
 
     public String getGuestNameSnapshot() {
         return guestNameSnapshot;
+    }
+
+    public String getPhoneSnapshot() {
+        return phoneSnapshot;
+    }
+
+    public String getMemberId() {
+        return memberId;
     }
 
     public String getRequestedRoomType() {
@@ -131,5 +146,19 @@ public class Booking {
     @Override
     public int hashCode() {
         return bookingId.hashCode();
+    }
+
+    /**
+     * compareTo: 给模块2的 AVL Tree 排优先级用,不是判断"是不是同一笔"(那是equals的事)
+     * 规则:tierRank 越高,compareTo 值越小(反过来比);tierRank 相同,arrivalSequence 越小
+     * (越早到)compareTo 值也越小——两条规则都让"优先级越高"排在树的越左边,
+     * in-order 遍历天生就是"优先级由高到低"
+     */
+    @Override
+    public int compareTo(Booking other) {
+        if (this.tierRankAtRequest != other.tierRankAtRequest) {
+            return other.tierRankAtRequest - this.tierRankAtRequest;
+        }
+        return this.arrivalSequence - other.arrivalSequence;
     }
 }
