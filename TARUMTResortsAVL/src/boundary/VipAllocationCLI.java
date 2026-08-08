@@ -83,6 +83,7 @@ public class VipAllocationCLI {
 
     public void displayRegistrationResult(Booking booking, String tier) {
         System.out.println("Registration successful!");
+        System.out.println("Booking ID: " + booking.getBookingId());
         System.out.println("Confirmation Number: " + booking.getConfirmationNumber());
         System.out.println("Tier: " + tier + " | Room Type: " + booking.getRequestedRoomType());
     }
@@ -108,8 +109,9 @@ public class VipAllocationCLI {
 
     public void displayAllocationResult(Booking booking, Room room) {
         System.out.println("Room allocated successfully!");
-        System.out.println(booking.getGuestNameSnapshot() + " (Confirmation: " + booking.getConfirmationNumber()
-                + ") has been allocated Room " + room.getRoomNumber());
+        System.out.println("Guest: " + booking.getGuestNameSnapshot()
+                + " | Confirmation Number: " + booking.getConfirmationNumber()
+                + " | Room: " + room.getRoomNumber());
     }
 
     // ========== 功能3:取消排队 ==========
@@ -138,7 +140,12 @@ public class VipAllocationCLI {
         int rank = 1;
         while (waitingList.hasNext()) {
             Booking booking = waitingList.next();
-            System.out.println(rank + ". " + booking);
+            System.out.println(rank + ". Booking ID: " + booking.getBookingId()
+                    + " | Confirmation Number: " + booking.getConfirmationNumber()
+                    + " | Guest: " + booking.getGuestNameSnapshot()
+                    + " | Room Type: " + booking.getRequestedRoomType()
+                    + " | Status: " + booking.getStatus()
+                    + " | Room: " + (booking.getAssignedRoomNo() == null ? "-" : booking.getAssignedRoomNo()));
             rank++;
         }
     }

@@ -46,6 +46,12 @@ public class MainMenuControl {
     private final ListInterface<Room> roomList;
     private final HashTableInterface<Guest> guestTable;
 
+    // ===== 各模块的Control只造一次、整个程式生命周期共用一份 =====
+    // 之前每次进入模块都 new 一个新的Control,会把里面的bookingCounter/confirmationCounter
+    // 归零重来,但共用队伍/树里还留着旧资料,导致新登记跟旧的撞号——所以改成在这里只建一次
+    private final WalkInControl walkInControl;
+    private final VipAllocationControl vipAllocationControl;
+
     /**
      * @param mainMenuCLI the boundary responsible for displaying the main screen
      */
@@ -71,6 +77,15 @@ public class MainMenuControl {
         // 这样VIP/Walk-In模块才有真的会员/房间资料可以测试,不用硬编码
         new MemberDao().loadMembers(memberList);
         new RoomDao().loadRooms(roomList);
+
+        // WalkInControl也要拿到VIP的三棵树(只读,用来检查isEmpty())才能落实
+        // "VIP永远优先"这条两个模块共用的规则
+        this.walkInControl = new WalkInControl(
+                new WalkInCLI(), standardWalkInQueue, deluxeWalkInQueue, suiteWalkInQueue,
+                standardVipTree, deluxeVipTree, suiteVipTree, roomList, guestTable);
+        this.vipAllocationControl = new VipAllocationControl(
+                new VipAllocationCLI(), standardVipTree, deluxeVipTree, suiteVipTree,
+                memberList, roomList, guestTable);
     }
 
     /**
@@ -114,20 +129,10 @@ public class MainMenuControl {
     }
 
     private void runWalkInModule() {
-        WalkInCLI walkInCLI = new WalkInCLI();
-        // WalkInControl也要拿到VIP的三棵树(只读,用来检查isEmpty())才能落实
-        // "VIP永远优先"这条两个模块共用的规则
-        WalkInControl walkInControl = new WalkInControl(
-                walkInCLI, standardWalkInQueue, deluxeWalkInQueue, suiteWalkInQueue,
-                standardVipTree, deluxeVipTree, suiteVipTree, roomList, guestTable);
         walkInControl.run();
     }
 
     private void runVipAllocationModule() {
-        VipAllocationCLI vipAllocationCLI = new VipAllocationCLI();
-        VipAllocationControl vipAllocationControl = new VipAllocationControl(
-                vipAllocationCLI, standardVipTree, deluxeVipTree, suiteVipTree,
-                memberList, roomList, guestTable);
         vipAllocationControl.run();
     }
 }

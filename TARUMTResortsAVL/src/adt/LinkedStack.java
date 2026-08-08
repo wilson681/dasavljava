@@ -1,6 +1,7 @@
 package adt;
 
 import java.util.Iterator;
+import java.util.NoSuchElementException;
 
 /**
  * LinkedStack.java
@@ -20,47 +21,62 @@ public class LinkedStack<T> implements StackInterface<T> {
     private int numberOfEntries;  // 目前有几个条目
 
     public LinkedStack() {
-        throw new UnsupportedOperationException("TODO");
+        topNode = null;
+        numberOfEntries = 0;
     }
 
     @Override
     public void push(T newEntry) {
-        throw new UnsupportedOperationException("TODO");
+        Node<T> newNode = new Node<>(newEntry);
+        newNode.next = topNode;
+        topNode = newNode;
+        numberOfEntries++;
     }
 
     @Override
     public T pop() {
-        throw new UnsupportedOperationException("TODO");
+        if (isEmpty()) {
+            return null;
+        }
+        T data = topNode.data;
+        topNode = topNode.next;
+        numberOfEntries--;
+        return data;
     }
 
     @Override
     public T peek() {
-        throw new UnsupportedOperationException("TODO");
+        if (isEmpty()) {
+            return null;
+        }
+        return topNode.data;
     }
 
     @Override
     public boolean isEmpty() {
-        throw new UnsupportedOperationException("TODO");
+        return topNode == null;
     }
 
     @Override
     public boolean isFull() {
-        throw new UnsupportedOperationException("TODO");
+        // 链表动态扩充,不会满
+        return false;
     }
 
     @Override
     public void clear() {
-        throw new UnsupportedOperationException("TODO");
+        topNode = null;
+        numberOfEntries = 0;
     }
 
     @Override
     public int size() {
-        throw new UnsupportedOperationException("TODO");
+        return numberOfEntries;
     }
 
     @Override
     public Iterator<T> getIterator() {
-        throw new UnsupportedOperationException("TODO");
+        return new LinkedStackIterator();
     }
 
     /**
@@ -72,6 +88,32 @@ public class LinkedStack<T> implements StackInterface<T> {
 
         private Node(E data) {
             this.data = data;
+        }
+    }
+
+    /**
+     * LinkedStackIterator —— 从topNode开始沿着next走,天生就是"栈顶到栈底"的顺序
+     */
+    private class LinkedStackIterator implements Iterator<T> {
+        private Node<T> currentNode;
+
+        private LinkedStackIterator() {
+            currentNode = topNode;
+        }
+
+        @Override
+        public boolean hasNext() {
+            return currentNode != null;
+        }
+
+        @Override
+        public T next() {
+            if (!hasNext()) {
+                throw new NoSuchElementException();
+            }
+            T data = currentNode.data;
+            currentNode = currentNode.next;
+            return data;
         }
     }
 }

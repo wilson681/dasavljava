@@ -1,5 +1,8 @@
 package entity;
 
+import adt.DoublyLinkedList;
+import adt.ListInterface;
+
 /**
  * Member.java
  * Entity 类 —— 代表一位会员的资料

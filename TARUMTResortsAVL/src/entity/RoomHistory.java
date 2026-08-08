@@ -1,5 +1,8 @@
 package entity;
 
+import adt.LinkedStack;
+import adt.StackInterface;
+
 /**
  * RoomHistory.java
  * Entity 类 —— 代表一间房间自己的状态变更历史记录

@@ -1,5 +1,8 @@
 package entity;
 
+import adt.ArrayBasedList;
+import adt.ListInterface;
+
 /**
  * Guest.java
  * Entity 类 —— 代表一位登记入住的客人
