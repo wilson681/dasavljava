@@ -1,0 +1,5 @@
+Free Breakfast,1500
+Late Checkout,1000
+Room Upgrade,5000
+Spa Voucher RM100,8000
+Free Night Stay,20000

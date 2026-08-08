@@ -1,0 +1,5 @@
+M1001,Tan Wei Ling,Diamond,15200,42000
+M1002,Farah Aziz,Platinum,8600,21000
+M1003,Kumar Selvam,Gold,3400,9500
+M1004,Lim Chee Hong,Silver,900,2200
+M1005,Nurul Izzah,Gold,4100,11000

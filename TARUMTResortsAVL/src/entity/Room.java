@@ -1,75 +1,85 @@
 package entity;
 
 /**
- * Room.java - Entity class representing a resort room.
+ * Room.java
+ * Entity 类 —— 代表酒店里的一间房间
  *
- * @author Wilson
+ * @author 某某
+ *
+ * status 可能的值(状态流程,由Control层驱动改变):
+ *   AVAILABLE              — 空房,可分配给客人
+ *   OCCUPIED                — 已有客人入住
+ *   NEEDS_CLEANING          — 客人已退房,待清洁
+ *   CLEANING_IN_PROGRESS    — 清洁中
+ *   INSPECTED               — 已检查,即将转为可用
  */
 public class Room {
 
-    private String roomNo;
-    private RoomType roomType;
-    private double nightlyRate;
-    private String status;
+    // ========== 数据字段 ==========
+    private String roomNumber;   // 房号,唯一识别这间房
+    private String roomType;      // 房型: Standard / Deluxe / Suite
+    private String status;        // 当前状态(见类注释列出的状态值)
 
-    public Room(String roomNo, RoomType roomType, double nightlyRate, String status) {
-        this.roomNo = roomNo;
+    /**
+     * 构造函数
+     */
+    public Room(String roomNumber, String roomType, String status) {
+        this.roomNumber = roomNumber;
         this.roomType = roomType;
-        this.nightlyRate = nightlyRate;
         this.status = status;
     }
 
-    public String getRoomNo() {
-        return roomNo;
+    // ========== Getters ==========
+    public String getRoomNumber() {
+        return roomNumber;
     }
 
-    public void setRoomNo(String roomNo) {
-        this.roomNo = roomNo;
-    }
-
-    public RoomType getRoomType() {
+    public String getRoomType() {
         return roomType;
-    }
-
-    public void setRoomType(RoomType roomType) {
-        this.roomType = roomType;
-    }
-
-    public double getNightlyRate() {
-        return nightlyRate;
-    }
-
-    public void setNightlyRate(double nightlyRate) {
-        this.nightlyRate = nightlyRate;
     }
 
     public String getStatus() {
         return status;
     }
 
+    // ========== Setters ==========
+    // roomNumber、roomType 在创建后不会改变,所以不提供setter
+    // status 会随着入住/退房/清洁流程不断改变,由Control层调用来更新
+
     public void setStatus(String status) {
         this.status = status;
     }
 
+    // ========== Override 方法 ==========
+
+    /**
+     * toString: 方便在console显示这间房的摘要信息
+     */
+    @Override
+    public String toString() {
+        return roomNumber + " | " + roomType + " | " + status;
+    }
+
+    /**
+     * equals: 两间房是否视为"同一间",以房号作为唯一依据
+     */
     @Override
     public boolean equals(Object obj) {
         if (this == obj) {
             return true;
         }
-        if (obj == null || getClass() != obj.getClass()) {
+        if (!(obj instanceof Room)) {
             return false;
         }
         Room other = (Room) obj;
-        return this.roomNo.equals(other.roomNo);
+        return this.roomNumber.equals(other.roomNumber);
     }
 
+    /**
+     * hashCode: 依照Java规范,override了equals()就必须配套override hashCode()
+     */
     @Override
     public int hashCode() {
-        return roomNo.hashCode();
-    }
-
-    @Override
-    public String toString() {
-        return String.format("%-6s %-10s %8.2f  %s", roomNo, roomType, nightlyRate, status);
+        return roomNumber.hashCode();
     }
 }

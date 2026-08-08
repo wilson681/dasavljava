@@ -1,85 +1,112 @@
 package entity;
 
 /**
- * Member.java - Entity class representing a loyalty programme member.
+ * Member.java
+ * Entity 类 —— 代表一位会员的资料
  *
- * @author Wilson
+ * @author 某某
+ *
+ * 说明:
+ * - 这是纯数据类(POJO),只负责存放会员的资料
+ * - 不包含任何输入(Scanner)或输出(System.out)语句,符合Entity类规范
+ * - 不包含"要不要升级""升级门槛是多少"这类业务逻辑,这些应写在Control层
+ *
+ * 关于两个积分字段的设计说明:
+ *   currentPoints    — 目前账户余额,可用来兑换东西,会随着累积/兑换而增减
+ *   totalPointsEarned — 历史累计总额,只会增加不会减少,只用来判断会员等级(Tier)
+ * 这样设计,是为了避免"客人兑换东西花掉积分,导致等级被降级"这种不合理的情况
  */
 public class Member {
 
-    private String memberId;
-    private String name;
-    private Tier tier;
-    private int points;
-    private boolean active;
+    // ========== 数据字段 ==========
+    private String memberId;           // 会员ID,唯一识别这位会员
+    private String name;                // 会员姓名
+    private String tier;                // 会员等级(Silver/Gold/Platinum/Diamond)
+    private int currentPoints;          // 当前可兑换的积分余额
+    private int totalPointsEarned;      // 历史累计总积分(只用来判断升级,不受兑换影响)
 
-    public Member(String memberId, String name, Tier tier, int points, boolean active) {
+    /**
+     * 构造函数
+     */
+    public Member(String memberId, String name, String tier,
+                  int currentPoints, int totalPointsEarned) {
         this.memberId = memberId;
         this.name = name;
         this.tier = tier;
-        this.points = points;
-        this.active = active;
+        this.currentPoints = currentPoints;
+        this.totalPointsEarned = totalPointsEarned;
     }
 
+    // ========== Getters ==========
     public String getMemberId() {
         return memberId;
-    }
-
-    public void setMemberId(String memberId) {
-        this.memberId = memberId;
     }
 
     public String getName() {
         return name;
     }
 
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public Tier getTier() {
+    public String getTier() {
         return tier;
     }
 
-    public void setTier(Tier tier) {
+    public int getCurrentPoints() {
+        return currentPoints;
+    }
+
+    public int getTotalPointsEarned() {
+        return totalPointsEarned;
+    }
+
+    // ========== Setters ==========
+    // memberId、name 创建后不会改变,所以不提供setter
+
+    public void setTier(String tier) {
+        // 由Control层判断是否达到升级门槛后,调用这个方法更新等级
         this.tier = tier;
     }
 
-    public int getPoints() {
-        return points;
+    public void setCurrentPoints(int currentPoints) {
+        // 由Control层在累积/兑换积分时调用
+        this.currentPoints = currentPoints;
     }
 
-    public void setPoints(int points) {
-        this.points = points;
+    public void setTotalPointsEarned(int totalPointsEarned) {
+        // 由Control层在累积积分时调用(兑换不会影响这个字段)
+        this.totalPointsEarned = totalPointsEarned;
     }
 
-    public boolean isActive() {
-        return active;
+    // ========== Override 方法 ==========
+
+    /**
+     * toString: 方便在console显示这位会员的摘要信息
+     */
+    @Override
+    public String toString() {
+        return memberId + " | " + name + " | " + tier
+                + " | Points: " + currentPoints + " (Total Earned: " + totalPointsEarned + ")";
     }
 
-    public void setActive(boolean active) {
-        this.active = active;
-    }
-
+    /**
+     * equals: 两位会员是否视为"同一位",以会员ID作为唯一依据
+     */
     @Override
     public boolean equals(Object obj) {
         if (this == obj) {
             return true;
         }
-        if (obj == null || getClass() != obj.getClass()) {
+        if (!(obj instanceof Member)) {
             return false;
         }
         Member other = (Member) obj;
         return this.memberId.equals(other.memberId);
     }
 
+    /**
+     * hashCode: 依照Java规范,override了equals()就必须配套override hashCode()
+     */
     @Override
     public int hashCode() {
         return memberId.hashCode();
-    }
-
-    @Override
-    public String toString() {
-        return String.format("%-10s %-25s %-10s %8d", memberId, name, tier, points);
     }
 }
