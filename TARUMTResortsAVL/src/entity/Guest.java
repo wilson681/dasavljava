@@ -17,28 +17,35 @@ public class Guest {
     private String memberId;              // 关联的会员ID(如果不是会员,则为null)
     private String tier;                  // 客人当前等级(Standard/Silver/Gold/Platinum/Diamond)
     private String registrationTime;      // 登记时间,格式如 "2026-08-01 09:00",用于VIP同等级时的排序依据
-    private ListInterface<String> bookedRooms;          // 这次入住,预订的所有房号
-    private ListInterface<BillingRecord> billingHistory; // 这位客人名下的所有消费记录
+    private String checkInDate;           // 入住日期,给报表统计入住率用
+    private String checkOutDate;          // 预计退房日期,给报表统计入住率用
+    private int numberOfNights;           // 这次入住预计住几晚,算房费用
+    private ListInterface<String> bookedRooms;   // 这次入住,预订的所有房号
+    private BillingRecord billingRecord;          // 这次入住退房结算的账单,退房前是null
 
     /**
      * 构造函数
-     * 新登记的客人,预设还没有任何预订的房间和消费记录,
-     * 所以 bookedRooms 和 billingHistory 在这里初始化成空的 List
+     * 新登记的客人,预设还没有任何预订的房间,退房账单也还没产生,
+     * 所以 bookedRooms 在这里初始化成空的 List,billingRecord 初始化成 null
      *
      * 注意: 这里的 List 实现类名称待team确定最终ADT实现方式后替换
      * (不可使用 ArrayList 这个名字,因为会与 java.util.ArrayList 撞名,
      *  容易被误判为直接使用了 Java Collections Framework)
      */
     public Guest(String confirmationNumber, String name, String phone,
-                 String memberId, String tier, String registrationTime) {
+                 String memberId, String tier, String registrationTime,
+                 String checkInDate, String checkOutDate, int numberOfNights) {
         this.confirmationNumber = confirmationNumber;
         this.name = name;
         this.phone = phone;
         this.memberId = memberId;
         this.tier = tier;
         this.registrationTime = registrationTime;
+        this.checkInDate = checkInDate;
+        this.checkOutDate = checkOutDate;
+        this.numberOfNights = numberOfNights;
         this.bookedRooms = new ArrayBasedList<>();
-        this.billingHistory = new ArrayBasedList<>();
+        this.billingRecord = null;
     }
 
     // ========== Getters ==========
@@ -66,12 +73,24 @@ public class Guest {
         return registrationTime;
     }
 
+    public String getCheckInDate() {
+        return checkInDate;
+    }
+
+    public String getCheckOutDate() {
+        return checkOutDate;
+    }
+
+    public int getNumberOfNights() {
+        return numberOfNights;
+    }
+
     public ListInterface<String> getBookedRooms() {
         return bookedRooms;
     }
 
-    public ListInterface<BillingRecord> getBillingHistory() {
-        return billingHistory;
+    public BillingRecord getBillingRecord() {
+        return billingRecord;
     }
 
     // ========== Setters ==========
@@ -102,11 +121,11 @@ public class Guest {
     }
 
     /**
-     * 新增一笔消费记录,加进这位客人的账单历史
-     * (单纯的数据操作,不涉及计费规则等业务逻辑)
+     * 退房结账时,把最终账单写进这位客人的记录
+     * (单纯的数据操作,房费/额外消费/积分怎么算是Control层的事)
      */
-    public void addBillingRecord(BillingRecord record) {
-        billingHistory.add(record);
+    public void setBillingRecord(BillingRecord billingRecord) {
+        this.billingRecord = billingRecord;
     }
 
     // ========== Override 方法 ==========

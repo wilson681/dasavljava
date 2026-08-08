@@ -10,6 +10,8 @@ package entity;
  * - 这是纯数据类(POJO),只负责存放一笔订房请求的资料
  * - 不包含任何输入(Scanner)或输出(System.out)语句,符合Entity类规范
  * - Booking 跟 Guest 是两回事:Guest 是客人身份档案,Booking 是"这一次订房请求"这个动作本身
+ * - 一位客人(一个 confirmationNumber)可以同时开多笔 Booking(比如一次订多间房),
+ *   所以 Booking 自己要有一个独立的 bookingId 当唯一识别,不能再借用 confirmationNumber
  * - arrivalSequence 给模块1(Walk-In FIFO排队)用,tierRankAtRequest 给模块2(VIP优先级分房)用
  * - 分房成功后,由Control层负责把结果同步写回 Guest.bookedRooms 和 Room.status,
  *   这两件事不属于 Booking 自己的职责
@@ -17,7 +19,8 @@ package entity;
 public class Booking {
 
     // ========== 数据字段 ==========
-    private String confirmationNumber;   // 关联哪位客人(对应 Guest 的 key)
+    private String bookingId;            // Booking自己专属的唯一编号,一人多笔Booking时用来互相区分
+    private String confirmationNumber;   // 关联哪位客人(对应 Guest 的 key),同一位客人的多笔Booking会共用同一个
     private String guestNameSnapshot;    // 客人姓名快照,方便直接打印,不用反查 Guest
     private String requestedRoomType;    // 要什么房型(Standard / Deluxe / Suite)
     private BookingStatus status;        // 订房状态(见 BookingStatus 枚举)
@@ -30,9 +33,10 @@ public class Booking {
      * 构造函数
      * 新建的订房请求,预设还没有分配到房间,所以 assignedRoomNo 初始化为 null
      */
-    public Booking(String confirmationNumber, String guestNameSnapshot,
+    public Booking(String bookingId, String confirmationNumber, String guestNameSnapshot,
                    String requestedRoomType, BookingStatus status, String source,
                    int arrivalSequence, int tierRankAtRequest) {
+        this.bookingId = bookingId;
         this.confirmationNumber = confirmationNumber;
         this.guestNameSnapshot = guestNameSnapshot;
         this.requestedRoomType = requestedRoomType;
@@ -44,6 +48,10 @@ public class Booking {
     }
 
     // ========== Getters ==========
+    public String getBookingId() {
+        return bookingId;
+    }
+
     public String getConfirmationNumber() {
         return confirmationNumber;
     }
@@ -77,7 +85,7 @@ public class Booking {
     }
 
     // ========== Setters ==========
-    // confirmationNumber、guestNameSnapshot、requestedRoomType、source、
+    // bookingId、confirmationNumber、guestNameSnapshot、requestedRoomType、source、
     // arrivalSequence、tierRankAtRequest 登记后不会改变,所以不提供setter
 
     public void setStatus(BookingStatus status) {
@@ -97,12 +105,13 @@ public class Booking {
      */
     @Override
     public String toString() {
-        return confirmationNumber + " | " + guestNameSnapshot + " | " + requestedRoomType
+        return bookingId + " | " + confirmationNumber + " | " + guestNameSnapshot + " | " + requestedRoomType
                 + " | " + status + " | Room: " + (assignedRoomNo == null ? "-" : assignedRoomNo);
     }
 
     /**
-     * equals: 两笔订房请求是否视为"同一笔",以确认号码作为唯一依据
+     * equals: 两笔订房请求是否视为"同一笔",以Booking自己的编号作为唯一依据
+     * (不能用confirmationNumber,因为同一位客人可能同时开好几笔Booking)
      */
     @Override
     public boolean equals(Object obj) {
@@ -113,7 +122,7 @@ public class Booking {
             return false;
         }
         Booking other = (Booking) obj;
-        return this.confirmationNumber.equals(other.confirmationNumber);
+        return this.bookingId.equals(other.bookingId);
     }
 
     /**
@@ -121,6 +130,6 @@ public class Booking {
      */
     @Override
     public int hashCode() {
-        return confirmationNumber.hashCode();
+        return bookingId.hashCode();
     }
 }

@@ -24,9 +24,13 @@ public class Member {
     private String tier;                // 会员等级(Silver/Gold/Platinum/Diamond)
     private int currentPoints;          // 当前可兑换的积分余额
     private int totalPointsEarned;      // 历史累计总积分(只用来判断升级,不受兑换影响)
+    private ListInterface<PointsLedgerEntry> pointsLedger;   // 这位会员的积分批次明细,给到期提醒/降级判断用
 
     /**
      * 构造函数
+     * 新会员,预设还没有任何积分批次明细,所以 pointsLedger 初始化成空的 List
+     *
+     * 注意: 这里的 List 实现类名称待team确定最终ADT实现方式后替换
      */
     public Member(String memberId, String name, String tier,
                   int currentPoints, int totalPointsEarned) {
@@ -35,6 +39,7 @@ public class Member {
         this.tier = tier;
         this.currentPoints = currentPoints;
         this.totalPointsEarned = totalPointsEarned;
+        this.pointsLedger = new DoublyLinkedList<>();
     }
 
     // ========== Getters ==========
@@ -58,6 +63,10 @@ public class Member {
         return totalPointsEarned;
     }
 
+    public ListInterface<PointsLedgerEntry> getPointsLedger() {
+        return pointsLedger;
+    }
+
     // ========== Setters ==========
     // memberId、name 创建后不会改变,所以不提供setter
 
@@ -74,6 +83,14 @@ public class Member {
     public void setTotalPointsEarned(int totalPointsEarned) {
         // 由Control层在累积积分时调用(兑换不会影响这个字段)
         this.totalPointsEarned = totalPointsEarned;
+    }
+
+    /**
+     * 新增一笔积分批次明细
+     * (单纯的数据操作,几时该加一笔、加多少是Control层的事)
+     */
+    public void addPointsEntry(PointsLedgerEntry entry) {
+        pointsLedger.add(entry);
     }
 
     // ========== Override 方法 ==========

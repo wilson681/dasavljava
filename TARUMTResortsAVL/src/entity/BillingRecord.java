@@ -2,54 +2,62 @@ package entity;
 
 /**
  * BillingRecord.java
- * Entity 类 —— 代表一笔消费/账单记录
+ * Entity 类 —— 代表一次入住,退房时结算的总账单
  *
  * @author 某某
  *
  * 说明:
- * - 这是纯数据类(POJO),只负责存放一笔消费记录的资料
+ * - 这是纯数据类(POJO),只负责存放一次入住结算后的账单资料
  * - 不包含任何输入(Scanner)或输出(System.out)语句,符合Entity类规范
- * - roomNumber 字段记录这笔消费发生在哪个房间,方便日后按房型统计营收
- * - 一位客人可能有多笔BillingRecord,存放在Guest的billingHistory里
+ * - 一位客人一次入住,退房时只结一次账,所以一个 Guest 对应一个 BillingRecord,
+ *   不是一堆消费明细的清单
+ * - roomFee、totalAmount、pointsEarned 都是Control层算好之后传进来的结果,
+ *   计算公式(房价x晚数、消费换算积分的比例)写死在Control层,Entity本身不负责计算
  */
 public class BillingRecord {
 
     // ========== 数据字段 ==========
-    private String confirmationNumber;   // 这笔消费,属于哪位客人
-    private String roomNumber;            // 这笔消费,发生在哪个房间(方便按房型统计)
-    private String description;           // 消费项目描述,例如 "Room Service", "Spa"
-    private double amount;                // 消费金额
-    private String date;                  // 消费日期
+    private String confirmationNumber;   // 这张账单,属于哪位客人
+    private double roomFee;               // 房费 = 房价 x 住的晚数
+    private double extraCharges;          // 额外消费,退房时前台手动输入的一个总数,不分类
+    private double totalAmount;           // 总额 = roomFee + extraCharges
+    private int pointsEarned;             // 这次消费赚了多少积分
+    private String date;                  // 结账日期
 
     /**
      * 构造函数
      */
-    public BillingRecord(String confirmationNumber, String roomNumber,
-                          String description, double amount, String date) {
+    public BillingRecord(String confirmationNumber, double roomFee, double extraCharges,
+                          double totalAmount, int pointsEarned, String date) {
         this.confirmationNumber = confirmationNumber;
-        this.roomNumber = roomNumber;
-        this.description = description;
-        this.amount = amount;
+        this.roomFee = roomFee;
+        this.extraCharges = extraCharges;
+        this.totalAmount = totalAmount;
+        this.pointsEarned = pointsEarned;
         this.date = date;
     }
 
     // ========== Getters ==========
-    // 消费记录一旦产生,不应该被修改,所以只提供getter,不提供setter
+    // 账单一旦结清,不应该被修改,所以只提供getter,不提供setter
 
     public String getConfirmationNumber() {
         return confirmationNumber;
     }
 
-    public String getRoomNumber() {
-        return roomNumber;
+    public double getRoomFee() {
+        return roomFee;
     }
 
-    public String getDescription() {
-        return description;
+    public double getExtraCharges() {
+        return extraCharges;
     }
 
-    public double getAmount() {
-        return amount;
+    public double getTotalAmount() {
+        return totalAmount;
+    }
+
+    public int getPointsEarned() {
+        return pointsEarned;
     }
 
     public String getDate() {
@@ -59,16 +67,16 @@ public class BillingRecord {
     // ========== Override 方法 ==========
 
     /**
-     * toString: 方便在console显示这笔消费记录的摘要信息
+     * toString: 方便在console显示这张账单的摘要信息
      */
     @Override
     public String toString() {
-        return date + " | Room " + roomNumber + " | " + description + " | RM" + amount;
+        return date + " | Room Fee: RM" + roomFee + " | Extra: RM" + extraCharges
+                + " | Total: RM" + totalAmount + " | +" + pointsEarned + " pts";
     }
 
     /**
-     * equals: 两笔消费记录,视为同一笔的判断依据
-     * 用确认号码+日期+描述+金额一起比对(因为单纯一个字段不足以唯一识别一笔消费)
+     * equals: 一位客人一次入住只有一张账单,以确认号码作为唯一依据
      */
     @Override
     public boolean equals(Object obj) {
@@ -79,10 +87,7 @@ public class BillingRecord {
             return false;
         }
         BillingRecord other = (BillingRecord) obj;
-        return this.confirmationNumber.equals(other.confirmationNumber)
-                && this.date.equals(other.date)
-                && this.description.equals(other.description)
-                && this.amount == other.amount;
+        return this.confirmationNumber.equals(other.confirmationNumber);
     }
 
     /**
@@ -90,10 +95,6 @@ public class BillingRecord {
      */
     @Override
     public int hashCode() {
-        int result = confirmationNumber.hashCode();
-        result = 31 * result + date.hashCode();
-        result = 31 * result + description.hashCode();
-        result = 31 * result + Double.hashCode(amount);
-        return result;
+        return confirmationNumber.hashCode();
     }
 }
