@@ -1,5 +1,5 @@
 .DS_Store
 build/
 dist/
-nbproject/private/
+**/nbproject/private/
 TARUMTResortsAVL/ASSIGNMENT_NOTES.md
