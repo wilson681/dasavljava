@@ -50,6 +50,16 @@ public class Guest {
         this.bookedRooms = new ArrayBasedList<>();
         this.billingRecord = null;
     }
+/**
+ * Search constructor.
+ * Used when searching the hash table by confirmation number.
+ */
+public Guest(String confirmationNumber) {
+    this.confirmationNumber = confirmationNumber;
+    this.bookedRooms = new ArrayBasedList<>();
+    this.billingRecord = null;
+}
+
 
     // ========== Getters ==========
     public String getConfirmationNumber() {

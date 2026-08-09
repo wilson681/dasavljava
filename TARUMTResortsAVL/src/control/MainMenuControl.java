@@ -11,6 +11,7 @@ import adt.SearchTreeInterface;
 import boundary.MainMenuCLI;
 import boundary.VipAllocationCLI;
 import boundary.WalkInCLI;
+import boundary.FrontDeskCLI;
 import dao.MemberDao;
 import dao.RoomDao;
 import entity.Booking;
@@ -51,6 +52,7 @@ public class MainMenuControl {
     // 归零重来,但共用队伍/树里还留着旧资料,导致新登记跟旧的撞号——所以改成在这里只建一次
     private final WalkInControl walkInControl;
     private final VipAllocationControl vipAllocationControl;
+    private final FrontDeskControl frontDeskControl;
 
     /**
      * @param mainMenuCLI the boundary responsible for displaying the main screen
@@ -86,6 +88,10 @@ public class MainMenuControl {
         this.vipAllocationControl = new VipAllocationControl(
                 new VipAllocationCLI(), standardVipTree, deluxeVipTree, suiteVipTree,
                 memberList, roomList, guestTable);
+        this.frontDeskControl = new FrontDeskControl(
+        new FrontDeskCLI(),
+        guestTable,
+        roomList);
     }
 
     /**
@@ -109,7 +115,7 @@ public class MainMenuControl {
                     mainMenuCLI.displayModuleNotReady("Housekeeping and Task Log");
                     break;
                 case 4:
-                    mainMenuCLI.displayModuleNotReady("Front-Desk Service");
+                    runFrontDeskModule();
                     break;
                 case 5:
                     mainMenuCLI.displayModuleNotReady("Loyalty and Rewards Service");
@@ -134,5 +140,9 @@ public class MainMenuControl {
 
     private void runVipAllocationModule() {
         vipAllocationControl.run();
+    }
+
+    private void runFrontDeskModule() {
+        frontDeskControl.run();
     }
 }
