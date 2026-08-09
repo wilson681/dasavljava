@@ -192,9 +192,17 @@ public class VipAllocationControl {
                     checkIn.toString(), checkOut.toString(), numberOfNights);
             guestTable.add(guest);
         }
+        //wilson
         guest.addRoom(availableRoom.getRoomNumber());
 
+        // Record the stay period on the booking itself and link it to the guest,
+        // so the Front-Desk module can list every booking under one
+        // confirmation number with its own dates.
+        topPriority.setStayPeriod(checkIn.toString(), checkOut.toString(), numberOfNights);
+        guest.addBooking(topPriority);
+
         vipAllocationCLI.displayAllocationResult(topPriority, availableRoom);
+        //wilson end
     }
 
     // ========== 功能3:取消排队 ==========

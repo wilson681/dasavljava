@@ -3,27 +3,34 @@ package control;
 import adt.HashTableInterface;
 import adt.ListInterface;
 import boundary.FrontDeskCLI;
+import entity.Booking;
 import entity.Guest;
 import entity.Room;
+import utility.TierRankUtility;
 
 /**
- * Control for the Front-Desk Service module.
+ * FrontDeskControl.java - Control class for the Front-Desk Service module.
+ *
+ * <p>Guest identification runs through a chaining hash table keyed on the
+ * 8-digit confirmation number, so an exact-match lookup costs O(1) on average.
+ * Room lookups deliberately keep a linear scan as the O(n) control group for
+ * the search efficiency report.</p>
+ *
+ * @author YOUR FULL NAME
  */
 public class FrontDeskControl {
 
     private FrontDeskCLI frontDeskCLI;
     private HashTableInterface<Guest> guestTable;
     private ListInterface<Room> roomList;
-    
-    public FrontDeskControl(
-        FrontDeskCLI frontDeskCLI,
-        HashTableInterface<Guest> guestTable,
-        ListInterface<Room> roomList) {
 
-    this.frontDeskCLI = frontDeskCLI;
-    this.guestTable = guestTable;
-    this.roomList = roomList;
-}
+    public FrontDeskControl(FrontDeskCLI frontDeskCLI,
+                            HashTableInterface<Guest> guestTable,
+                            ListInterface<Room> roomList) {
+        this.frontDeskCLI = frontDeskCLI;
+        this.guestTable = guestTable;
+        this.roomList = roomList;
+    }
 
     public void run() {
 
@@ -40,11 +47,11 @@ public class FrontDeskControl {
                     break;
 
                 case 2:
-                    System.out.println("Room Availability - coming soon.");
+                    frontDeskCLI.displayNotImplemented("Room Availability");
                     break;
 
                 case 3:
-                    System.out.println("Billing Details - coming soon.");
+                    frontDeskCLI.displayNotImplemented("Billing Details");
                     break;
 
                 case 0:
@@ -57,49 +64,119 @@ public class FrontDeskControl {
             }
         }
     }
-    
+
     private void searchGuestByConfirmationNumber() {
 
-    String confirmationNumber =
-            frontDeskCLI.promptConfirmationNumber();
+        String confirmationNumber = frontDeskCLI.promptConfirmationNumber();
+        Guest foundGuest = findGuest(confirmationNumber);
 
-    Guest searchKey = new Guest(confirmationNumber);
-
-    Guest foundGuest = guestTable.getEntry(searchKey);
-
-    if (foundGuest == null) {
-        frontDeskCLI.displayGuestNotFound();
-    } else {
-
-    String roomNumber = "-";
-    String roomType = "-";
-
-    if (!foundGuest.getBookedRooms().isEmpty()) {
-
-        roomNumber =
-                foundGuest.getBookedRooms().getEntry(1);
-for (int i = 1; i <= roomList.getNumberOfEntries(); i++) {
-
-    Room room = roomList.getEntry(i);
-
-    if (room.getRoomNumber().equals(roomNumber)) {
-        roomType = room.getRoomType();
-        break;
+        if (foundGuest == null) {
+            frontDeskCLI.displayGuestNotFound();
+            return;
         }
-    }
-}
 
-    frontDeskCLI.displayGuestDetails(
-            foundGuest.getConfirmationNumber(),
-            foundGuest.getName(),
-            foundGuest.getPhone(),
-            foundGuest.getMemberId(),
-            foundGuest.getTier(),
-            roomNumber,
-            roomType
-    );
-}
-            
-}
-    
+        // A guest carrying no member ID walked in off the street.
+        boolean isMember = foundGuest.getMemberId() != null;
+        String guestType = isMember ? "Member" : "Walk-In Guest";
+        String memberIdDisplay = isMember ? foundGuest.getMemberId() : "-  (not a member)";
+
+        // Any tier above Standard earns queue priority.
+        int rank = TierRankUtility.tierToRank(foundGuest.getTier());
+        String vipStatus = (rank > 0)
+                ? "VIP  (tier rank " + rank + ")"
+                : "Standard  (no queue priority)";
+
+        frontDeskCLI.displayGuestDetails(
+                foundGuest.getConfirmationNumber(),
+                foundGuest.getName(),
+                foundGuest.getPhone(),
+                guestType,
+                memberIdDisplay,
+                foundGuest.getTier(),
+                vipStatus,
+                orDash(foundGuest.getRegistrationTime()),
+                buildBookingLines(foundGuest),
+                foundGuest.getBookings().getNumberOfEntries()
+        );
+    }
+
+    /**
+     * Looks up a guest by confirmation number. The hash table derives the
+     * bucket from the key, so the cost stays O(1) on average no matter how many
+     * guests are registered.
+     *
+     * @param confirmationNumber the 8-digit confirmation number
+     * @return the guest, or null when no guest carries that number
+     */
+    private Guest findGuest(String confirmationNumber) {
+        return guestTable.getEntry(new Guest(confirmationNumber));
+    }
+
+    /**
+     * Finds a room by room number with a linear scan of the room list. Kept
+     * deliberately as the O(n) control group for the search efficiency report.
+     *
+     * @param roomNumber the room number to find
+     * @return the room, or null when no such room exists
+     */
+    private Room findRoom(String roomNumber) {
+        for (int i = 1; i <= roomList.getNumberOfEntries(); i++) {
+            Room room = roomList.getEntry(i);
+            if (room.getRoomNumber().equals(roomNumber)) {
+                return room;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Replaces a null field with a dash so the console never prints "null".
+     *
+     * @param value the value to display
+     * @return the value, or a dash when the value is null
+     */
+    private String orDash(String value) {
+        return (value == null) ? "-" : value;
+    }
+
+    /**
+     * Builds one display block per booking linked to this guest. Each booking
+     * carries its own stay period, so the dates come from the booking rather
+     * than from the guest record.
+     *
+     * @param guest the guest whose bookings are listed
+     * @return the formatted booking lines, or a dash line when none exist
+     */
+    private String buildBookingLines(Guest guest) {
+
+        if (guest.getBookings().isEmpty()) {
+            return "  -  (no booking record linked to this confirmation number)"
+                    + System.lineSeparator();
+        }
+
+        String result = "";
+        for (int i = 1; i <= guest.getBookings().getNumberOfEntries(); i++) {
+
+            Booking booking = guest.getBookings().getEntry(i);
+
+            String roomNo = orDash(booking.getAssignedRoomNo());
+            String roomType = booking.getRequestedRoomType();
+            double rate = 0.0;
+
+            if (booking.getAssignedRoomNo() != null) {
+                Room room = findRoom(booking.getAssignedRoomNo());
+                if (room != null) {
+                    roomType = room.getRoomType();
+                    rate = room.getNightlyRate();
+                }
+            }
+
+            result = result + String.format("  %d. %-10s | %-9s | Room %-6s | %-11s%n",
+                    i, booking.getBookingId(), roomType, roomNo, booking.getStatus());
+            result = result + String.format("     Stay: %s to %s  (%d night(s))  |  RM %.2f / night%n",
+                    orDash(booking.getCheckInDate()), orDash(booking.getCheckOutDate()),
+                    booking.getNumberOfNights(), rate);
+        }
+        return result;
+    }
 }

@@ -43,26 +43,45 @@ public class FrontDeskCLI {
         System.out.print("Enter 8-digit confirmation number: ");
         return scanner.nextLine().trim();
     }
-    public void displayGuestDetails(String confirmationNumber,
-                                String name,
-                                String phone,
-                                String memberId,
-                                String tier,
-                                String roomNumber,
-                                String roomType) {
+  public void displayGuestDetails(String confirmationNumber,
+                                    String name,
+                                    String phone,
+                                    String guestType,
+                                    String memberId,
+                                    String tier,
+                                    String vipStatus,
+                                    String recordCreatedAt,
+                                    String bookingLines,
+                                    int bookingCount) {
 
         System.out.println();
-        System.out.println("===== Guest Details =====");
+        System.out.println("======================================================");
+        System.out.println("                   GUEST DETAILS");
+        System.out.println("======================================================");
         System.out.println("Confirmation Number : " + confirmationNumber);
         System.out.println("Name                : " + name);
         System.out.println("Phone               : " + phone);
+        System.out.println("------------------------------------------------------");
+        System.out.println("Guest Type          : " + guestType);
         System.out.println("Member ID           : " + memberId);
         System.out.println("Tier                : " + tier);
-        System.out.println("Room Number         : " + roomNumber);
-        System.out.println("Room Type           : " + roomType);
+        System.out.println("VIP Status          : " + vipStatus);
+        System.out.println("Record Created At   : " + recordCreatedAt);
+        System.out.println("------------------------------------------------------");
+        System.out.println("Bookings            : " + bookingCount);
+        System.out.print(bookingLines);
+        System.out.println("======================================================");
     }
     public void displayGuestNotFound() {
         System.out.println("Guest not found.");
     }
-    
+    /**
+     * Tells the user a menu option is not available yet.
+     *
+     * @param featureName the name of the feature
+     */
+    public void displayNotImplemented(String featureName) {
+        System.out.println();
+        System.out.println(featureName + " - coming soon.");
+    }
 }

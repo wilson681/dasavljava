@@ -33,7 +33,12 @@ public class Booking implements Comparable<Booking> {
     private int arrivalSequence;         // 到达顺序,模块1 FIFO排队/模块2同等级比较用
     private int tierRankAtRequest;       // 会员等级排名,模块2插队优先级用
     private String assignedRoomNo;       // 分到的房号,还没分是 null
-
+    // Stay period for THIS booking. One confirmation number may cover several
+    // bookings with different stay periods, so the dates belong here rather
+    // than on Guest.
+    private String checkInDate;          // null until the room is allocated
+    private String checkOutDate;         // null until the room is allocated
+    private int numberOfNights;          // 0 until the room is allocated
     /**
      * 构造函数
      * 新建的订房请求,预设还没有分配到房间,所以 assignedRoomNo 初始化为 null
@@ -52,6 +57,9 @@ public class Booking implements Comparable<Booking> {
         this.arrivalSequence = arrivalSequence;
         this.tierRankAtRequest = tierRankAtRequest;
         this.assignedRoomNo = null;
+        this.checkInDate = null;
+        this.checkOutDate = null;
+        this.numberOfNights = 0;
     }
 
     // ========== Getters ==========
@@ -98,7 +106,17 @@ public class Booking implements Comparable<Booking> {
     public String getAssignedRoomNo() {
         return assignedRoomNo;
     }
+    public String getCheckInDate() {
+        return checkInDate;
+    }
 
+    public String getCheckOutDate() {
+        return checkOutDate;
+    }
+
+    public int getNumberOfNights() {
+        return numberOfNights;
+    }
     // ========== Setters ==========
     // bookingId、confirmationNumber、guestNameSnapshot、requestedRoomType、source、
     // arrivalSequence、tierRankAtRequest 登记后不会改变,所以不提供setter
@@ -112,16 +130,31 @@ public class Booking implements Comparable<Booking> {
         // 由Control层在分房成功后调用,写入分配到的房号
         this.assignedRoomNo = assignedRoomNo;
     }
-
+    
+    /**
+     * Records the stay period for this booking. Called by the Control layer at
+     * allocation time, when the guest states how many nights they are staying.
+     *
+     * @param checkInDate the check-in date
+     * @param checkOutDate the check-out date
+     * @param numberOfNights the number of nights for this booking
+     */
+    public void setStayPeriod(String checkInDate, String checkOutDate, int numberOfNights) {
+        this.checkInDate = checkInDate;
+        this.checkOutDate = checkOutDate;
+        this.numberOfNights = numberOfNights;
+    }
     // ========== Override 方法 ==========
 
     /**
      * toString: 方便在console显示这笔订房请求的摘要信息
      */
     @Override
-    public String toString() {
-        return bookingId + " | " + confirmationNumber + " | " + guestNameSnapshot + " | " + requestedRoomType
-                + " | " + status + " | Room: " + (assignedRoomNo == null ? "-" : assignedRoomNo);
+     public String toString() {
+        return bookingId + " | " + confirmationNumber + " | " + guestNameSnapshot
+                + " | " + requestedRoomType + " | " + status
+                + " | Room: " + (assignedRoomNo == null ? "-" : assignedRoomNo)
+                + " | " + (numberOfNights == 0 ? "-" : numberOfNights + " night(s)");
     }
 
     /**

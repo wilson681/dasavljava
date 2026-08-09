@@ -25,7 +25,7 @@ public class Guest {
     private int numberOfNights;           // 这次入住预计住几晚,算房费用
     private ListInterface<String> bookedRooms;   // 这次入住,预订的所有房号
     private BillingRecord billingRecord;          // 这次入住退房结算的账单,退房前是null
-
+    private ListInterface<Booking> bookings;
     /**
      * 构造函数
      * 新登记的客人,预设还没有任何预订的房间,退房账单也还没产生,
@@ -49,6 +49,7 @@ public class Guest {
         this.numberOfNights = numberOfNights;
         this.bookedRooms = new ArrayBasedList<>();
         this.billingRecord = null;
+        this.bookings = new ArrayBasedList<>();
     }
 /**
  * Search constructor.
@@ -58,6 +59,7 @@ public Guest(String confirmationNumber) {
     this.confirmationNumber = confirmationNumber;
     this.bookedRooms = new ArrayBasedList<>();
     this.billingRecord = null;
+    this.bookings = new ArrayBasedList<>();
 }
 
 
@@ -140,7 +142,22 @@ public Guest(String confirmationNumber) {
     public void setBillingRecord(BillingRecord billingRecord) {
         this.billingRecord = billingRecord;
     }
+/**
+     * Links a booking to this guest. One confirmation number may cover several
+     * bookings when the guest reserves more than one room.
+     *
+     * @param booking the booking to link
+     */
+    public void addBooking(Booking booking) {
+        bookings.add(booking);
+    }
 
+    /**
+     * @return every booking linked to this confirmation number
+     */
+    public ListInterface<Booking> getBookings() {
+        return bookings;
+    }
     // ========== Override 方法 ==========
 
     /**
@@ -166,7 +183,7 @@ public Guest(String confirmationNumber) {
         Guest other = (Guest) obj;
         return this.confirmationNumber.equals(other.confirmationNumber);
     }
-
+    
     /**
      * 两者都以confirmationNumber作为唯一依据,保持一致
      */
