@@ -83,6 +83,16 @@ public class WalkInCLI {
         System.out.println("Room Type: " + booking.getRequestedRoomType());
     }
 
+    /**
+     * 同一位客人登记完一间房后,问要不要在同一个确认号下继续加订下一间房
+     * (一次订多间房时用,让多笔 Booking 共用同一个 confirmationNumber)
+     */
+    public boolean promptAddAnotherRoom() {
+        System.out.print("Add another room for this guest? (y/n): ");
+        String input = scanner.nextLine().trim();
+        return input.equalsIgnoreCase("y");
+    }
+
     // ========== 功能2:分房 ==========
 
     public void displayVipHasPriority(String roomType) {

@@ -104,26 +104,31 @@ public class WalkInControl {
         String name = walkInCLI.promptName();
         String phone = walkInCLI.promptPhone();
 
-        String roomType = walkInCLI.promptRoomType();
-        QueueInterface<Booking> queue = getQueueForRoomType(roomType);
-        if (queue == null) {
-            walkInCLI.displayInvalidRoomType(roomType);
-            return;
-        }
-
-        arrivalCounter++;
-        bookingCounter++;
+        // 一位客人可能一次要订好几间房(不一定同房型),所以姓名/电话只问一次,
+        // 底下用同一个confirmationNumber循环开多笔Booking,直到客人说不用再加了
         confirmationCounter++;
-
-        String bookingId = "WB" + String.format("%06d", bookingCounter);
         String confirmationNumber = String.valueOf(confirmationCounter);
 
-        // memberId是null、tierRank是0——散客没有等级,这两个字段跟VIP那边刻意留空/最低
-        Booking booking = new Booking(bookingId, confirmationNumber, name, phone, null,
-                roomType, BookingStatus.PENDING, "WALK_IN", arrivalCounter, 0);
+        boolean continueBooking = true;
+        while (continueBooking) {
+            String roomType = walkInCLI.promptRoomType();
+            QueueInterface<Booking> queue = getQueueForRoomType(roomType);
+            if (queue == null) {
+                walkInCLI.displayInvalidRoomType(roomType);
+            } else {
+                arrivalCounter++;
+                bookingCounter++;
+                String bookingId = "WB" + String.format("%06d", bookingCounter);
 
-        queue.enqueue(booking);
-        walkInCLI.displayRegistrationResult(booking);
+                // memberId是null、tierRank是0——散客没有等级,这两个字段跟VIP那边刻意留空/最低
+                Booking booking = new Booking(bookingId, confirmationNumber, name, phone, null,
+                        roomType, BookingStatus.PENDING, "WALK_IN", arrivalCounter, 0);
+
+                queue.enqueue(booking);
+                walkInCLI.displayRegistrationResult(booking);
+            }
+            continueBooking = walkInCLI.promptAddAnotherRoom();
+        }
     }
 
     // ========== 功能2:分房 ==========
@@ -169,12 +174,19 @@ public class WalkInControl {
         // 现在才真正把它从队伍拿掉,因为确定分房成功了
         queue.dequeue();
 
-        Guest guest = new Guest(frontBooking.getConfirmationNumber(), frontBooking.getGuestNameSnapshot(),
-                frontBooking.getPhoneSnapshot(), frontBooking.getMemberId(), "Standard",
-                checkIn.toString() + " " + java.time.LocalTime.now().withNano(0).toString(),
-                checkIn.toString(), checkOut.toString(), numberOfNights);
+        // 同一位客人(同一个confirmationNumber)可能早就因为前一间房分房成功,
+        // 已经在guestTable里有Guest记录了——这时候不能再new一个塞进去(那样guestTable
+        // 里会出现两个confirmationNumber相同的Guest,查找时后者会盖住前者),
+        // 而是要把这间新房加进原本那个Guest的bookedRooms
+        Guest guest = findGuestByConfirmationNumber(frontBooking.getConfirmationNumber());
+        if (guest == null) {
+            guest = new Guest(frontBooking.getConfirmationNumber(), frontBooking.getGuestNameSnapshot(),
+                    frontBooking.getPhoneSnapshot(), frontBooking.getMemberId(), "Standard",
+                    checkIn.toString() + " " + java.time.LocalTime.now().withNano(0).toString(),
+                    checkIn.toString(), checkOut.toString(), numberOfNights);
+            guestTable.add(guest);
+        }
         guest.addRoom(availableRoom.getRoomNumber());
-        guestTable.add(guest);
 
         walkInCLI.displayAllocationResult(frontBooking, availableRoom);
     }
@@ -264,6 +276,17 @@ public class WalkInControl {
             }
         }
         return null;
+    }
+
+    /**
+     * 用confirmationNumber去guestTable里查这位客人是否已经有Guest记录
+     * (比如已经因为另一间房分房成功而建过了)。
+     * Guest的equals()/hashCode()只看confirmationNumber,所以拿一个
+     * 只填了confirmationNumber、其他栏位留null的样板去查,一样能正确命中。
+     */
+    private Guest findGuestByConfirmationNumber(String confirmationNumber) {
+        Guest template = new Guest(confirmationNumber, null, null, null, null, null, null, null, 0);
+        return guestTable.getEntry(template);
     }
 
     /**

@@ -88,6 +88,16 @@ public class VipAllocationCLI {
         System.out.println("Tier: " + tier + " | Room Type: " + booking.getRequestedRoomType());
     }
 
+    /**
+     * 同一位VIP登记完一间房后,问要不要在同一个确认号下继续加订下一间房
+     * (一次订多间房时用,让多笔 Booking 共用同一个 confirmationNumber)
+     */
+    public boolean promptAddAnotherRoom() {
+        System.out.print("Add another room for this guest? (y/n): ");
+        String input = scanner.nextLine().trim();
+        return input.equalsIgnoreCase("y");
+    }
+
     // ========== 功能2:分房 ==========
 
     public void displayNoOneWaiting(String roomType) {

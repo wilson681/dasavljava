@@ -100,34 +100,40 @@ public class VipAllocationControl {
             return;
         }
 
-        // 第二步:问要什么房型,顺便决定这笔Booking该进哪一棵树
-        String roomType = vipAllocationCLI.promptRoomType();
-        SearchTreeInterface<Booking> tree = getTreeForRoomType(roomType);
-        if (tree == null) {
-            vipAllocationCLI.displayInvalidRoomType(roomType);
-            return;
-        }
-
-        // 第三步:产生这笔Booking自己的编号跟客人的确认号码(各自累加,保证不重复)
-        arrivalCounter++;
-        bookingCounter++;
-        confirmationCounter++;
-
-        String bookingId = "VB" + String.format("%06d", bookingCounter);
-        String confirmationNumber = String.valueOf(confirmationCounter);
-        // 把会员等级(文字)换算成排名数字,插进树时靠这个数字决定优先级
+        // 把会员等级(文字)换算成排名数字,插进树时靠这个数字决定优先级——
+        // 同一位会员这次登记的每一笔Booking等级都一样,只需要算一次
         int tierRank = TierRankUtility.tierToRank(member.getTier());
 
-        // 第四步:把这个人的姓名、电话、会员编号都从Member身上抄一份进Booking,
-        // 因为这时候还没建Guest,这些资料要先存在Booking里,等真的分到房才拿出来用
-        Booking booking = new Booking(bookingId, confirmationNumber, member.getName(),
-                member.getPhone(), member.getMemberId(), roomType, BookingStatus.PENDING,
-                "VIP", arrivalCounter, tierRank);
+        // 这位VIP可能一次要订好几间房(不一定同房型),所以会员资料只查一次,
+        // 底下用同一个confirmationNumber循环开多笔Booking,直到不用再加了
+        confirmationCounter++;
+        String confirmationNumber = String.valueOf(confirmationCounter);
 
-        // 第五步:插进对应房型的树——AVLTree.add()内部会自己比较tierRank/arrivalSequence,
-        // 自动排到该在的位置,不用我们自己指定放哪
-        tree.add(booking);
-        vipAllocationCLI.displayRegistrationResult(booking, member.getTier());
+        boolean continueBooking = true;
+        while (continueBooking) {
+            // 问要什么房型,顺便决定这笔Booking该进哪一棵树
+            String roomType = vipAllocationCLI.promptRoomType();
+            SearchTreeInterface<Booking> tree = getTreeForRoomType(roomType);
+            if (tree == null) {
+                vipAllocationCLI.displayInvalidRoomType(roomType);
+            } else {
+                arrivalCounter++;
+                bookingCounter++;
+                String bookingId = "VB" + String.format("%06d", bookingCounter);
+
+                // 把这个人的姓名、电话、会员编号都从Member身上抄一份进Booking,
+                // 因为这时候还没建Guest,这些资料要先存在Booking里,等真的分到房才拿出来用
+                Booking booking = new Booking(bookingId, confirmationNumber, member.getName(),
+                        member.getPhone(), member.getMemberId(), roomType, BookingStatus.PENDING,
+                        "VIP", arrivalCounter, tierRank);
+
+                // 插进对应房型的树——AVLTree.add()内部会自己比较tierRank/arrivalSequence,
+                // 自动排到该在的位置,不用我们自己指定放哪
+                tree.add(booking);
+                vipAllocationCLI.displayRegistrationResult(booking, member.getTier());
+            }
+            continueBooking = vipAllocationCLI.promptAddAnotherRoom();
+        }
     }
 
     // ========== 功能2:分房 ==========
@@ -173,14 +179,20 @@ public class VipAllocationControl {
         tree.remove(topPriority);
 
         // 第六步:这时候才真正建Guest(客人身份档案)——用Booking上存的姓名/电话/会员编号,
-        // 组成完整的Guest物件,再塞进guestTable,前台(模块4)之后才查得到这个人
-        Guest guest = new Guest(topPriority.getConfirmationNumber(), topPriority.getGuestNameSnapshot(),
-                topPriority.getPhoneSnapshot(), topPriority.getMemberId(),
-                findMemberById(topPriority.getMemberId()).getTier(),
-                checkIn.toString() + " " + java.time.LocalTime.now().withNano(0).toString(),
-                checkIn.toString(), checkOut.toString(), numberOfNights);
+        // 组成完整的Guest物件,再塞进guestTable,前台(模块4)之后才查得到这个人。
+        // 但如果这位VIP已经因为前一间房分房成功、guestTable里早就有他的Guest记录了,
+        // 就不能再new一个塞进去(那样guestTable里会出现两个confirmationNumber相同的
+        // Guest,查找时后者会盖住前者),而是把这间新房加进原本那个Guest的bookedRooms
+        Guest guest = findGuestByConfirmationNumber(topPriority.getConfirmationNumber());
+        if (guest == null) {
+            guest = new Guest(topPriority.getConfirmationNumber(), topPriority.getGuestNameSnapshot(),
+                    topPriority.getPhoneSnapshot(), topPriority.getMemberId(),
+                    findMemberById(topPriority.getMemberId()).getTier(),
+                    checkIn.toString() + " " + java.time.LocalTime.now().withNano(0).toString(),
+                    checkIn.toString(), checkOut.toString(), numberOfNights);
+            guestTable.add(guest);
+        }
         guest.addRoom(availableRoom.getRoomNumber());
-        guestTable.add(guest);
 
         vipAllocationCLI.displayAllocationResult(topPriority, availableRoom);
     }
@@ -280,6 +292,17 @@ public class VipAllocationControl {
             }
         }
         return null;
+    }
+
+    /**
+     * 用confirmationNumber去guestTable里查这位客人是否已经有Guest记录
+     * (比如已经因为另一间房分房成功而建过了)。
+     * Guest的equals()/hashCode()只看confirmationNumber,所以拿一个
+     * 只填了confirmationNumber、其他栏位留null的样板去查,一样能正确命中。
+     */
+    private Guest findGuestByConfirmationNumber(String confirmationNumber) {
+        Guest template = new Guest(confirmationNumber, null, null, null, null, null, null, null, 0);
+        return guestTable.getEntry(template);
     }
 
     /**
