@@ -84,7 +84,7 @@ public class MainMenuControl {
         // "VIP永远优先"这条两个模块共用的规则
         this.walkInControl = new WalkInControl(
                 new WalkInCLI(), standardWalkInQueue, deluxeWalkInQueue, suiteWalkInQueue,
-                standardVipTree, deluxeVipTree, suiteVipTree, roomList, guestTable);
+                standardVipTree, deluxeVipTree, suiteVipTree, roomList, guestTable, memberList);
         this.vipAllocationControl = new VipAllocationControl(
                 new VipAllocationCLI(), standardVipTree, deluxeVipTree, suiteVipTree,
                 memberList, roomList, guestTable);

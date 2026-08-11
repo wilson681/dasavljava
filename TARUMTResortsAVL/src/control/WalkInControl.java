@@ -8,6 +8,7 @@ import boundary.WalkInCLI;
 import entity.Booking;
 import entity.BookingStatus;
 import entity.Guest;
+import entity.Member;
 import entity.Room;
 import java.time.LocalDate;
 import java.util.Iterator;
@@ -22,6 +23,9 @@ import java.util.Iterator;
  * - 分房时一定要先看VIP那边的树,VIP树只要有人在等,这个房型的Walk-In一律不能分房——
  *   这是两个模块共用的关键规则:VIP永远优先
  * - 只对"会调用collection ADT方法"的操作(登记、取消)做输入校验,查看名单这种不用
+ * - 分房不再是一个手动菜单动作,改成 tryAllocate() 这个检查:登记完当下会自动跑一次,
+ *   之后房间从不可用变可用时(退房/清洁完成)也该跑一次——那个触发点现在还没有人会调用它
+ *   (housekeeping/checkout都还没做),先把方法留成public,等那边接进来直接调用即可
  */
 public class WalkInControl {
 
@@ -34,10 +38,12 @@ public class WalkInControl {
     private final SearchTreeInterface<Booking> suiteVipTree;
     private final ListInterface<Room> roomList;
     private final HashTableInterface<Guest> guestTable;
+    private final ListInterface<Member> memberList;
 
     private int arrivalCounter;
     private int bookingCounter;
     private int confirmationCounter;
+    private int memberCounter;
 
     public WalkInControl(WalkInCLI walkInCLI,
                           QueueInterface<Booking> standardQueue,
@@ -47,10 +53,11 @@ public class WalkInControl {
                           SearchTreeInterface<Booking> deluxeVipTree,
                           SearchTreeInterface<Booking> suiteVipTree,
                           ListInterface<Room> roomList,
-                          HashTableInterface<Guest> guestTable) {
+                          HashTableInterface<Guest> guestTable,
+                          ListInterface<Member> memberList) {
         if (walkInCLI == null || standardQueue == null || deluxeQueue == null || suiteQueue == null
                 || standardVipTree == null || deluxeVipTree == null || suiteVipTree == null
-                || roomList == null || guestTable == null) {
+                || roomList == null || guestTable == null || memberList == null) {
             throw new IllegalArgumentException("WalkInControl dependencies cannot be null");
         }
         this.walkInCLI = walkInCLI;
@@ -62,10 +69,12 @@ public class WalkInControl {
         this.suiteVipTree = suiteVipTree;
         this.roomList = roomList;
         this.guestTable = guestTable;
+        this.memberList = memberList;
         // 用20000000起跳当VIP的确认号,Walk-In从10000000起跳,避免两边号码重复
         this.arrivalCounter = 0;
         this.bookingCounter = 0;
         this.confirmationCounter = 10000000;
+        this.memberCounter = 0;
     }
 
     /**
@@ -80,12 +89,9 @@ public class WalkInControl {
                     doRegister();
                     break;
                 case 2:
-                    doAllocate();
-                    break;
-                case 3:
                     doCancel();
                     break;
-                case 4:
+                case 3:
                     doViewWaitingList();
                     break;
                 case 0:
@@ -116,6 +122,11 @@ public class WalkInControl {
             if (queue == null) {
                 walkInCLI.displayInvalidRoomType(roomType);
             } else {
+                // 住几晚要在客人还在面前的登记当下先问好,存进Booking——
+                // 分房不再保证是当场发生的,之后可能是房间空出来才自动触发,
+                // 到时候客人不一定还在,没办法临时问
+                int numberOfNights = walkInCLI.promptNumberOfNights();
+
                 arrivalCounter++;
                 bookingCounter++;
                 String bookingId = "WB" + String.format("%06d", bookingCounter);
@@ -123,50 +134,54 @@ public class WalkInControl {
                 // memberId是null、tierRank是0——散客没有等级,这两个字段跟VIP那边刻意留空/最低
                 Booking booking = new Booking(bookingId, confirmationNumber, name, phone, null,
                         roomType, BookingStatus.PENDING, "WALK_IN", arrivalCounter, 0);
+                booking.setNumberOfNights(numberOfNights);
 
                 queue.enqueue(booking);
                 walkInCLI.displayRegistrationResult(booking);
+
+                // 登记完立刻检查一次这个房型能不能马上分房(VIP没人等、队伍轮到他、有空房)
+                tryAllocate(roomType);
             }
             continueBooking = walkInCLI.promptAddAnotherRoom();
         }
     }
 
-    // ========== 功能2:分房 ==========
+    // ========== 分房检查(不再是手动菜单动作) ==========
 
-    private void doAllocate() {
-        String roomType = walkInCLI.promptRoomType();
+    /**
+     * 检查指定房型现在能不能分房,能就把队头那笔Booking分掉。
+     * 两个触发时机:1) doRegister() 登记完当下跑一次;2) 之后房间从不可用变可用时
+     * (退房/清洁完成,housekeeping/checkout模块接上后)也该跑一次——目前还没有人调用
+     * 第2种情况,方法先留成public,等那边接进来直接调用。
+     * 什么都不满足就静静地什么都不做(客人留在队伍里继续等),不当错误处理。
+     */
+    public void tryAllocate(String roomType) {
         QueueInterface<Booking> queue = getQueueForRoomType(roomType);
         SearchTreeInterface<Booking> vipTree = getVipTreeForRoomType(roomType);
         if (queue == null || vipTree == null) {
-            walkInCLI.displayInvalidRoomType(roomType);
             return;
         }
 
         // 关键规则:VIP永远优先——只要这个房型的VIP树还有人在等,
         // Walk-In这边完全不动,不管Walk-In已经排了多久
         if (!vipTree.isEmpty()) {
-            walkInCLI.displayVipHasPriority(roomType);
             return;
         }
 
         if (queue.isEmpty()) {
-            walkInCLI.displayNoOneWaiting(roomType);
+            return;
+        }
+
+        Room availableRoom = findAvailableRoom(roomType);
+        if (availableRoom == null) {
             return;
         }
 
         // 先peek队头,不要马上dequeue——要等确定真的有空房可以分,才正式把它从队伍拿掉
         Booking frontBooking = queue.getFront();
 
-        Room availableRoom = findAvailableRoom(roomType);
-        if (availableRoom == null) {
-            walkInCLI.displayNoRoomAvailable(roomType);
-            return;
-        }
-
-        int numberOfNights = walkInCLI.promptNumberOfNights();
-
         LocalDate checkIn = LocalDate.now();
-        LocalDate checkOut = checkIn.plusDays(numberOfNights);
+        LocalDate checkOut = checkIn.plusDays(frontBooking.getNumberOfNights());
 
         frontBooking.setStatus(BookingStatus.CHECKED_IN);
         frontBooking.setAssignedRoomNo(availableRoom.getRoomNumber());
@@ -180,23 +195,30 @@ public class WalkInControl {
         // 而是要把这间新房加进原本那个Guest的bookedRooms
         Guest guest = findGuestByConfirmationNumber(frontBooking.getConfirmationNumber());
         if (guest == null) {
+            // Walk-In一走进这个分支,就代表他是"这辈子第一次被系统看到"的人(还没有
+            // memberId)——一旦真的入住(不是还在排队),就自动帮他开一个最低等级的
+            // Member。tier用"Standard",TierRankUtility.tierToRank()对认不得的tier
+            // 一律回传0,所以不会因为多了memberId就意外插进VIP优先级队伍。
+            // 下次这个人再来,理论上会自称会员、直接走VIP模块用memberId登记,
+            // 不会再经过这里,所以这里不用查重。
+            Member newMember = enrollAsStandardMember(frontBooking.getGuestNameSnapshot(),
+                    frontBooking.getPhoneSnapshot());
+
             guest = new Guest(frontBooking.getConfirmationNumber(), frontBooking.getGuestNameSnapshot(),
-                    frontBooking.getPhoneSnapshot(), frontBooking.getMemberId(), "Standard",
+                    frontBooking.getPhoneSnapshot(), newMember.getMemberId(), newMember.getTier(),
                     checkIn.toString() + " " + java.time.LocalTime.now().withNano(0).toString(),
-                    checkIn.toString(), checkOut.toString(), numberOfNights);
+                    checkIn.toString(), checkOut.toString(), frontBooking.getNumberOfNights());
             guestTable.add(guest);
         }
-        //wilson
         guest.addRoom(availableRoom.getRoomNumber());
 
         // Record the stay period on the booking itself and link it to the guest,
         // so the Front-Desk module can list every booking under one
         // confirmation number with its own dates.
-        frontBooking.setStayPeriod(checkIn.toString(), checkOut.toString(), numberOfNights);
+        frontBooking.setStayPeriod(checkIn.toString(), checkOut.toString(), frontBooking.getNumberOfNights());
         guest.addBooking(frontBooking);
-        
+
         walkInCLI.displayAllocationResult(frontBooking, availableRoom);
-        //wilson end
     }
 
     // ========== 功能3:取消排队 ==========
@@ -284,6 +306,20 @@ public class WalkInControl {
             }
         }
         return null;
+    }
+
+    /**
+     * 帮一位第一次入住、还不是会员的Walk-In客人,开一个最低等级(Standard)的会员档案,
+     * 存进memberList,再回传这个新Member给呼叫方拿memberId/tier去建Guest用。
+     * currentPoints/totalPointsEarned都从0开始——实际赚多少分是模块5的事,这里只负责
+     * "这个人现在是有memberId的会员了"这个身份的建立。
+     */
+    private Member enrollAsStandardMember(String name, String phone) {
+        memberCounter++;
+        String memberId = "WM" + String.format("%06d", memberCounter);
+        Member member = new Member(memberId, name, phone, "Standard", 0, 0);
+        memberList.add(member);
+        return member;
     }
 
     /**

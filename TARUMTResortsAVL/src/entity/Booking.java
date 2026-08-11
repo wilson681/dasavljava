@@ -38,7 +38,7 @@ public class Booking implements Comparable<Booking> {
     // than on Guest.
     private String checkInDate;          // null until the room is allocated
     private String checkOutDate;         // null until the room is allocated
-    private int numberOfNights;          // 0 until the room is allocated
+    private int numberOfNights;          // collected at registration time; dates are filled in once actually allocated
     /**
      * 构造函数
      * 新建的订房请求,预设还没有分配到房间,所以 assignedRoomNo 初始化为 null
@@ -142,6 +142,17 @@ public class Booking implements Comparable<Booking> {
     public void setStayPeriod(String checkInDate, String checkOutDate, int numberOfNights) {
         this.checkInDate = checkInDate;
         this.checkOutDate = checkOutDate;
+        this.numberOfNights = numberOfNights;
+    }
+
+    /**
+     * Records how many nights the guest asked for at registration time, before
+     * a room is actually allocated (allocation may happen immediately, or later
+     * once a room frees up, when the guest is no longer there to ask).
+     *
+     * @param numberOfNights the number of nights requested
+     */
+    public void setNumberOfNights(int numberOfNights) {
         this.numberOfNights = numberOfNights;
     }
     // ========== Override 方法 ==========

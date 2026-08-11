@@ -16,6 +16,10 @@ import java.util.Scanner;
  */
 public class WalkInCLI {
 
+    private static final String DIVIDER = "--------------------------------------------------------";
+    private static final String TABLE_DIVIDER =
+            "---- ------------ ------------------ -------------------- ----------- ------------ ------";
+
     private Scanner scanner;
 
     public WalkInCLI() {
@@ -25,11 +29,12 @@ public class WalkInCLI {
     public int displayMenuAndGetChoice() {
         System.out.println();
         System.out.println("===== Walk-In Registrations & Standard Booking =====");
-        System.out.println("1) Register New Guest");
-        System.out.println("2) Allocate Room");
-        System.out.println("3) Cancel Waiting");
-        System.out.println("4) View Waiting List");
-        System.out.println("0) Back to Main Menu");
+        System.out.println();
+        System.out.println("  1) Register New Guest");
+        System.out.println("  2) Cancel Waiting");
+        System.out.println("  3) View Waiting List");
+        System.out.println("  0) Back to Main Menu");
+        System.out.println();
         System.out.print("Enter your choice: ");
 
         String input = scanner.nextLine().trim();
@@ -57,6 +62,7 @@ public class WalkInCLI {
     }
 
     public String promptRoomType() {
+        System.out.println();
         System.out.println("Room Type: 1) Standard  2) Deluxe  3) Suite");
         System.out.print("Select room type: ");
         String choice = scanner.nextLine().trim();
@@ -77,10 +83,14 @@ public class WalkInCLI {
     }
 
     public void displayRegistrationResult(Booking booking) {
-        System.out.println("Registration successful!");
-        System.out.println("Booking ID: " + booking.getBookingId());
-        System.out.println("Confirmation Number: " + booking.getConfirmationNumber());
-        System.out.println("Room Type: " + booking.getRequestedRoomType());
+        System.out.println();
+        System.out.println(DIVIDER);
+        System.out.println("  REGISTRATION SUCCESSFUL");
+        System.out.println(DIVIDER);
+        System.out.println("  Booking ID           : " + booking.getBookingId());
+        System.out.println("  Confirmation Number  : " + booking.getConfirmationNumber());
+        System.out.println("  Room Type            : " + booking.getRequestedRoomType());
+        System.out.println(DIVIDER);
     }
 
     /**
@@ -88,25 +98,13 @@ public class WalkInCLI {
      * (一次订多间房时用,让多笔 Booking 共用同一个 confirmationNumber)
      */
     public boolean promptAddAnotherRoom() {
+        System.out.println();
         System.out.print("Add another room for this guest? (y/n): ");
         String input = scanner.nextLine().trim();
         return input.equalsIgnoreCase("y");
     }
 
-    // ========== 功能2:分房 ==========
-
-    public void displayVipHasPriority(String roomType) {
-        System.out.println("A VIP guest is waiting for " + roomType
-                + " rooms. Please process the VIP allocation first.");
-    }
-
-    public void displayNoOneWaiting(String roomType) {
-        System.out.println("No walk-in guest is currently waiting for " + roomType + " rooms.");
-    }
-
-    public void displayNoRoomAvailable(String roomType) {
-        System.out.println("No " + roomType + " room is available right now.");
-    }
+    // ========== 分房结果(登记后自动触发,不再是独立菜单动作) ==========
 
     public int promptNumberOfNights() {
         System.out.print("Enter number of nights: ");
@@ -118,13 +116,17 @@ public class WalkInCLI {
     }
 
     public void displayAllocationResult(Booking booking, Room room) {
-        System.out.println("Room allocated successfully!");
-        System.out.println("Guest: " + booking.getGuestNameSnapshot()
-                + " | Confirmation Number: " + booking.getConfirmationNumber()
-                + " | Room: " + room.getRoomNumber());
+        System.out.println();
+        System.out.println(DIVIDER);
+        System.out.println("  ROOM ALLOCATED");
+        System.out.println(DIVIDER);
+        System.out.println("  Guest                : " + booking.getGuestNameSnapshot());
+        System.out.println("  Confirmation Number  : " + booking.getConfirmationNumber());
+        System.out.println("  Room                 : " + room.getRoomNumber());
+        System.out.println(DIVIDER);
     }
 
-    // ========== 功能3:取消排队 ==========
+    // ========== 功能2:取消排队 ==========
 
     public String promptConfirmationNumberToCancel() {
         System.out.print("Enter the confirmation number to cancel: ");
@@ -132,6 +134,7 @@ public class WalkInCLI {
     }
 
     public void displayCancelResult(boolean success) {
+        System.out.println();
         if (success) {
             System.out.println("Cancelled successfully.");
         } else {
@@ -139,23 +142,30 @@ public class WalkInCLI {
         }
     }
 
-    // ========== 功能4:查看排队名单 ==========
+    // ========== 功能3:查看排队名单 ==========
 
     public void displayWaitingList(String roomType, Iterator<Booking> waitingList) {
+        System.out.println();
         System.out.println("===== " + roomType + " Walk-In Waiting List (arrival order) =====");
+        System.out.println();
         if (!waitingList.hasNext()) {
             System.out.println("No one is currently waiting.");
             return;
         }
+        System.out.println(String.format("%-4s %-12s %-18s %-20s %-11s %-12s %s",
+                "No.", "Booking ID", "Confirmation No.", "Guest", "Room Type", "Status", "Room"));
+        System.out.println(TABLE_DIVIDER);
         int rank = 1;
         while (waitingList.hasNext()) {
             Booking booking = waitingList.next();
-            System.out.println(rank + ". Booking ID: " + booking.getBookingId()
-                    + " | Confirmation Number: " + booking.getConfirmationNumber()
-                    + " | Guest: " + booking.getGuestNameSnapshot()
-                    + " | Room Type: " + booking.getRequestedRoomType()
-                    + " | Status: " + booking.getStatus()
-                    + " | Room: " + (booking.getAssignedRoomNo() == null ? "-" : booking.getAssignedRoomNo()));
+            System.out.println(String.format("%-4d %-12s %-18s %-20s %-11s %-12s %s",
+                    rank,
+                    booking.getBookingId(),
+                    booking.getConfirmationNumber(),
+                    booking.getGuestNameSnapshot(),
+                    booking.getRequestedRoomType(),
+                    booking.getStatus(),
+                    (booking.getAssignedRoomNo() == null ? "-" : booking.getAssignedRoomNo())));
             rank++;
         }
     }

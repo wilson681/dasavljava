@@ -20,8 +20,11 @@ import utility.TierRankUtility;
  *
  * 说明:
  * - 三棵 AVL Tree,按房型分开(Standard/Deluxe/Suite 各一棵),互相独立
- * - 分房时只处理VIP树,不会去管Walk-In队伍(模块1还没做,之后接上时VIP要永远优先)
+ * - 分房时只处理VIP树,不会去管Walk-In队伍(VIP树非空时,WalkInControl自己会挡住不分)
  * - 只对"会调用collection ADT方法"的操作(登记、取消)做输入校验,查看名单这种不用
+ * - 分房不再是一个手动菜单动作,改成 tryAllocate() 这个检查:登记完当下会自动跑一次,
+ *   之后房间从不可用变可用时(退房/清洁完成)也该跑一次——那个触发点现在还没有人会调用它
+ *   (housekeeping/checkout都还没做),先把方法留成public,等那边接进来直接调用即可
  */
 public class VipAllocationControl {
 
@@ -72,12 +75,9 @@ public class VipAllocationControl {
                     doRegister();
                     break;
                 case 2:
-                    doAllocate();
-                    break;
-                case 3:
                     doCancel();
                     break;
-                case 4:
+                case 3:
                     doViewWaitingList();
                     break;
                 case 0:
@@ -104,6 +104,16 @@ public class VipAllocationControl {
         // 同一位会员这次登记的每一笔Booking等级都一样,只需要算一次
         int tierRank = TierRankUtility.tierToRank(member.getTier());
 
+        // tierRank<=0代表这不是真正的VIP等级(比如Walk-In入住后自动开的Standard会员)——
+        // 这种人虽然有memberId,但不该走VIP这条路登记。放行的话,他的Booking会被插进
+        // VIP树,树一非空就会挡住WalkInControl.tryAllocate()对这个房型的所有Walk-In
+        // 分房(那边的判断只看树是不是空的,不看里面tierRank多少),等于让一个不该有
+        // VIP优先权的人变相卡住所有Walk-In——所以要在这里直接拦下来,请他去Walk-In登记
+        if (tierRank <= 0) {
+            vipAllocationCLI.displayNotVip(memberId, member.getTier());
+            return;
+        }
+
         // 这位VIP可能一次要订好几间房(不一定同房型),所以会员资料只查一次,
         // 底下用同一个confirmationNumber循环开多笔Booking,直到不用再加了
         confirmationCounter++;
@@ -117,6 +127,11 @@ public class VipAllocationControl {
             if (tree == null) {
                 vipAllocationCLI.displayInvalidRoomType(roomType);
             } else {
+                // 住几晚要在客人还在面前的登记当下先问好,存进Booking——
+                // 分房不再保证是当场发生的,之后可能是房间空出来才自动触发,
+                // 到时候客人不一定还在,没办法临时问
+                int numberOfNights = vipAllocationCLI.promptNumberOfNights();
+
                 arrivalCounter++;
                 bookingCounter++;
                 String bookingId = "VB" + String.format("%06d", bookingCounter);
@@ -126,59 +141,56 @@ public class VipAllocationControl {
                 Booking booking = new Booking(bookingId, confirmationNumber, member.getName(),
                         member.getPhone(), member.getMemberId(), roomType, BookingStatus.PENDING,
                         "VIP", arrivalCounter, tierRank);
+                booking.setNumberOfNights(numberOfNights);
 
                 // 插进对应房型的树——AVLTree.add()内部会自己比较tierRank/arrivalSequence,
                 // 自动排到该在的位置,不用我们自己指定放哪
                 tree.add(booking);
                 vipAllocationCLI.displayRegistrationResult(booking, member.getTier());
+
+                // 登记完立刻检查一次这个房型能不能马上分房(树里排最前面的那笔、有空房)
+                tryAllocate(roomType);
             }
             continueBooking = vipAllocationCLI.promptAddAnotherRoom();
         }
     }
 
-    // ========== 功能2:分房 ==========
+    // ========== 分房检查(不再是手动菜单动作) ==========
 
-    private void doAllocate() {
-        // 第一步:决定要处理哪个房型的分房(这个模块目前只顾VIP树,不管Walk-In队伍)
-        String roomType = vipAllocationCLI.promptRoomType();
+    /**
+     * 检查指定房型现在能不能分房,能就把树里优先级最高的那笔Booking分掉。
+     * 两个触发时机:1) doRegister() 登记完当下跑一次;2) 之后房间从不可用变可用时
+     * (退房/清洁完成,housekeeping/checkout模块接上后)也该跑一次——目前还没有人调用
+     * 第2种情况,方法先留成public,等那边接进来直接调用。
+     * 什么都不满足就静静地什么都不做(客人留在树里继续等),不当错误处理。
+     */
+    public void tryAllocate(String roomType) {
         SearchTreeInterface<Booking> tree = getTreeForRoomType(roomType);
-        if (tree == null) {
-            vipAllocationCLI.displayInvalidRoomType(roomType);
+        if (tree == null || tree.isEmpty()) {
             return;
         }
 
-        // 树是空的,代表这个房型完全没人在排,不用往下做
-        if (tree.isEmpty()) {
-            vipAllocationCLI.displayNoOneWaiting(roomType);
+        Room availableRoom = findAvailableRoom(roomType);
+        if (availableRoom == null) {
             return;
         }
 
-        // 第二步:拿"优先级最高"的那一笔——因为Booking.compareTo()把等级越高的值设得越小,
+        // 拿"优先级最高"的那一笔——因为Booking.compareTo()把等级越高的值设得越小,
         // in-order遍历(由小到大)吐出来的第一个,天生就是优先级最高的那个,不用额外找
         Iterator<Booking> priorityIterator = tree.getInorderIterator();
         Booking topPriority = priorityIterator.next();
 
-        // 第三步:去房间清单里找一间这个房型、状态刚好是AVAILABLE的空房
-        Room availableRoom = findAvailableRoom(roomType);
-        if (availableRoom == null) {
-            vipAllocationCLI.displayNoRoomAvailable(roomType);
-            return;
-        }
-
-        // 第四步:问住几晚,用来算入住/退房日期(给报表用,不是拿来判断能不能分房)
-        int numberOfNights = vipAllocationCLI.promptNumberOfNights();
-
         LocalDate checkIn = LocalDate.now();
-        LocalDate checkOut = checkIn.plusDays(numberOfNights);
+        LocalDate checkOut = checkIn.plusDays(topPriority.getNumberOfNights());
 
-        // 第五步:真正分房——改Booking状态、写入房号、改Room状态、把这笔Booking从树里移除
+        // 真正分房——改Booking状态、写入房号、改Room状态、把这笔Booking从树里移除
         // (它已经处理完了,不该继续留在"等待名单"里)
         topPriority.setStatus(BookingStatus.CHECKED_IN);
         topPriority.setAssignedRoomNo(availableRoom.getRoomNumber());
         availableRoom.setStatus("OCCUPIED");
         tree.remove(topPriority);
 
-        // 第六步:这时候才真正建Guest(客人身份档案)——用Booking上存的姓名/电话/会员编号,
+        // 这时候才真正建Guest(客人身份档案)——用Booking上存的姓名/电话/会员编号,
         // 组成完整的Guest物件,再塞进guestTable,前台(模块4)之后才查得到这个人。
         // 但如果这位VIP已经因为前一间房分房成功、guestTable里早就有他的Guest记录了,
         // 就不能再new一个塞进去(那样guestTable里会出现两个confirmationNumber相同的
@@ -189,20 +201,18 @@ public class VipAllocationControl {
                     topPriority.getPhoneSnapshot(), topPriority.getMemberId(),
                     findMemberById(topPriority.getMemberId()).getTier(),
                     checkIn.toString() + " " + java.time.LocalTime.now().withNano(0).toString(),
-                    checkIn.toString(), checkOut.toString(), numberOfNights);
+                    checkIn.toString(), checkOut.toString(), topPriority.getNumberOfNights());
             guestTable.add(guest);
         }
-        //wilson
         guest.addRoom(availableRoom.getRoomNumber());
 
         // Record the stay period on the booking itself and link it to the guest,
         // so the Front-Desk module can list every booking under one
         // confirmation number with its own dates.
-        topPriority.setStayPeriod(checkIn.toString(), checkOut.toString(), numberOfNights);
+        topPriority.setStayPeriod(checkIn.toString(), checkOut.toString(), topPriority.getNumberOfNights());
         guest.addBooking(topPriority);
 
         vipAllocationCLI.displayAllocationResult(topPriority, availableRoom);
-        //wilson end
     }
 
     // ========== 功能3:取消排队 ==========
