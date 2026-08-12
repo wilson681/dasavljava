@@ -122,8 +122,12 @@ public class VipAllocationCLI {
         try {
             return Integer.parseInt(scanner.nextLine().trim());
         } catch (NumberFormatException e) {
-            return 1;
+            return -1;
         }
+    }
+
+    public void displayInvalidNumberOfNights(int numberOfNights) {
+        System.out.println("Invalid number of nights (" + numberOfNights + "). Must be a positive whole number.");
     }
 
     public void displayAllocationResult(Booking booking, Room room) {
@@ -140,8 +144,12 @@ public class VipAllocationCLI {
     // ========== 功能2:取消排队 ==========
 
     public String promptConfirmationNumberToCancel() {
-        System.out.print("Enter the confirmation number to cancel: ");
+        System.out.print("Enter the 8-digit confirmation number to cancel: ");
         return scanner.nextLine().trim();
+    }
+
+    public void displayInvalidConfirmationNumber(String confirmationNumber) {
+        System.out.println("\"" + confirmationNumber + "\" is not a valid confirmation number. It must be exactly 8 digits.");
     }
 
     public void displayCancelResult(boolean success) {

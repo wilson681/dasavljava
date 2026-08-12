@@ -37,4 +37,22 @@ public class TierRankUtility {
                 return 0;
         }
     }
+
+    /**
+     * 把会员历史累计总积分(totalPointsEarned)换算成该在的等级文字,给模块5升降级判断用。
+     * 门槛数字压低,配合"消费RM10=1分"的赚分速度,让等级在合理的入住次数内够得到。
+     * @param totalPointsEarned 历史累计总积分,只会越来越大,所以这个函数天生只会往上升级
+     * @return 对应的等级文字(Standard/Elite/Platinum/Diamond)
+     */
+    public static String pointsToTier(int totalPointsEarned) {
+        if (totalPointsEarned >= 5000) {
+            return "Diamond";
+        } else if (totalPointsEarned >= 1500) {
+            return "Platinum";
+        } else if (totalPointsEarned >= 300) {
+            return "Elite";
+        } else {
+            return "Standard";
+        }
+    }
 }

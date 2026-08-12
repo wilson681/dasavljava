@@ -9,15 +9,16 @@ package entity;
  * 说明:
  * - 这是纯数据类(POJO),只负责存放一次入住结算后的账单资料
  * - 不包含任何输入(Scanner)或输出(System.out)语句,符合Entity类规范
- * - 一位客人一次入住,退房时只结一次账,所以一个 Guest 对应一个 BillingRecord,
- *   不是一堆消费明细的清单
+ * - 一位客人一次入住,可能分好几次退房(比如两间房、不同天各自退),各自结出各自的
+ *   账单,所以一个Guest对应的是一份BillingRecord清单,不是只有一张
  * - roomFee、totalAmount、pointsEarned 都是Control层算好之后传进来的结果,
  *   计算公式(房价x晚数、消费换算积分的比例)写死在Control层,Entity本身不负责计算
  */
 public class BillingRecord {
 
     // ========== 数据字段 ==========
-    private String confirmationNumber;   // 这张账单,属于哪位客人
+    private String billingId;             // 这张账单自己专属的唯一编号,一人多张账单时用来互相区分
+    private String confirmationNumber;   // 这张账单,属于哪位客人(同一位客人的多张账单会共用同一个)
     private double roomFee;               // 房费 = 房价 x 住的晚数
     private double extraCharges;          // 额外消费,退房时前台手动输入的一个总数,不分类
     private double totalAmount;           // 总额 = roomFee + extraCharges
@@ -27,8 +28,9 @@ public class BillingRecord {
     /**
      * 构造函数
      */
-    public BillingRecord(String confirmationNumber, double roomFee, double extraCharges,
+    public BillingRecord(String billingId, String confirmationNumber, double roomFee, double extraCharges,
                           double totalAmount, int pointsEarned, String date) {
+        this.billingId = billingId;
         this.confirmationNumber = confirmationNumber;
         this.roomFee = roomFee;
         this.extraCharges = extraCharges;
@@ -39,6 +41,10 @@ public class BillingRecord {
 
     // ========== Getters ==========
     // 账单一旦结清,不应该被修改,所以只提供getter,不提供setter
+
+    public String getBillingId() {
+        return billingId;
+    }
 
     public String getConfirmationNumber() {
         return confirmationNumber;
@@ -71,12 +77,13 @@ public class BillingRecord {
      */
     @Override
     public String toString() {
-        return date + " | Room Fee: RM" + roomFee + " | Extra: RM" + extraCharges
+        return billingId + " | " + date + " | Room Fee: RM" + roomFee + " | Extra: RM" + extraCharges
                 + " | Total: RM" + totalAmount + " | +" + pointsEarned + " pts";
     }
 
     /**
-     * equals: 一位客人一次入住只有一张账单,以确认号码作为唯一依据
+     * equals: 两张账单是否视为"同一张",以billingId作为唯一依据
+     * (不能用confirmationNumber,因为同一位客人可能分好几次退房、各自有各自的账单)
      */
     @Override
     public boolean equals(Object obj) {
@@ -87,7 +94,7 @@ public class BillingRecord {
             return false;
         }
         BillingRecord other = (BillingRecord) obj;
-        return this.confirmationNumber.equals(other.confirmationNumber);
+        return this.billingId.equals(other.billingId);
     }
 
     /**
@@ -95,6 +102,6 @@ public class BillingRecord {
      */
     @Override
     public int hashCode() {
-        return confirmationNumber.hashCode();
+        return billingId.hashCode();
     }
 }

@@ -12,6 +12,7 @@ import entity.Member;
 import entity.Room;
 import java.time.LocalDate;
 import java.util.Iterator;
+import utility.ValidationUtility;
 
 /**
  * WalkInControl.java - 模块1(Walk-In Registrations & Standard Booking)的业务逻辑。
@@ -74,7 +75,10 @@ public class WalkInControl {
         this.arrivalCounter = 0;
         this.bookingCounter = 0;
         this.confirmationCounter = 10000000;
-        this.memberCounter = 0;
+        // 扫一次种子会员资料(MemberDao已经在这之前把它们读进memberList了),
+        // 接着种子资料的编号继续往下用,格式才会跟M1001这些一致——这个计数器从此只有
+        // WalkInControl自己在用,不会再重新扫描,所以不会有两边各自算出同一个号码的风险
+        this.memberCounter = computeNextMemberNumber();
     }
 
     /**
@@ -109,6 +113,10 @@ public class WalkInControl {
         // 散客不是会员,直接问姓名、电话,不用像VIP那样先查会员资料
         String name = walkInCLI.promptName();
         String phone = walkInCLI.promptPhone();
+        if (!ValidationUtility.isDigitsOnly(phone)) {
+            walkInCLI.displayInvalidPhone(phone);
+            return;
+        }
 
         // 一位客人可能一次要订好几间房(不一定同房型),所以姓名/电话只问一次,
         // 底下用同一个confirmationNumber循环开多笔Booking,直到客人说不用再加了
@@ -126,21 +134,24 @@ public class WalkInControl {
                 // 分房不再保证是当场发生的,之后可能是房间空出来才自动触发,
                 // 到时候客人不一定还在,没办法临时问
                 int numberOfNights = walkInCLI.promptNumberOfNights();
+                if (numberOfNights <= 0) {
+                    walkInCLI.displayInvalidNumberOfNights(numberOfNights);
+                } else {
+                    arrivalCounter++;
+                    bookingCounter++;
+                    String bookingId = "WB" + String.format("%06d", bookingCounter);
 
-                arrivalCounter++;
-                bookingCounter++;
-                String bookingId = "WB" + String.format("%06d", bookingCounter);
+                    // memberId是null、tierRank是0——散客没有等级,这两个字段跟VIP那边刻意留空/最低
+                    Booking booking = new Booking(bookingId, confirmationNumber, name, phone, null,
+                            roomType, BookingStatus.PENDING, "WALK_IN", arrivalCounter, 0);
+                    booking.setNumberOfNights(numberOfNights);
 
-                // memberId是null、tierRank是0——散客没有等级,这两个字段跟VIP那边刻意留空/最低
-                Booking booking = new Booking(bookingId, confirmationNumber, name, phone, null,
-                        roomType, BookingStatus.PENDING, "WALK_IN", arrivalCounter, 0);
-                booking.setNumberOfNights(numberOfNights);
+                    queue.enqueue(booking);
+                    walkInCLI.displayRegistrationResult(booking);
 
-                queue.enqueue(booking);
-                walkInCLI.displayRegistrationResult(booking);
-
-                // 登记完立刻检查一次这个房型能不能马上分房(VIP没人等、队伍轮到他、有空房)
-                tryAllocate(roomType);
+                    // 登记完立刻检查一次这个房型能不能马上分房(VIP没人等、队伍轮到他、有空房)
+                    tryAllocate(roomType);
+                }
             }
             continueBooking = walkInCLI.promptAddAnotherRoom();
         }
@@ -232,6 +243,10 @@ public class WalkInControl {
         }
 
         String confirmationNumber = walkInCLI.promptConfirmationNumberToCancel();
+        if (!ValidationUtility.isEightDigitNumber(confirmationNumber)) {
+            walkInCLI.displayInvalidConfirmationNumber(confirmationNumber);
+            return;
+        }
         Booking target = findBookingInQueue(queue, confirmationNumber);
         if (target == null) {
             walkInCLI.displayCancelResult(false);
@@ -239,7 +254,7 @@ public class WalkInControl {
         }
 
         target.setStatus(BookingStatus.CANCELLED);
-        // 普通enqueue/dequeue只能动队头/队尾,取消要用QueueInterface额外提供的remove()
+        // 普通enqueue/dequeue只能动队头/队尾,取消要用QueueInterface额外写的remove()
         // 才能真正把队伍中间那一笔完全移除,不是只改状态
         queue.remove(target);
         walkInCLI.displayCancelResult(true);
@@ -315,11 +330,38 @@ public class WalkInControl {
      * "这个人现在是有memberId的会员了"这个身份的建立。
      */
     private Member enrollAsStandardMember(String name, String phone) {
+        String memberId = "M" + memberCounter;
         memberCounter++;
-        String memberId = "WM" + String.format("%06d", memberCounter);
         Member member = new Member(memberId, name, phone, "Standard", 0, 0);
         memberList.add(member);
         return member;
+    }
+
+    /**
+     * 扫一次memberList,把"M"开头、后面接数字的会员编号(比如种子资料的M1001~M1005)
+     * 都解析出数字部分,取最大值+1,当作WalkInControl自己接下来要用的编号起点——
+     * 之后终生只有这个计数器在用这个号码段,不会再重新扫描,新会员编号才会跟种子资料
+     * 格式一致,同时不会有"两个地方各自算出同一个号码"这种撞号风险。
+     * memberList万一是空的(理论上不会,MemberDao已经先读过种子资料),给一个保底起点。
+     */
+    private int computeNextMemberNumber() {
+        int maxNumber = 1000;
+        Iterator<Member> iterator = memberList.getIterator();
+        while (iterator.hasNext()) {
+            Member member = iterator.next();
+            String id = member.getMemberId();
+            if (id != null && id.length() > 1 && id.charAt(0) == 'M') {
+                try {
+                    int number = Integer.parseInt(id.substring(1));
+                    if (number > maxNumber) {
+                        maxNumber = number;
+                    }
+                } catch (NumberFormatException e) {
+                    // ID不是"M"+纯数字这个格式,跳过,不影响其他笔的计算
+                }
+            }
+        }
+        return maxNumber + 1;
     }
 
     /**

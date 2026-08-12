@@ -12,6 +12,7 @@ import entity.Room;
 import java.time.LocalDate;
 import java.util.Iterator;
 import utility.TierRankUtility;
+import utility.ValidationUtility;
 
 /**
  * VipAllocationControl.java - 模块2(VIP & Loyalty Tier Priority Room Allocation)的业务逻辑。
@@ -131,25 +132,28 @@ public class VipAllocationControl {
                 // 分房不再保证是当场发生的,之后可能是房间空出来才自动触发,
                 // 到时候客人不一定还在,没办法临时问
                 int numberOfNights = vipAllocationCLI.promptNumberOfNights();
+                if (numberOfNights <= 0) {
+                    vipAllocationCLI.displayInvalidNumberOfNights(numberOfNights);
+                } else {
+                    arrivalCounter++;
+                    bookingCounter++;
+                    String bookingId = "VB" + String.format("%06d", bookingCounter);
 
-                arrivalCounter++;
-                bookingCounter++;
-                String bookingId = "VB" + String.format("%06d", bookingCounter);
+                    // 把这个人的姓名、电话、会员编号都从Member身上抄一份进Booking,
+                    // 因为这时候还没建Guest,这些资料要先存在Booking里,等真的分到房才拿出来用
+                    Booking booking = new Booking(bookingId, confirmationNumber, member.getName(),
+                            member.getPhone(), member.getMemberId(), roomType, BookingStatus.PENDING,
+                            "VIP", arrivalCounter, tierRank);
+                    booking.setNumberOfNights(numberOfNights);
 
-                // 把这个人的姓名、电话、会员编号都从Member身上抄一份进Booking,
-                // 因为这时候还没建Guest,这些资料要先存在Booking里,等真的分到房才拿出来用
-                Booking booking = new Booking(bookingId, confirmationNumber, member.getName(),
-                        member.getPhone(), member.getMemberId(), roomType, BookingStatus.PENDING,
-                        "VIP", arrivalCounter, tierRank);
-                booking.setNumberOfNights(numberOfNights);
+                    // 插进对应房型的树——AVLTree.add()内部会自己比较tierRank/arrivalSequence,
+                    // 自动排到该在的位置,不用我们自己指定放哪
+                    tree.add(booking);
+                    vipAllocationCLI.displayRegistrationResult(booking, member.getTier());
 
-                // 插进对应房型的树——AVLTree.add()内部会自己比较tierRank/arrivalSequence,
-                // 自动排到该在的位置,不用我们自己指定放哪
-                tree.add(booking);
-                vipAllocationCLI.displayRegistrationResult(booking, member.getTier());
-
-                // 登记完立刻检查一次这个房型能不能马上分房(树里排最前面的那笔、有空房)
-                tryAllocate(roomType);
+                    // 登记完立刻检查一次这个房型能不能马上分房(树里排最前面的那笔、有空房)
+                    tryAllocate(roomType);
+                }
             }
             continueBooking = vipAllocationCLI.promptAddAnotherRoom();
         }
@@ -228,6 +232,10 @@ public class VipAllocationControl {
         // 只有确认号码,不知道这笔Booking的tierRank/arrivalSequence是多少,
         // 没办法直接叫树去比大小导航——所以先用in-order扫过去,找到"真正的那个物件"
         String confirmationNumber = vipAllocationCLI.promptConfirmationNumberToCancel();
+        if (!ValidationUtility.isEightDigitNumber(confirmationNumber)) {
+            vipAllocationCLI.displayInvalidConfirmationNumber(confirmationNumber);
+            return;
+        }
         Booking target = findBookingInTree(tree, confirmationNumber);
         if (target == null) {
             vipAllocationCLI.displayCancelResult(false);

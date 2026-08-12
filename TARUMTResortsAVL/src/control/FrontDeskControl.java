@@ -1,12 +1,18 @@
 package control;
 
+import adt.ArrayBasedList;
 import adt.HashTableInterface;
 import adt.ListInterface;
 import boundary.FrontDeskCLI;
+import entity.BillingRecord;
 import entity.Booking;
+import entity.BookingStatus;
 import entity.Guest;
+import entity.Member;
 import entity.Room;
+import java.time.LocalDate;
 import utility.TierRankUtility;
+import utility.ValidationUtility;
 
 /**
  * FrontDeskControl.java - Control class for the Front-Desk Service module.
@@ -23,13 +29,19 @@ public class FrontDeskControl {
     private FrontDeskCLI frontDeskCLI;
     private HashTableInterface<Guest> guestTable;
     private ListInterface<Room> roomList;
+    private LoyaltyControl loyaltyControl;
+
+    private int billingCounter;
 
     public FrontDeskControl(FrontDeskCLI frontDeskCLI,
                             HashTableInterface<Guest> guestTable,
-                            ListInterface<Room> roomList) {
+                            ListInterface<Room> roomList,
+                            LoyaltyControl loyaltyControl) {
         this.frontDeskCLI = frontDeskCLI;
         this.guestTable = guestTable;
         this.roomList = roomList;
+        this.loyaltyControl = loyaltyControl;
+        this.billingCounter = 0;
     }
 
     public void run() {
@@ -54,6 +66,10 @@ public class FrontDeskControl {
                     frontDeskCLI.displayNotImplemented("Billing Details");
                     break;
 
+                case 4:
+                    doCheckOut();
+                    break;
+
                 case 0:
                     running = false;
                     break;
@@ -68,6 +84,10 @@ public class FrontDeskControl {
     private void searchGuestByConfirmationNumber() {
 
         String confirmationNumber = frontDeskCLI.promptConfirmationNumber();
+        if (!ValidationUtility.isEightDigitNumber(confirmationNumber)) {
+            frontDeskCLI.displayInvalidConfirmationNumber(confirmationNumber);
+            return;
+        }
         Guest foundGuest = findGuest(confirmationNumber);
 
         if (foundGuest == null) {
@@ -98,6 +118,120 @@ public class FrontDeskControl {
                 buildBookingLines(foundGuest),
                 foundGuest.getBookings().getNumberOfEntries()
         );
+    }
+
+    /**
+     * Processes a check-out. One confirmation number can carry several rooms
+     * with different stay lengths, so this only settles the rooms the staff
+     * actually selects this time, not the guest's entire booking history —
+     * a later, separate check-out under the same confirmation number produces
+     * its own BillingRecord instead of overwriting this one.
+     */
+    private void doCheckOut() {
+
+        String confirmationNumber = frontDeskCLI.promptConfirmationNumber();
+        if (!ValidationUtility.isEightDigitNumber(confirmationNumber)) {
+            frontDeskCLI.displayInvalidConfirmationNumber(confirmationNumber);
+            return;
+        }
+
+        Guest guest = findGuest(confirmationNumber);
+        if (guest == null) {
+            frontDeskCLI.displayGuestNotFound();
+            return;
+        }
+
+        ListInterface<Booking> checkedIn = findCheckedInBookings(guest);
+        if (checkedIn.isEmpty()) {
+            frontDeskCLI.displayNoRoomsToCheckOut(confirmationNumber);
+            return;
+        }
+
+        frontDeskCLI.displayCheckedInBookings(checkedIn.getIterator());
+
+        // Staff picks which of the checked-in rooms are actually leaving this
+        // time — same room type v.s. "add another room" loop used at registration.
+        ListInterface<Booking> selected = new ArrayBasedList<>();
+        double roomFee = 0.0;
+        boolean continueSelecting = true;
+        while (continueSelecting) {
+            String roomNumber = frontDeskCLI.promptRoomToCheckOut();
+            Booking match = findBookingByRoomNumber(checkedIn, roomNumber);
+            if (match == null) {
+                frontDeskCLI.displayRoomNotEligible(roomNumber);
+            } else if (selected.contains(match)) {
+                frontDeskCLI.displayRoomAlreadySelected(roomNumber);
+            } else {
+                Room room = findRoom(match.getAssignedRoomNo());
+                double rate = (room == null) ? 0.0 : room.getNightlyRate();
+                roomFee = roomFee + rate * match.getNumberOfNights();
+                selected.add(match);
+                frontDeskCLI.displayRoomSelected(roomNumber);
+            }
+            continueSelecting = frontDeskCLI.promptCheckOutAnotherRoom();
+        }
+
+        if (selected.isEmpty()) {
+            frontDeskCLI.displayNoRoomsSelected();
+            return;
+        }
+
+        double extraCharges = frontDeskCLI.promptExtraCharges();
+        double totalAmount = roomFee + extraCharges;
+        int pointsEarned = (int) (totalAmount / 10);
+
+        billingCounter++;
+        String billingId = "BR" + String.format("%06d", billingCounter);
+        BillingRecord billingRecord = new BillingRecord(billingId, confirmationNumber, roomFee,
+                extraCharges, totalAmount, pointsEarned, LocalDate.now().toString());
+        guest.addBillingRecord(billingRecord);
+
+        for (int i = 1; i <= selected.getNumberOfEntries(); i++) {
+            Booking booking = selected.getEntry(i);
+            booking.setStatus(BookingStatus.CHECKED_OUT);
+            Room room = findRoom(booking.getAssignedRoomNo());
+            if (room != null) {
+                // Needs cleaning before it can go back into the pool — not an
+                // immediate return to AVAILABLE. Housekeeping (not built yet)
+                // owns the rest of that transition.
+                room.setStatus("NEEDS_CLEANING");
+            }
+        }
+
+        Member member = (guest.getMemberId() == null) ? null
+                : loyaltyControl.awardPointsByMemberId(guest.getMemberId(), pointsEarned);
+
+        frontDeskCLI.displayCheckOutResult(billingRecord, selected.getNumberOfEntries(),
+                (member == null) ? null : member.getTier());
+    }
+
+    /**
+     * Filters a guest's full booking history down to the ones still checked
+     * in right now — history already checked out or cancelled isn't eligible.
+     */
+    private ListInterface<Booking> findCheckedInBookings(Guest guest) {
+        ListInterface<Booking> result = new ArrayBasedList<>();
+        for (int i = 1; i <= guest.getBookings().getNumberOfEntries(); i++) {
+            Booking booking = guest.getBookings().getEntry(i);
+            if (booking.getStatus() == BookingStatus.CHECKED_IN) {
+                result.add(booking);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Finds the checked-in booking that matches a given room number, so the
+     * staff can select rooms to check out by number rather than booking ID.
+     */
+    private Booking findBookingByRoomNumber(ListInterface<Booking> bookings, String roomNumber) {
+        for (int i = 1; i <= bookings.getNumberOfEntries(); i++) {
+            Booking booking = bookings.getEntry(i);
+            if (booking.getAssignedRoomNo() != null && booking.getAssignedRoomNo().equalsIgnoreCase(roomNumber)) {
+                return booking;
+            }
+        }
+        return null;
     }
 
     /**

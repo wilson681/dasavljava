@@ -24,12 +24,14 @@ public class Guest {
     private String checkOutDate;          // 预计退房日期,给报表统计入住率用
     private int numberOfNights;           // 这次入住预计住几晚,算房费用
     private ListInterface<String> bookedRooms;   // 这次入住,预订的所有房号
-    private BillingRecord billingRecord;          // 这次入住退房结算的账单,退房前是null
+    // 一位客人可能分好几次退房(比如两间房、不同天各自退),每次都各自结一张账单,
+    // 所以这里是清单,不是单一一张——不能假设"一位客人这辈子只有一张账单"
+    private ListInterface<BillingRecord> billingRecords;
     private ListInterface<Booking> bookings;
     /**
      * 构造函数
-     * 新登记的客人,预设还没有任何预订的房间,退房账单也还没产生,
-     * 所以 bookedRooms 在这里初始化成空的 List,billingRecord 初始化成 null
+     * 新登记的客人,预设还没有任何预订的房间,也还没有任何账单,
+     * 所以 bookedRooms、billingRecords 在这里都初始化成空的 List
      *
      * 注意: 这里的 List 实现类名称待team确定最终ADT实现方式后替换
      * (不可使用 ArrayList 这个名字,因为会与 java.util.ArrayList 撞名,
@@ -48,7 +50,7 @@ public class Guest {
         this.checkOutDate = checkOutDate;
         this.numberOfNights = numberOfNights;
         this.bookedRooms = new ArrayBasedList<>();
-        this.billingRecord = null;
+        this.billingRecords = new ArrayBasedList<>();
         this.bookings = new ArrayBasedList<>();
     }
 /**
@@ -58,7 +60,7 @@ public class Guest {
 public Guest(String confirmationNumber) {
     this.confirmationNumber = confirmationNumber;
     this.bookedRooms = new ArrayBasedList<>();
-    this.billingRecord = null;
+    this.billingRecords = new ArrayBasedList<>();
     this.bookings = new ArrayBasedList<>();
 }
 
@@ -104,8 +106,8 @@ public Guest(String confirmationNumber) {
         return bookedRooms;
     }
 
-    public BillingRecord getBillingRecord() {
-        return billingRecord;
+    public ListInterface<BillingRecord> getBillingRecords() {
+        return billingRecords;
     }
 
     // ========== Setters ==========
@@ -136,11 +138,12 @@ public Guest(String confirmationNumber) {
     }
 
     /**
-     * 退房结账时,把最终账单写进这位客人的记录
+     * 退房结账时,把这一次结算的账单加进这位客人的记录——一位客人可能分好几次退房,
+     * 各自结出各自的账单,所以是往清单里加一笔,不是覆盖掉之前那笔
      * (单纯的数据操作,房费/额外消费/积分怎么算是Control层的事)
      */
-    public void setBillingRecord(BillingRecord billingRecord) {
-        this.billingRecord = billingRecord;
+    public void addBillingRecord(BillingRecord billingRecord) {
+        billingRecords.add(billingRecord);
     }
 /**
      * Links a booking to this guest. One confirmation number may cover several
