@@ -93,7 +93,71 @@ public class FrontDeskCLI {
         System.out.println();
         System.out.println(featureName + " - coming soon.");
     }
+    /**
+     * Prints the header block of the billing details screen.
+     */
+    public void displayBillingHeader(String confirmationNumber, String guestName,
+                                     String guestType, String tier) {
+        System.out.println();
+        System.out.println("======================================================");
+        System.out.println("                 BILLING DETAILS");
+        System.out.println("======================================================");
+        System.out.println("Confirmation Number : " + confirmationNumber);
+        System.out.println("Guest               : " + guestName);
+        System.out.println("Guest Type          : " + guestType);
+        System.out.println("Tier                : " + tier);
+    }
 
+    /**
+     * Prints the charges for rooms the guest is still occupying.
+     */
+    public void displayCurrentCharges(String chargeLines, int roomCount,
+                                      int totalNights, double totalCharges) {
+        System.out.println("------------------------------------------------------");
+        System.out.println("CURRENT CHARGES  (rooms still checked in)");
+        System.out.println("------------------------------------------------------");
+
+        if (roomCount == 0) {
+            System.out.println("  None - no room is currently checked in.");
+            return;
+        }
+
+        System.out.printf("  %-6s %-10s %12s %8s %14s%n",
+                "Room", "Type", "Rate/night", "Nights", "Subtotal");
+        System.out.print(chargeLines);
+        System.out.println("------------------------------------------------------");
+        System.out.printf("  %d room(s), %d night(s) in total%n", roomCount, totalNights);
+        System.out.printf("  Room charges so far              RM %12.2f%n", totalCharges);
+        System.out.println("  Note: tier discount and extra charges are applied");
+        System.out.println("        at check-out, so the final amount may differ.");
+    }
+
+    /**
+     * Prints the bills already settled under this confirmation number.
+     */
+    public void displaySettledBills(String settledLines, int billCount,
+                                    double settledTotal, int totalPoints) {
+        System.out.println("------------------------------------------------------");
+        System.out.println("SETTLED BILLS  (" + billCount + ")");
+        System.out.println("------------------------------------------------------");
+
+        if (billCount == 0) {
+            System.out.println("  None - nothing has been checked out yet.");
+            return;
+        }
+
+        System.out.print(settledLines);
+        System.out.println("------------------------------------------------------");
+        System.out.printf("  Total settled                    RM %12.2f%n", settledTotal);
+        System.out.printf("  Total points earned              %15d%n", totalPoints);
+    }
+
+    /**
+     * Prints the closing line of the billing details screen.
+     */
+    public void displayBillingFooter() {
+        System.out.println("======================================================");
+    }
     // ========== Check-Out ==========
 
     public void displayNoRoomsToCheckOut(String confirmationNumber) {

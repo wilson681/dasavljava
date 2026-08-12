@@ -10,6 +10,8 @@ import entity.BookingStatus;
 import entity.Guest;
 import entity.Member;
 import entity.Room;
+import entity.BillingRecord;
+import entity.BookingStatus;
 import java.time.LocalDate;
 import utility.TierRankUtility;
 import utility.ValidationUtility;
@@ -63,7 +65,7 @@ public class FrontDeskControl {
                     break;
 
                 case 3:
-                    frontDeskCLI.displayNotImplemented("Billing Details");
+                    viewBillingDetails();
                     break;
 
                 case 4:
@@ -215,6 +217,49 @@ public class FrontDeskControl {
     }
 
     /**
+     * Shows the billing picture for one confirmation number: what the rooms
+     * currently checked in have accumulated, and what has already been settled.
+     *
+     * <p>Rooms still checked in are priced live from the nightly rate and the
+     * stay length held on each booking. Rooms already checked out are read from
+     * their BillingRecord instead, because the settled amount includes the tier
+     * discount and extra charges that were only known at check-out.</p>
+     */
+    private void viewBillingDetails() {
+
+        String confirmationNumber = frontDeskCLI.promptConfirmationNumber();
+        if (!ValidationUtility.isEightDigitNumber(confirmationNumber)) {
+            frontDeskCLI.displayInvalidConfirmationNumber(confirmationNumber);
+            return;
+        }
+
+        Guest guest = findGuest(confirmationNumber);
+        if (guest == null) {
+            frontDeskCLI.displayGuestNotFound();
+            return;
+        }
+
+        boolean isMember = guest.getMemberId() != null;
+        String guestType = isMember ? "Member" : "Walk-In Guest";
+
+        frontDeskCLI.displayBillingHeader(confirmationNumber, guest.getName(),
+                guestType, guest.getTier());
+
+        frontDeskCLI.displayCurrentCharges(
+                buildChargeLines(guest),
+                countCheckedInRooms(guest),
+                countCheckedInNights(guest),
+                calculateCurrentCharges(guest));
+
+        frontDeskCLI.displaySettledBills(
+                buildSettledLines(guest),
+                guest.getBillingRecords().getNumberOfEntries(),
+                calculateSettledTotal(guest),
+                calculateTotalPoints(guest));
+
+        frontDeskCLI.displayBillingFooter();
+    }
+    /**
      * Filters a guest's full booking history down to the ones still checked
      * in right now — history already checked out or cancelled isn't eligible.
      */
@@ -321,5 +366,129 @@ public class FrontDeskControl {
                     booking.getNumberOfNights(), rate);
         }
         return result;
+    }
+    
+    /**
+     * Builds one charge line per room the guest is still occupying.
+     */
+    private String buildChargeLines(Guest guest) {
+
+        String result = "";
+        for (int i = 1; i <= guest.getBookings().getNumberOfEntries(); i++) {
+
+            Booking booking = guest.getBookings().getEntry(i);
+            if (booking.getStatus() != BookingStatus.CHECKED_IN) {
+                continue;
+            }
+
+            Room room = findRoom(booking.getAssignedRoomNo());
+            double rate = (room == null) ? 0.0 : room.getNightlyRate();
+            String type = (room == null) ? booking.getRequestedRoomType() : room.getRoomType();
+            double subtotal = rate * booking.getNumberOfNights();
+
+            result = result + String.format("  %-6s %-10s %12.2f %8d %14.2f%n",
+                    booking.getAssignedRoomNo(), type, rate,
+                    booking.getNumberOfNights(), subtotal);
+        }
+        return result;
+    }
+
+    /**
+     * Sums the nightly rate times the stay length for every room still
+     * checked in.
+     */
+    private double calculateCurrentCharges(Guest guest) {
+
+        double total = 0.0;
+        for (int i = 1; i <= guest.getBookings().getNumberOfEntries(); i++) {
+
+            Booking booking = guest.getBookings().getEntry(i);
+            if (booking.getStatus() != BookingStatus.CHECKED_IN) {
+                continue;
+            }
+
+            Room room = findRoom(booking.getAssignedRoomNo());
+            double rate = (room == null) ? 0.0 : room.getNightlyRate();
+            total = total + rate * booking.getNumberOfNights();
+        }
+        return total;
+    }
+
+    /**
+     * @return how many rooms this guest is currently occupying
+     */
+    private int countCheckedInRooms(Guest guest) {
+
+        int count = 0;
+        for (int i = 1; i <= guest.getBookings().getNumberOfEntries(); i++) {
+            if (guest.getBookings().getEntry(i).getStatus() == BookingStatus.CHECKED_IN) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /**
+     * @return the total nights across every room this guest is occupying
+     */
+    private int countCheckedInNights(Guest guest) {
+
+        int nights = 0;
+        for (int i = 1; i <= guest.getBookings().getNumberOfEntries(); i++) {
+            Booking booking = guest.getBookings().getEntry(i);
+            if (booking.getStatus() == BookingStatus.CHECKED_IN) {
+                nights = nights + booking.getNumberOfNights();
+            }
+        }
+        return nights;
+    }
+
+    /**
+     * Builds one block per settled bill under this confirmation number.
+     */
+    private String buildSettledLines(Guest guest) {
+
+        String result = "";
+        for (int i = 1; i <= guest.getBillingRecords().getNumberOfEntries(); i++) {
+
+            BillingRecord bill = guest.getBillingRecords().getEntry(i);
+
+            result = result + String.format("  %-10s  %s%n",
+                    bill.getBillingId(), bill.getDate());
+            result = result + String.format("    Room fee                     RM %12.2f%n",
+                    bill.getRoomFee());
+            result = result + String.format("    Extra charges                RM %12.2f%n",
+                    bill.getExtraCharges());
+            result = result + String.format("    Total paid                   RM %12.2f%n",
+                    bill.getTotalAmount());
+            result = result + String.format("    Points earned                %15d%n",
+                    bill.getPointsEarned());
+            result = result + System.lineSeparator();
+        }
+        return result;
+    }
+
+    /**
+     * @return the sum of every settled bill under this confirmation number
+     */
+    private double calculateSettledTotal(Guest guest) {
+
+        double total = 0.0;
+        for (int i = 1; i <= guest.getBillingRecords().getNumberOfEntries(); i++) {
+            total = total + guest.getBillingRecords().getEntry(i).getTotalAmount();
+        }
+        return total;
+    }
+
+    /**
+     * @return the loyalty points earned across every settled bill
+     */
+    private int calculateTotalPoints(Guest guest) {
+
+        int points = 0;
+        for (int i = 1; i <= guest.getBillingRecords().getNumberOfEntries(); i++) {
+            points = points + guest.getBillingRecords().getEntry(i).getPointsEarned();
+        }
+        return points;
     }
 }

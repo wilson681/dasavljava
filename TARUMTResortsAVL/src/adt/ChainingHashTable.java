@@ -39,11 +39,18 @@ public class ChainingHashTable<T> implements HashTableInterface<T> {
     }
 
     /**
-     * 把T的hashCode()换算成落在哪一个桶。hashCode()可能是负数,
-     * 用Math.abs()转成非负数,再对桶的数量取余数。
+     * Maps the entry's hashCode() onto a bucket index.
+     *
+     * <p>hashCode() may be negative, and Math.abs() cannot be used here:
+     * Math.abs(Integer.MIN_VALUE) overflows and returns a negative value,
+     * which would then produce a negative index. Masking with 0x7FFFFFFF
+     * clears the sign bit instead, so the result is always non-negative.</p>
+     *
+     * @param entry the entry whose bucket index is required
+     * @return a bucket index in the range 0 to buckets.length - 1
      */
     private int getBucketIndex(T entry) {
-        return Math.abs(entry.hashCode()) % buckets.length;
+        return (entry.hashCode() & 0x7FFFFFFF) % buckets.length;
     }
 
     @Override
