@@ -177,12 +177,21 @@ public class FrontDeskControl {
         }
 
         double extraCharges = frontDeskCLI.promptExtraCharges();
-        double totalAmount = roomFee + extraCharges;
+
+        // 等级折扣是"个性化促销"的一种,只影响价格计算,不碰房型/房间状态——
+        // 折扣用会员现在真正的等级算(不是Guest身上入住当天的快照),这样退房那一刻
+        // 算出来的价格才是准的,不会因为快照过期而算错
+        String currentTier = (guest.getMemberId() == null) ? null
+                : loyaltyControl.getTierByMemberId(guest.getMemberId());
+        int discountPercent = TierRankUtility.tierToDiscountPercent(currentTier);
+        double discountedRoomFee = roomFee - (roomFee * discountPercent / 100.0);
+
+        double totalAmount = discountedRoomFee + extraCharges;
         int pointsEarned = (int) (totalAmount / 10);
 
         billingCounter++;
         String billingId = "BR" + String.format("%06d", billingCounter);
-        BillingRecord billingRecord = new BillingRecord(billingId, confirmationNumber, roomFee,
+        BillingRecord billingRecord = new BillingRecord(billingId, confirmationNumber, discountedRoomFee,
                 extraCharges, totalAmount, pointsEarned, LocalDate.now().toString());
         guest.addBillingRecord(billingRecord);
 
@@ -202,7 +211,7 @@ public class FrontDeskControl {
                 : loyaltyControl.awardPointsByMemberId(guest.getMemberId(), pointsEarned);
 
         frontDeskCLI.displayCheckOutResult(billingRecord, selected.getNumberOfEntries(),
-                (member == null) ? null : member.getTier());
+                roomFee, discountPercent, (member == null) ? null : member.getTier());
     }
 
     /**

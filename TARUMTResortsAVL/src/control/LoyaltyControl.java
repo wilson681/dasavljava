@@ -219,6 +219,18 @@ public class LoyaltyControl {
         return member;
     }
 
+    /**
+     * 给退房结算价格用——查这位会员**现在真正**的等级(不是Guest身上入住当天的快照),
+     * 折扣要照实际状态算才准。查不到会员就回传null,呼叫方自行决定折扣是0%还是不显示。
+     *
+     * @param memberId 要查的会员ID
+     * @return 该会员现在的等级文字,查不到就回传null
+     */
+    public String getTierByMemberId(String memberId) {
+        Member member = findMemberById(memberId);
+        return (member == null) ? null : member.getTier();
+    }
+
     // ========== 内部辅助方法 ==========
 
     /**

@@ -199,11 +199,11 @@ public class VipAllocationControl {
         // 但如果这位VIP已经因为前一间房分房成功、guestTable里早就有他的Guest记录了,
         // 就不能再new一个塞进去(那样guestTable里会出现两个confirmationNumber相同的
         // Guest,查找时后者会盖住前者),而是把这间新房加进原本那个Guest的bookedRooms
+        Member member = findMemberById(topPriority.getMemberId());
         Guest guest = findGuestByConfirmationNumber(topPriority.getConfirmationNumber());
         if (guest == null) {
             guest = new Guest(topPriority.getConfirmationNumber(), topPriority.getGuestNameSnapshot(),
-                    topPriority.getPhoneSnapshot(), topPriority.getMemberId(),
-                    findMemberById(topPriority.getMemberId()).getTier(),
+                    topPriority.getPhoneSnapshot(), topPriority.getMemberId(), member.getTier(),
                     checkIn.toString() + " " + java.time.LocalTime.now().withNano(0).toString(),
                     checkIn.toString(), checkOut.toString(), topPriority.getNumberOfNights());
             guestTable.add(guest);
@@ -216,7 +216,15 @@ public class VipAllocationControl {
         topPriority.setStayPeriod(checkIn.toString(), checkOut.toString(), topPriority.getNumberOfNights());
         guest.addBooking(topPriority);
 
-        vipAllocationCLI.displayAllocationResult(topPriority, availableRoom);
+        // 分房那一刻就先给客人看一下预估房费(等级折扣是"个性化促销"的一种,只影响
+        // 价格显示,不碰房型/房间状态)——正式结算金额还是要等退房才真正定案,
+        // 这里只是让客人提前知道大概要付多少
+        double originalPrice = availableRoom.getNightlyRate() * topPriority.getNumberOfNights();
+        int discountPercent = TierRankUtility.tierToDiscountPercent(member.getTier());
+        double finalPrice = originalPrice - (originalPrice * discountPercent / 100.0);
+
+        vipAllocationCLI.displayAllocationResult(topPriority, availableRoom,
+                originalPrice, discountPercent, finalPrice);
     }
 
     // ========== 功能3:取消排队 ==========
@@ -229,14 +237,17 @@ public class VipAllocationControl {
             return;
         }
 
-        // 只有确认号码,不知道这笔Booking的tierRank/arrivalSequence是多少,
+        // 用bookingId取消,不是confirmationNumber——同一个confirmationNumber可能同时
+        // 有好几笔Booking在同一个房型的树里(一次订多间房),用confirmationNumber去找
+        // 会有歧义,没办法让客人指定要取消的到底是哪一笔;bookingId每笔都是唯一的
+        // 只有bookingId,不知道这笔Booking的tierRank/arrivalSequence是多少,
         // 没办法直接叫树去比大小导航——所以先用in-order扫过去,找到"真正的那个物件"
-        String confirmationNumber = vipAllocationCLI.promptConfirmationNumberToCancel();
-        if (!ValidationUtility.isEightDigitNumber(confirmationNumber)) {
-            vipAllocationCLI.displayInvalidConfirmationNumber(confirmationNumber);
+        String bookingId = vipAllocationCLI.promptBookingIdToCancel();
+        if (ValidationUtility.isBlank(bookingId)) {
+            vipAllocationCLI.displayInvalidBookingId(bookingId);
             return;
         }
-        Booking target = findBookingInTree(tree, confirmationNumber);
+        Booking target = findBookingInTree(tree, bookingId);
         if (target == null) {
             vipAllocationCLI.displayCancelResult(false);
             return;
@@ -332,15 +343,15 @@ public class VipAllocationControl {
     }
 
     /**
-     * 在指定的树里,用confirmationNumber线性找出对应的Booking物件。
+     * 在指定的树里,用bookingId线性找出对应的Booking物件。
      * 找到的是"真正存在树里的那个物件"(不是重新拼凑出来的),
      * 这样才能拿去交给 tree.remove() 正确导航、删除。
      */
-    private Booking findBookingInTree(SearchTreeInterface<Booking> tree, String confirmationNumber) {
+    private Booking findBookingInTree(SearchTreeInterface<Booking> tree, String bookingId) {
         Iterator<Booking> iterator = tree.getInorderIterator();
         while (iterator.hasNext()) {
             Booking booking = iterator.next();
-            if (booking.getConfirmationNumber().equals(confirmationNumber)) {
+            if (booking.getBookingId().equals(bookingId)) {
                 return booking;
             }
         }

@@ -93,6 +93,8 @@ public class MainMenuControl {
         new RoomDao().loadRooms(roomList);
         new RedemptionItemDao().loadRedemptionItems(redemptionItemList);
 
+
+
         // WalkInControl也要拿到VIP的三棵树(只读,用来检查isEmpty())才能落实
         // "VIP永远优先"这条两个模块共用的规则
         this.walkInControl = new WalkInControl(
@@ -105,11 +107,10 @@ public class MainMenuControl {
         // 去调用awardPointsByMemberId(),不能反过来
         this.loyaltyControl = new LoyaltyControl(
                 new LoyaltyCLI(), memberList, redemptionItemList, redemptionTransactionList);
-        this.frontDeskControl = new FrontDeskControl(
-        new FrontDeskCLI(),
-        guestTable,
-        roomList,
-        loyaltyControl);
+
+
+        this.frontDeskControl = new FrontDeskControl( 
+                new FrontDeskCLI(),guestTable,roomList,loyaltyControl);
     }
 
     /**

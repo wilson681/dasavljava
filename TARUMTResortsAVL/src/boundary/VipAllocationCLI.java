@@ -130,7 +130,8 @@ public class VipAllocationCLI {
         System.out.println("Invalid number of nights (" + numberOfNights + "). Must be a positive whole number.");
     }
 
-    public void displayAllocationResult(Booking booking, Room room) {
+    public void displayAllocationResult(Booking booking, Room room,
+                                         double originalPrice, int discountPercent, double finalPrice) {
         System.out.println();
         System.out.println(DIVIDER);
         System.out.println("  ROOM ALLOCATED");
@@ -138,18 +139,21 @@ public class VipAllocationCLI {
         System.out.println("  Guest                : " + booking.getGuestNameSnapshot());
         System.out.println("  Confirmation Number  : " + booking.getConfirmationNumber());
         System.out.println("  Room                 : " + room.getRoomNumber());
+        System.out.println("  Original Price       : RM" + originalPrice);
+        System.out.println("  Tier Discount        : " + discountPercent + "%");
+        System.out.println("  Estimated Price      : RM" + finalPrice + "  (finalised at check-out)");
         System.out.println(DIVIDER);
     }
 
     // ========== 功能2:取消排队 ==========
 
-    public String promptConfirmationNumberToCancel() {
-        System.out.print("Enter the 8-digit confirmation number to cancel: ");
+    public String promptBookingIdToCancel() {
+        System.out.print("Enter the booking ID to cancel: ");
         return scanner.nextLine().trim();
     }
 
-    public void displayInvalidConfirmationNumber(String confirmationNumber) {
-        System.out.println("\"" + confirmationNumber + "\" is not a valid confirmation number. It must be exactly 8 digits.");
+    public void displayInvalidBookingId(String bookingId) {
+        System.out.println("\"" + bookingId + "\" is not a valid booking ID.");
     }
 
     public void displayCancelResult(boolean success) {

@@ -148,14 +148,17 @@ public class FrontDeskCLI {
         }
     }
 
-    public void displayCheckOutResult(BillingRecord billingRecord, int roomsCheckedOut, String memberTier) {
+    public void displayCheckOutResult(BillingRecord billingRecord, int roomsCheckedOut,
+                                       double originalRoomFee, int discountPercent, String memberTier) {
         System.out.println();
         System.out.println("======================================================");
         System.out.println("                 CHECK-OUT COMPLETE");
         System.out.println("======================================================");
         System.out.println("Billing ID          : " + billingRecord.getBillingId());
         System.out.println("Rooms Checked Out   : " + roomsCheckedOut);
-        System.out.println("Room Fee            : RM" + billingRecord.getRoomFee());
+        System.out.println("Original Room Fee   : RM" + originalRoomFee);
+        System.out.println("Tier Discount       : " + discountPercent + "%");
+        System.out.println("Discounted Room Fee : RM" + billingRecord.getRoomFee());
         System.out.println("Extra Charges       : RM" + billingRecord.getExtraCharges());
         System.out.println("Total Amount        : RM" + billingRecord.getTotalAmount());
         System.out.println("Points Earned       : +" + billingRecord.getPointsEarned());

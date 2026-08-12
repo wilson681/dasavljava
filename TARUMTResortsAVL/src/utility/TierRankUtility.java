@@ -55,4 +55,26 @@ public class TierRankUtility {
             return "Standard";
         }
     }
+
+    /**
+     * 把等级文字换算成房费折扣百分比——模块5"个性化促销"的其中一种,固定写死,
+     * 只影响价格显示/计算,不碰房型/房间状态这类真正的业务逻辑。
+     * @param tier 等级文字,大小写不拘
+     * @return 折扣百分比(0~100 的整数);不认得的等级(包括Standard)回传0,没有折扣
+     */
+    public static int tierToDiscountPercent(String tier) {
+        if (tier == null) {
+            return 0;
+        }
+        switch (tier.trim().toUpperCase()) {
+            case "DIAMOND":
+                return 15;
+            case "PLATINUM":
+                return 10;
+            case "ELITE":
+                return 5;
+            default:
+                return 0;
+        }
+    }
 }

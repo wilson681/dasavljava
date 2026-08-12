@@ -12,6 +12,7 @@ import entity.Member;
 import entity.Room;
 import java.time.LocalDate;
 import java.util.Iterator;
+import utility.TierRankUtility;
 import utility.ValidationUtility;
 
 /**
@@ -229,7 +230,14 @@ public class WalkInControl {
         frontBooking.setStayPeriod(checkIn.toString(), checkOut.toString(), frontBooking.getNumberOfNights());
         guest.addBooking(frontBooking);
 
-        walkInCLI.displayAllocationResult(frontBooking, availableRoom);
+        // 分房那一刻就先给客人看一下预估房费(等级折扣是"个性化促销"的一种,只影响
+        // 价格显示,不碰房型/房间状态)——Walk-In新客人tier固定是Standard(0%折扣),
+        // 正式结算金额还是要等退房才真正定案
+        double originalPrice = availableRoom.getNightlyRate() * frontBooking.getNumberOfNights();
+        int discountPercent = TierRankUtility.tierToDiscountPercent(guest.getTier());
+        double finalPrice = originalPrice - (originalPrice * discountPercent / 100.0);
+
+        walkInCLI.displayAllocationResult(frontBooking, availableRoom, originalPrice, discountPercent, finalPrice);
     }
 
     // ========== 功能3:取消排队 ==========
@@ -242,12 +250,16 @@ public class WalkInControl {
             return;
         }
 
-        String confirmationNumber = walkInCLI.promptConfirmationNumberToCancel();
-        if (!ValidationUtility.isEightDigitNumber(confirmationNumber)) {
-            walkInCLI.displayInvalidConfirmationNumber(confirmationNumber);
+        // 用bookingId取消,不是confirmationNumber——同一个confirmationNumber可能同时
+        // 有好几笔Booking在同一个房型的队伍里(一次订多间房),用confirmationNumber去找
+        // 只会抓到排最前面那一笔,没办法让客人指定要取消的到底是哪一间;bookingId每笔
+        // 都是唯一的,不会有这个歧义
+        String bookingId = walkInCLI.promptBookingIdToCancel();
+        if (ValidationUtility.isBlank(bookingId)) {
+            walkInCLI.displayInvalidBookingId(bookingId);
             return;
         }
-        Booking target = findBookingInQueue(queue, confirmationNumber);
+        Booking target = findBookingInQueue(queue, bookingId);
         if (target == null) {
             walkInCLI.displayCancelResult(false);
             return;
@@ -376,14 +388,14 @@ public class WalkInControl {
     }
 
     /**
-     * 在指定的队伍里,用confirmationNumber线性找出对应的Booking物件。
+     * 在指定的队伍里,用bookingId线性找出对应的Booking物件。
      * 找到的是"真正存在队伍里的那个物件",这样才能拿去交给 queue.remove() 正确比对、移除。
      */
-    private Booking findBookingInQueue(QueueInterface<Booking> queue, String confirmationNumber) {
+    private Booking findBookingInQueue(QueueInterface<Booking> queue, String bookingId) {
         Iterator<Booking> iterator = queue.getIterator();
         while (iterator.hasNext()) {
             Booking booking = iterator.next();
-            if (booking.getConfirmationNumber().equals(confirmationNumber)) {
+            if (booking.getBookingId().equals(bookingId)) {
                 return booking;
             }
         }
