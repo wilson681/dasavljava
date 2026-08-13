@@ -10,8 +10,6 @@ import entity.BookingStatus;
 import entity.Guest;
 import entity.Member;
 import entity.Room;
-import entity.BillingRecord;
-import entity.BookingStatus;
 import java.time.LocalDate;
 import utility.TierRankUtility;
 import utility.ValidationUtility;
