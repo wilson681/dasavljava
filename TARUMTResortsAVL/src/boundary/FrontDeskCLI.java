@@ -158,6 +158,76 @@ public class FrontDeskCLI {
     public void displayBillingFooter() {
         System.out.println("======================================================");
     }
+    
+    // ========== Room Availability ==========
+
+    /**
+     * Asks which room type to report on.
+     *
+     * @return the room type name, or null when the user wants every type
+     */
+    public String promptRoomTypeFilter() {
+        System.out.println();
+        System.out.println("Filter by room type:");
+        System.out.println("  1) Standard");
+        System.out.println("  2) Deluxe");
+        System.out.println("  3) Suite");
+        System.out.println("  4) All types");
+        System.out.print("Enter your choice: ");
+
+        String input = scanner.nextLine().trim();
+        if (input.equals("1")) {
+            return "Standard";
+        }
+        if (input.equals("2")) {
+            return "Deluxe";
+        }
+        if (input.equals("3")) {
+            return "Suite";
+        }
+        return null;
+    }
+
+   /**
+     * Prints the room availability query: which rooms can be sold right now,
+     * and how many are blocked.
+     *
+     * <p>This is an operational lookup, not an analysis. Occupancy rates,
+     * revenue per room and idle capacity belong to the room utilisation report
+     * instead, so the two use cases stay distinct.</p>
+     */
+    public void displayRoomAvailability(String typeFilter,
+                                        String breakdownLines,
+                                        String availableLines,
+                                        int available,
+                                        int occupied,
+                                        int inHousekeeping) {
+
+        System.out.println();
+        System.out.println("======================================================");
+        System.out.println("                ROOM AVAILABILITY");
+        System.out.println("======================================================");
+        System.out.println("Filter : " + ((typeFilter == null) ? "All room types" : typeFilter));
+        System.out.println("------------------------------------------------------");
+        System.out.printf("  %-10s %10s %9s%n", "Type", "Available", "Blocked");
+        System.out.print(breakdownLines);
+        System.out.println("------------------------------------------------------");
+        System.out.println("ROOMS READY TO SELL  (" + available + ")");
+        System.out.println("------------------------------------------------------");
+
+        if (available == 0) {
+            System.out.println("  None - no room can be sold right now.");
+        } else {
+            System.out.printf("  %-6s %-10s %12s%n", "Room", "Type", "Rate/night");
+            System.out.print(availableLines);
+        }
+
+        System.out.println("------------------------------------------------------");
+        System.out.println("  " + available + " room(s) can be sold right now.");
+        System.out.println("  " + (occupied + inHousekeeping) + " room(s) unavailable: "
+                + occupied + " occupied, " + inHousekeeping + " in housekeeping.");
+        System.out.println("======================================================");
+    }
     // ========== Check-Out ==========
 
     public void displayNoRoomsToCheckOut(String confirmationNumber) {

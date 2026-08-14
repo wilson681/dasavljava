@@ -59,7 +59,7 @@ public class FrontDeskControl {
                     break;
 
                 case 2:
-                    frontDeskCLI.displayNotImplemented("Room Availability");
+                    checkRoomAvailability();
                     break;
 
                 case 3:
@@ -256,6 +256,30 @@ public class FrontDeskControl {
                 calculateTotalPoints(guest));
 
         frontDeskCLI.displayBillingFooter();
+    }
+    
+  /**
+     * Answers the operational question "can I sell a room right now?".
+     *
+     * <p>Deliberately limited to current sellability. Occupancy rate, revenue
+     * per room and idle capacity are analytical measures and belong to the room
+     * utilisation report, so this query and that report do not overlap.</p>
+     */
+    private void checkRoomAvailability() {
+
+        String typeFilter = frontDeskCLI.promptRoomTypeFilter();
+
+        int inHousekeeping = countRooms(typeFilter, "NEEDS_CLEANING")
+                + countRooms(typeFilter, "CLEANING_IN_PROGRESS")
+                + countRooms(typeFilter, "INSPECTED");
+
+        frontDeskCLI.displayRoomAvailability(
+                typeFilter,
+                buildTypeBreakdownLines(typeFilter),
+                buildAvailableRoomLines(typeFilter),
+                countRooms(typeFilter, "AVAILABLE"),
+                countRooms(typeFilter, "OCCUPIED"),
+                inHousekeeping);
     }
     /**
      * Filters a guest's full booking history down to the ones still checked
@@ -488,5 +512,95 @@ public class FrontDeskControl {
             points = points + guest.getBillingRecords().getEntry(i).getPointsEarned();
         }
         return points;
+    }
+    
+    /**
+     * Counts rooms matching an optional type and an optional status.
+     *
+     * <p>Passing null for either filter means "any value", so this one method
+     * serves every count the availability screen and the utilisation report
+     * need, instead of one method per combination.</p>
+     *
+     * @param typeFilter the room type to match, or null for any type
+     * @param statusFilter the status to match, or null for any status
+     * @return how many rooms match both filters
+     */
+    private int countRooms(String typeFilter, String statusFilter) {
+
+        int count = 0;
+        for (int i = 1; i <= roomList.getNumberOfEntries(); i++) {
+
+            Room room = roomList.getEntry(i);
+
+            if (typeFilter != null && !room.getRoomType().equals(typeFilter)) {
+                continue;
+            }
+            if (statusFilter != null && !room.getStatus().equals(statusFilter)) {
+                continue;
+            }
+            count++;
+        }
+        return count;
+    }
+
+    /**
+     * Builds one breakdown line per room type in scope.
+     *
+     * @param typeFilter the single type to report, or null for every type
+     * @return the formatted breakdown lines
+     */
+    /**
+     * Builds one line per room type: how many can be sold, how many cannot.
+     *
+     * @param typeFilter the single type to report, or null for every type
+     * @return the formatted breakdown lines
+     */
+    private String buildTypeBreakdownLines(String typeFilter) {
+
+        String[] allTypes = {"Standard", "Deluxe", "Suite"};
+        String result = "";
+
+        for (int i = 0; i < allTypes.length; i++) {
+
+            String type = allTypes[i];
+            if (typeFilter != null && !type.equals(typeFilter)) {
+                continue;
+            }
+
+            int blocked = countRooms(type, null) - countRooms(type, "AVAILABLE");
+
+            result = result + String.format("  %-10s %10d %9d%n",
+                    type, countRooms(type, "AVAILABLE"), blocked);
+        }
+        return result;
+    }
+    /**
+     * Lists every room that can be sold right now.
+     *
+     * <p>Only an exact AVAILABLE status counts as sellable. Testing for "not
+     * OCCUPIED" instead would wrongly include rooms still in the housekeeping
+     * pipeline and lead to overselling.</p>
+     *
+     * @param typeFilter the room type to list, or null for every type
+     * @return the formatted room lines
+     */
+    private String buildAvailableRoomLines(String typeFilter) {
+
+        String result = "";
+        for (int i = 1; i <= roomList.getNumberOfEntries(); i++) {
+
+            Room room = roomList.getEntry(i);
+
+            if (typeFilter != null && !room.getRoomType().equals(typeFilter)) {
+                continue;
+            }
+            if (!room.getStatus().equals("AVAILABLE")) {
+                continue;
+            }
+
+            result = result + String.format("  %-6s %-10s %12.2f%n",
+                    room.getRoomNumber(), room.getRoomType(), room.getNightlyRate());
+        }
+        return result;
     }
 }
