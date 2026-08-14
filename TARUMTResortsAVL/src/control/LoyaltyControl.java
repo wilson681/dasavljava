@@ -67,6 +67,9 @@ public class LoyaltyControl {
                 case 3:
                     doAddPoints();
                     break;
+                case 4:                          
+                    doAdjustTier();
+                    break;
                 case 0:
                     running = false;
                     break;
@@ -167,7 +170,64 @@ public class LoyaltyControl {
 
         loyaltyCLI.displayAddPointsResult(member, pointsAmount, tierBefore);
     }
+// ========== 功能4:手动调整等级 ==========
 
+    /**
+     * 让职员手动把某位会员调到指定等级(升降都可以)。
+     * 只改 tier,不动 currentPoints 也不动 totalPointsEarned——
+     * 这是身份调整,不是没收积分。
+     *
+     * 注意:awardPoints() 会依 totalPointsEarned 自动重算等级,所以这个手动调整
+     * 会在该会员下一次赚分时被自动规则覆盖回去。这是刻意的取舍——
+     * 累计分代表会员的终身价值,不该因为管理动作被改写。
+     */
+    private void doAdjustTier() {
+
+        if (memberList.isEmpty()) {
+            loyaltyCLI.displayNoMembers();
+            return;
+        }
+
+        loyaltyCLI.displayMemberTable(buildMemberRows());
+
+        String memberId = loyaltyCLI.promptMemberIdToAdjust();
+        if (ValidationUtility.isBlank(memberId)) {
+            loyaltyCLI.displayMemberNotFound(memberId, "Tier adjustment failed.");
+            return;
+        }
+        Member member = findMemberById(memberId);
+        if (member == null) {
+            loyaltyCLI.displayMemberNotFound(memberId, "Tier adjustment failed.");
+            return;
+        }
+
+        String newTier = loyaltyCLI.promptTargetTier(member.getTier());
+        if (newTier == null) {
+            loyaltyCLI.displayInvalidTier();
+            return;
+        }
+
+        String oldTier = member.getTier();
+        if (newTier.equals(oldTier)) {
+            loyaltyCLI.displayTierUnchanged(newTier);
+            return;
+        }
+
+        if (!loyaltyCLI.promptConfirmAdjustment(member.getName(), oldTier, newTier)) {
+            loyaltyCLI.displayAdjustmentCancelled();
+            return;
+        }
+
+        member.setTier(newTier);
+
+        boolean isDowngrade = TierRankUtility.tierToRank(newTier)
+                < TierRankUtility.tierToRank(oldTier);
+
+        loyaltyCLI.displayAdjustmentResult(buildMemberRow(member),
+                oldTier, newTier, isDowngrade,
+                TierRankUtility.tierToDiscountPercent(oldTier),
+                TierRankUtility.tierToDiscountPercent(newTier));
+    }
     // ========== 赚积分(手动加分/退房结账都会触发) ==========
 
     /**
@@ -230,7 +290,27 @@ public class LoyaltyControl {
         Member member = findMemberById(memberId);
         return (member == null) ? null : member.getTier();
     }
+/**
+     * 把 memberList 里每一位会员组成一行表格资料。
+     */
+    private String buildMemberRows() {
+        String result = "";
+        for (int i = 1; i <= memberList.getNumberOfEntries(); i++) {
+            result = result + buildMemberRow(memberList.getEntry(i));
+        }
+        return result;
+    }
 
+    /**
+     * 把一位会员组成一行表格资料,栏宽跟 LoyaltyCLI 的表头一致。
+     */
+    private String buildMemberRow(Member member) {
+        return String.format("%-9s| %-20s| %8d | %s%n",
+                member.getMemberId(),
+                member.getName(),
+                member.getCurrentPoints(),
+                member.getTier());
+    }
     // ========== 内部辅助方法 ==========
 
     /**

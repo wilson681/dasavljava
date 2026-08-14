@@ -21,7 +21,11 @@ public class LoyaltyCLI {
     private static final String DIVIDER = "--------------------------------------------------------";
     private static final String LEDGER_TABLE_DIVIDER = "---- ---------- -------------- --------------";
     private static final String CATALOG_TABLE_DIVIDER = "-------------------------- -------------- ----------";
-
+  
+    private static final String MEMBER_TABLE_HEADER =
+            String.format("%-9s| %-20s| %8s | %s", "MemberId", "MemberName", "Point", "VipTier");
+    private static final String MEMBER_TABLE_DIVIDER =
+            "---------|---------------------|----------|----------";
     private Scanner scanner;
 
     public LoyaltyCLI() {
@@ -35,6 +39,7 @@ public class LoyaltyCLI {
         System.out.println("  1) View Points Expiry");
         System.out.println("  2) Redeem Points");
         System.out.println("  3) Add Points (Manual)");
+        System.out.println("  4) Manual Tier Adjustment");  
         System.out.println("  0) Back to Main Menu");
         System.out.println();
         System.out.print("Enter your choice: ");
@@ -160,5 +165,90 @@ public class LoyaltyCLI {
             System.out.println("  >> Upgraded from " + tierBefore + " to " + member.getTier() + "!");
         }
         System.out.println(DIVIDER);
+    }
+    // ========== 功能4:手动调整等级 ==========
+
+    public void displayMemberTable(String rows) {
+        System.out.println();
+        System.out.println("===== Member Directory =====");
+        System.out.println();
+        System.out.println(MEMBER_TABLE_HEADER);
+        System.out.println(MEMBER_TABLE_DIVIDER);
+        System.out.print(rows);
+    }
+
+    public void displayNoMembers() {
+        System.out.println("No members are registered yet.");
+    }
+
+    public String promptMemberIdToAdjust() {
+        System.out.println();
+        System.out.print("Enter the Member ID to adjust: ");
+        return scanner.nextLine().trim();
+    }
+
+    /**
+     * 让使用者用数字选目标等级,避免大小写或拼错的问题。
+     *
+     * @param currentTier 这位会员现在的等级
+     * @return 选到的等级文字,选项无效则回传 null
+     */
+    public String promptTargetTier(String currentTier) {
+        System.out.println();
+        System.out.println("Current tier: " + currentTier);
+        System.out.println("Select the new tier:");
+        System.out.println("  1) Standard");
+        System.out.println("  2) Elite");
+        System.out.println("  3) Platinum");
+        System.out.println("  4) Diamond");
+        System.out.print("Enter your choice: ");
+
+        String input = scanner.nextLine().trim();
+        if (input.equals("1")) {
+            return "Standard";
+        }
+        if (input.equals("2")) {
+            return "Elite";
+        }
+        if (input.equals("3")) {
+            return "Platinum";
+        }
+        if (input.equals("4")) {
+            return "Diamond";
+        }
+        return null;
+    }
+
+    public void displayInvalidTier() {
+        System.out.println("Invalid choice. No tier was changed.");
+    }
+
+    public void displayTierUnchanged(String tier) {
+        System.out.println("The member is already on " + tier + ". Nothing changed.");
+    }
+
+    public boolean promptConfirmAdjustment(String name, String oldTier, String newTier) {
+        System.out.print("Move " + name + " from " + oldTier + " to " + newTier + "? (y/n): ");
+        return scanner.nextLine().trim().equalsIgnoreCase("y");
+    }
+
+    public void displayAdjustmentCancelled() {
+        System.out.println("Tier adjustment cancelled.");
+    }
+
+    public void displayAdjustmentResult(String row, String oldTier, String newTier,
+                                        boolean isDowngrade,
+                                        int oldDiscount, int newDiscount) {
+        System.out.println();
+        System.out.println(DIVIDER);
+        System.out.println("  TIER ADJUSTMENT SUCCESSFUL");
+        System.out.println(DIVIDER);
+        System.out.println("  Direction            : " + (isDowngrade ? "DOWNGRADE" : "UPGRADE"));
+        System.out.println("  Tier                 : " + oldTier + "  ->  " + newTier);
+        System.out.println("  Room Discount        : " + oldDiscount + "%  ->  " + newDiscount + "%");
+        System.out.println(DIVIDER);
+        System.out.println(MEMBER_TABLE_HEADER);
+        System.out.println(MEMBER_TABLE_DIVIDER);
+        System.out.print(row);
     }
 }
