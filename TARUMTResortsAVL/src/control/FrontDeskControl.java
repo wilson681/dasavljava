@@ -30,17 +30,20 @@ public class FrontDeskControl {
     private HashTableInterface<Guest> guestTable;
     private ListInterface<Room> roomList;
     private LoyaltyControl loyaltyControl;
+    private HousekeepingControl housekeepingControl;
 
     private int billingCounter;
 
     public FrontDeskControl(FrontDeskCLI frontDeskCLI,
                             HashTableInterface<Guest> guestTable,
                             ListInterface<Room> roomList,
-                            LoyaltyControl loyaltyControl) {
+                            LoyaltyControl loyaltyControl,
+                            HousekeepingControl housekeepingControl) {
         this.frontDeskCLI = frontDeskCLI;
         this.guestTable = guestTable;
         this.roomList = roomList;
         this.loyaltyControl = loyaltyControl;
+        this.housekeepingControl = housekeepingControl;
         this.billingCounter = 0;
     }
 
@@ -200,10 +203,9 @@ public class FrontDeskControl {
             booking.setStatus(BookingStatus.CHECKED_OUT);
             Room room = findRoom(booking.getAssignedRoomNo());
             if (room != null) {
-                // Needs cleaning before it can go back into the pool — not an
-                // immediate return to AVAILABLE. Housekeeping (not built yet)
-                // owns the rest of that transition.
-                room.setStatus("NEEDS_CLEANING");
+                housekeepingControl.markRoomNeedsCleaning(
+                     room.getRoomNumber()
+                );
             }
         }
 

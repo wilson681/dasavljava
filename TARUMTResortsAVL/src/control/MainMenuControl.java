@@ -13,6 +13,7 @@ import boundary.MainMenuCLI;
 import boundary.VipAllocationCLI;
 import boundary.WalkInCLI;
 import boundary.FrontDeskCLI;
+import boundary.HousekeepingCLI;
 import dao.MemberDao;
 import dao.RedemptionItemDao;
 import dao.RoomDao;
@@ -27,8 +28,8 @@ import entity.Room;
  * MainMenuControl.java - Controls the main menu flow: shows the main screen,
  * reads the actor's menu choice, and routes to each module's own Control.
  *
- * 这里同时是"总装配点"——各模块要共用的 ADT 实例,都在这里 new 一次,
- * 再传给需要用到的模块 Control,让大家共用同一份、不是各自另外造一份。
+ * 这里同时是"总装配点"——各模块要共用的 ADT 实例,都在这里 new 一次, 再传给需要用到的模块
+ * Control,让大家共用同一份、不是各自另外造一份。
  *
  * @author Wilson
  */
@@ -62,9 +63,11 @@ public class MainMenuControl {
     private final VipAllocationControl vipAllocationControl;
     private final FrontDeskControl frontDeskControl;
     private final LoyaltyControl loyaltyControl;
+    private final HousekeepingControl housekeepingControl;
 
     /**
-     * @param mainMenuCLI the boundary responsible for displaying the main screen
+     * @param mainMenuCLI the boundary responsible for displaying the main
+     * screen
      */
     public MainMenuControl(MainMenuCLI mainMenuCLI) {
         if (mainMenuCLI == null) {
@@ -91,9 +94,26 @@ public class MainMenuControl {
         // 这样VIP/Walk-In/Loyalty模块才有真的会员/房间/兑换清单资料可以测试,不用硬编码
         new MemberDao().loadMembers(memberList);
         new RoomDao().loadRooms(roomList);
+        /*
+         * Each Room already owns its own RoomHistory.
+         * After loading all rooms, record each room's initial status
+         * into its Stack so rollback has a starting state.
+         */
+        for (int i = 1; i <= roomList.getNumberOfEntries(); i++) {
+
+            Room room = (Room) roomList.getEntry(i);
+
+            if (room.getRoomHistory()
+                    .getStatusStack()
+                    .isEmpty()) {
+
+                room.getRoomHistory()
+                        .getStatusStack()
+                        .push(room.getStatus());
+            }
+        }
+
         new RedemptionItemDao().loadRedemptionItems(redemptionItemList);
-
-
 
         // WalkInControl也要拿到VIP的三棵树(只读,用来检查isEmpty())才能落实
         // "VIP永远优先"这条两个模块共用的规则
@@ -105,16 +125,23 @@ public class MainMenuControl {
                 memberList, roomList, guestTable);
         // loyaltyControl要先造出来,因为退房结账(FrontDeskControl)要拿它的引用
         // 去调用awardPointsByMemberId(),不能反过来
+
+        this.housekeepingControl = new HousekeepingControl(
+                new HousekeepingCLI(),
+                roomList,
+                vipAllocationControl,
+                walkInControl);
+
         this.loyaltyControl = new LoyaltyControl(
                 new LoyaltyCLI(), memberList, redemptionItemList, redemptionTransactionList);
 
-
-        this.frontDeskControl = new FrontDeskControl( 
-                new FrontDeskCLI(),guestTable,roomList,loyaltyControl);
+        this.frontDeskControl = new FrontDeskControl(
+                new FrontDeskCLI(), guestTable, roomList, loyaltyControl, housekeepingControl);
     }
 
     /**
-     * Launches the main screen and runs the main menu loop until the actor exits.
+     * Launches the main screen and runs the main menu loop until the actor
+     * exits.
      */
     public void run() {
         mainMenuCLI.displayWelcome();
@@ -131,7 +158,7 @@ public class MainMenuControl {
                     runVipAllocationModule();
                     break;
                 case 3:
-                    mainMenuCLI.displayModuleNotReady("Housekeeping and Task Log");
+                    runHousekeepingModule();
                     break;
                 case 4:
                     runFrontDeskModule();
@@ -155,6 +182,10 @@ public class MainMenuControl {
 
     private void runWalkInModule() {
         walkInControl.run();
+    }
+
+    private void runHousekeepingModule() {
+        housekeepingControl.run();
     }
 
     private void runVipAllocationModule() {
