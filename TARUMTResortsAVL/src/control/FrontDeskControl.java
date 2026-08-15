@@ -74,14 +74,6 @@ public class FrontDeskControl {
                     doCheckOut();
                     break;
 
-                case 5:
-                    doCheckOutRevenueReport();
-                    break;
-
-                case 6:
-                    doRoomUtilisationReport();
-                    break;
-
                 case 0:
                     running = false;
                     break;
@@ -180,7 +172,15 @@ public class FrontDeskControl {
                 selected.add(match);
                 frontDeskCLI.displayRoomSelected(roomNumber);
             }
-            continueSelecting = frontDeskCLI.promptCheckOutAnotherRoom();
+
+            // 这个确认号底下能退的房间已经全部选完了,没有剩下的可以再选,
+            // 不该再问"要不要继续退另一间"——问了使用者也没得选
+            if (selected.getNumberOfEntries() >= checkedIn.getNumberOfEntries()) {
+                frontDeskCLI.displayAllRoomsSelected();
+                continueSelecting = false;
+            } else {
+                continueSelecting = frontDeskCLI.promptCheckOutAnotherRoom();
+            }
         }
 
         if (selected.isEmpty()) {
@@ -189,6 +189,10 @@ public class FrontDeskControl {
         }
 
         double extraCharges = frontDeskCLI.promptExtraCharges();
+        if (extraCharges < 0) {
+            frontDeskCLI.displayInvalidExtraCharges(extraCharges);
+            return;
+        }
 
         // 等级折扣是"个性化促销"的一种,只影响价格计算,不碰房型/房间状态——
         // 折扣用会员现在真正的等级算(不是Guest身上入住当天的快照),这样退房那一刻
@@ -299,7 +303,7 @@ public class FrontDeskControl {
      * guestTable底下每位客人的billingRecords,等级用guest.getTier()——这是入住
      * 那天的等级快照,反映的是"这笔消费发生当下客人是什么等级",不是现在的等级。
      */
-    private void doCheckOutRevenueReport() {
+    void doCheckOutRevenueReport() {
         String fromDate = frontDeskCLI.promptReportFromDate();
         String toDate = frontDeskCLI.promptReportToDate();
         String tierFilter = frontDeskCLI.promptReportTierFilter();
@@ -445,7 +449,7 @@ public class FrontDeskControl {
      * 每一笔CHECKED_IN/CHECKED_OUT的Booking(rate x晚数)加总——用现在的房价算,
      * 因为Room entity没有留历史房价。
      */
-    private void doRoomUtilisationReport() {
+    void doRoomUtilisationReport() {
         String roomTypeFilter = frontDeskCLI.promptReportRoomTypeFilter();
         String statusFilter = frontDeskCLI.promptReportStatusFilter();
 

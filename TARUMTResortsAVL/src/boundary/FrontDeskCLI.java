@@ -27,8 +27,6 @@ public class FrontDeskCLI {
         System.out.println("2) Check Room Availability");
         System.out.println("3) View Billing Details");
         System.out.println("4) Process Check-Out");
-        System.out.println("5) Generate Check-Out Revenue Report");
-        System.out.println("6) Generate Room Utilisation & Status Report");
         System.out.println("0) Back to Main Menu");
         System.out.print("Enter your choice: ");
 
@@ -275,13 +273,21 @@ public class FrontDeskCLI {
         System.out.println("No rooms were selected. Check-out cancelled.");
     }
 
+    public void displayAllRoomsSelected() {
+        System.out.println("All checked-in rooms under this confirmation number have been selected.");
+    }
+
     public double promptExtraCharges() {
         System.out.print("Enter extra charges (RM, 0 if none): ");
         try {
             return Double.parseDouble(scanner.nextLine().trim());
         } catch (NumberFormatException e) {
-            return 0.0;
+            return -1.0;
         }
+    }
+
+    public void displayInvalidExtraCharges(double extraCharges) {
+        System.out.println("Invalid extra charges amount. Must be zero or a positive number.");
     }
 
     public void displayCheckOutResult(BillingRecord billingRecord, int roomsCheckedOut,

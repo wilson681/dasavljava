@@ -33,9 +33,6 @@ public class HousekeepingCLI {
         System.out.println("2. Update Room Status");
         System.out.println("3. Roll Back Latest Status");
         System.out.println("4. View Room Status History");
-        System.out.println("5. Generate Housekeeping Status Report");
-        System.out.println("6. Generate Room History Activity Report");
-        System.out.println("7. Generate Rollback Frequency Report");
         System.out.println("0. Back to Main Menu");
         System.out.println();
         System.out.print("Enter your choice: ");
@@ -137,6 +134,20 @@ public class HousekeepingCLI {
         );
     }
 
+    public void displayRoomNotInPipeline(
+            String roomNumber,
+            String currentStatus) {
+
+        System.out.println();
+
+        System.out.println(
+                "Room " + roomNumber + " (status: " + currentStatus
+                + ") is not in the housekeeping pipeline. Only rooms with"
+                + " NEEDS_CLEANING, CLEANING_IN_PROGRESS, or INSPECTED status"
+                + " can be updated here."
+        );
+    }
+
     // =========================================================
     // Option 2
     // Update Room Status
@@ -155,9 +166,14 @@ public class HousekeepingCLI {
         );
     }
 
-    public String promptNewStatus() {
+    public String promptNewStatus(String suggestedNextStatus) {
 
         System.out.println();
+        if (suggestedNextStatus != null) {
+            System.out.println(
+                    "The only valid next status from here is: " + suggestedNextStatus
+            );
+        }
         System.out.println("Select New Status:");
         System.out.println("1. NEEDS_CLEANING");
         System.out.println("2. CLEANING_IN_PROGRESS");

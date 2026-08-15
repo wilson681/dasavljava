@@ -62,6 +62,42 @@ public class MainMenuCLI {
     }
 
     /**
+     * Displays the flat list of every report across all five modules and
+     * reads the actor's choice.
+     * @return the number the actor typed, or -1 if the input wasn't a number
+     */
+    public int displayReportsMenuAndGetChoice() {
+        System.out.println();
+        System.out.println("===== Reports =====");
+        System.out.println();
+        System.out.println("Walk-In Registrations & Standard Booking");
+        System.out.println("   1) Daily Registration Report");
+        System.out.println("   2) Wait Time Analysis Report");
+        System.out.println("VIP & Loyalty Tier Priority Allocation");
+        System.out.println("   3) VIP Waiting List Report");
+        System.out.println("   4) Tier Allocation SLA Report");
+        System.out.println("Housekeeping and Task Log");
+        System.out.println("   5) Housekeeping Status Report");
+        System.out.println("   6) Room History Activity Report");
+        System.out.println("   7) Rollback Frequency Report");
+        System.out.println("Front-Desk Service");
+        System.out.println("   8) Check-Out Revenue Report");
+        System.out.println("   9) Room Utilisation & Status Report");
+        System.out.println("Loyalty and Rewards Service");
+        System.out.println("  10) Points Expiry Report");
+        System.out.println("  11) Top Redeemed Items Report");
+        System.out.println("   0) Back to Main Menu");
+        System.out.print("Enter your choice: ");
+
+        String input = scanner.nextLine().trim();
+        try {
+            return Integer.parseInt(input);
+        } catch (NumberFormatException e) {
+            return -1;
+        }
+    }
+
+    /**
      * Tells the actor the module they picked isn't built yet.
      * @param moduleName the module's display name
      */

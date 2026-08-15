@@ -102,12 +102,6 @@ public class WalkInControl {
                 case 3:
                     doViewWaitingList();
                     break;
-                case 4:
-                    doDailyRegistrationReport();
-                    break;
-                case 5:
-                    doWaitTimeAnalysisReport();
-                    break;
                 case 0:
                     running = false;
                     break;
@@ -122,6 +116,10 @@ public class WalkInControl {
     private void doRegister() {
         // 散客不是会员,直接问姓名、电话,不用像VIP那样先查会员资料
         String name = walkInCLI.promptName();
+        if (ValidationUtility.isBlank(name)) {
+            walkInCLI.displayInvalidName(name);
+            return;
+        }
         String phone = walkInCLI.promptPhone();
         if (!ValidationUtility.isDigitsOnly(phone)) {
             walkInCLI.displayInvalidPhone(phone);
@@ -302,7 +300,7 @@ public class WalkInControl {
      * 挂在guestTable底下客人身上的"两边合起来,这样不管有没有分到房都看得到——
      * 唯一看不到的是已经取消排队的(doCancel()把它从队伍拿掉后就没有其他地方存了)。
      */
-    private void doDailyRegistrationReport() {
+    void doDailyRegistrationReport() {
         String dateFilter = walkInCLI.promptReportDate();
         String roomTypeFilter = walkInCLI.promptReportRoomType();
 
@@ -343,7 +341,7 @@ public class WalkInControl {
      * filter=最少等待分钟数+日期,按等待时长降序排序,另外按小时聚合平均等待时长——
      * 给营运经理判断哪个时段该加开柜台用。
      */
-    private void doWaitTimeAnalysisReport() {
+    void doWaitTimeAnalysisReport() {
         int minWaitMinutes = walkInCLI.promptMinWaitMinutes();
         String dateFilter = walkInCLI.promptReportDate();
 
@@ -366,13 +364,16 @@ public class WalkInControl {
                     ? minutesBetween(booking.getRegisteredAt(), booking.getAllocatedAt())
                     : minutesBetween(booking.getRegisteredAt(), currentTimestamp());
 
-            int hour = Integer.parseInt(booking.getRegisteredAt().substring(11, 13));
-            hourlyCount[hour]++;
-            hourlyTotalWait[hour] += waitMinutes;
-
             if (waitMinutes >= minWaitMinutes) {
                 filtered.add(booking);
                 waitMinutesList.add(waitMinutes);
+
+                // 按小时聚合要跟主表用同一份"通过minWaitMinutes门槛"的资料,
+                // 不然门槛调高时主表显示"没有符合的记录",下面的小时明细却还是有数字,
+                // 使用者会看到自相矛盾的报表
+                int hour = Integer.parseInt(booking.getRegisteredAt().substring(11, 13));
+                hourlyCount[hour]++;
+                hourlyTotalWait[hour] += waitMinutes;
             }
         }
 

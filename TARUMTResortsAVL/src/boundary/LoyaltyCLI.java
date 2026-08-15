@@ -40,8 +40,6 @@ public class LoyaltyCLI {
         System.out.println("  2) Redeem Points");
         System.out.println("  3) Add Points (Manual)");
         System.out.println("  4) Manual Tier Adjustment");
-        System.out.println("  5) Generate Points Expiry Report");
-        System.out.println("  6) Generate Top Redeemed Items Report");
         System.out.println("  0) Back to Main Menu");
         System.out.println();
         System.out.print("Enter your choice: ");

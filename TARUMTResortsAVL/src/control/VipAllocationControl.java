@@ -84,12 +84,6 @@ public class VipAllocationControl {
                 case 3:
                     doViewWaitingList();
                     break;
-                case 4:
-                    doVipWaitingListReport();
-                    break;
-                case 5:
-                    doTierSlaReport();
-                    break;
                 case 0:
                     running = false;
                     break;
@@ -104,6 +98,10 @@ public class VipAllocationControl {
     private void doRegister() {
         // 第一步:先查这个会员编号存不存在,不存在直接结束,不往下走
         String memberId = vipAllocationCLI.promptMemberId();
+        if (ValidationUtility.isBlank(memberId)) {
+            vipAllocationCLI.displayMemberNotFound(memberId);
+            return;
+        }
         Member member = findMemberById(memberId);
         if (member == null) {
             vipAllocationCLI.displayMemberNotFound(memberId);
@@ -292,7 +290,7 @@ public class VipAllocationControl {
      * 树本身的中序顺序(那是tierRank+arrivalSequence),改成按"已经等了多久"降序——
      * 这样报表层才是自己在做排序,不是单纯把树的既有顺序吐出来。
      */
-    private void doVipWaitingListReport() {
+    void doVipWaitingListReport() {
         int tierRankFilter = vipAllocationCLI.promptReportTierRank();
 
         ListInterface<Booking> filtered = new ArrayBasedList<>();
@@ -336,7 +334,7 @@ public class VipAllocationControl {
      * filter=等级+日期区间(按分房那天算),把"登记到分房"的平均耗时按等级分组比较,
      * 用来验证"VIP优先"这个承诺是不是真的兑现——如果高等级反而等更久,代表流程有问题。
      */
-    private void doTierSlaReport() {
+    void doTierSlaReport() {
         int tierRankFilter = vipAllocationCLI.promptReportTierRank();
         String fromDate = vipAllocationCLI.promptReportFromDate();
         String toDate = vipAllocationCLI.promptReportToDate();

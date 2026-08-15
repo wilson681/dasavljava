@@ -38,8 +38,6 @@ public class VipAllocationCLI {
         System.out.println("  1) VIP Registration");
         System.out.println("  2) Cancel Waiting");
         System.out.println("  3) View VIP Waiting List");
-        System.out.println("  4) Generate VIP Waiting List Report");
-        System.out.println("  5) Generate Tier Allocation SLA Report");
         System.out.println("  0) Back to Main Menu");
         System.out.println();
         System.out.print("Enter your choice: ");

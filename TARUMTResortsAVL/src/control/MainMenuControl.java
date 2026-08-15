@@ -174,7 +174,7 @@ public class MainMenuControl {
                     runLoyaltyModule();
                     break;
                 case 6:
-                    mainMenuCLI.displayModuleNotReady("Reports");
+                    runReportsMenu();
                     break;
                 case 0:
                     running = false;
@@ -205,5 +205,57 @@ public class MainMenuControl {
 
     private void runLoyaltyModule() {
         loyaltyControl.run();
+    }
+
+    /**
+     * Reports 菜单——扁平列出全部11份报表,选哪个就直接呼叫该模块自己的报表方法
+     * (那些方法是package-private,只放宽到让同package的这里叫得到,boundary层还是碰不到)。
+     * 这里本身不装任何filter/sort逻辑,纯粹是分发,报表怎么算还是各模块自己的Control负责。
+     */
+    private void runReportsMenu() {
+        boolean running = true;
+        while (running) {
+            int choice = mainMenuCLI.displayReportsMenuAndGetChoice();
+            switch (choice) {
+                case 1:
+                    walkInControl.doDailyRegistrationReport();
+                    break;
+                case 2:
+                    walkInControl.doWaitTimeAnalysisReport();
+                    break;
+                case 3:
+                    vipAllocationControl.doVipWaitingListReport();
+                    break;
+                case 4:
+                    vipAllocationControl.doTierSlaReport();
+                    break;
+                case 5:
+                    housekeepingControl.doGenerateHousekeepingStatusReport();
+                    break;
+                case 6:
+                    housekeepingControl.doGenerateRoomHistoryReport();
+                    break;
+                case 7:
+                    housekeepingControl.doGenerateRollbackFrequencyReport();
+                    break;
+                case 8:
+                    frontDeskControl.doCheckOutRevenueReport();
+                    break;
+                case 9:
+                    frontDeskControl.doRoomUtilisationReport();
+                    break;
+                case 10:
+                    loyaltyControl.doPointsExpiryReport();
+                    break;
+                case 11:
+                    loyaltyControl.doTopRedeemedItemsReport();
+                    break;
+                case 0:
+                    running = false;
+                    break;
+                default:
+                    mainMenuCLI.displayInvalidChoice();
+            }
+        }
     }
 }

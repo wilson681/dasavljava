@@ -71,12 +71,6 @@ public class LoyaltyControl {
                 case 4:
                     doAdjustTier();
                     break;
-                case 5:
-                    doPointsExpiryReport();
-                    break;
-                case 6:
-                    doTopRedeemedItemsReport();
-                    break;
                 case 0:
                     running = false;
                     break;
@@ -242,7 +236,7 @@ public class LoyaltyControl {
      * 跟功能1(doViewExpiry)不一样,那个是查单一会员的完整明细,这个是给营销团队
      * 一次拉出全体会员名单去发提醒邮件用。
      */
-    private void doPointsExpiryReport() {
+    void doPointsExpiryReport() {
         int withinDays = loyaltyCLI.promptExpiryWindowDays();
         String tierFilter = loyaltyCLI.promptReportTierFilter();
 
@@ -321,7 +315,7 @@ public class LoyaltyControl {
      * filter=日期区间,遍历现有redemptionHistory,按itemRedeemed分组统计次数
      * 跟消耗积分总额,按次数降序——不需要动任何entity,资料本来就有。
      */
-    private void doTopRedeemedItemsReport() {
+    void doTopRedeemedItemsReport() {
         String fromDate = loyaltyCLI.promptReportFromDate();
         String toDate = loyaltyCLI.promptReportToDate();
 

@@ -33,8 +33,6 @@ public class WalkInCLI {
         System.out.println("  1) Register New Guest");
         System.out.println("  2) Cancel Waiting");
         System.out.println("  3) View Waiting List");
-        System.out.println("  4) Generate Daily Registration Report");
-        System.out.println("  5) Generate Wait Time Analysis Report");
         System.out.println("  0) Back to Main Menu");
         System.out.println();
         System.out.print("Enter your choice: ");
@@ -56,6 +54,10 @@ public class WalkInCLI {
     public String promptName() {
         System.out.print("Enter guest name: ");
         return scanner.nextLine().trim();
+    }
+
+    public void displayInvalidName(String name) {
+        System.out.println("Guest name cannot be blank.");
     }
 
     public String promptPhone() {

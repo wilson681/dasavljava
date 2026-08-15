@@ -88,21 +88,6 @@ public class HousekeepingControl {
                     housekeepingCLI.promptContinue();
                     break;
 
-                case 5:
-                    doGenerateHousekeepingStatusReport();
-                    housekeepingCLI.promptContinue();
-                    break;
-
-                case 6:
-                    doGenerateRoomHistoryReport();
-                    housekeepingCLI.promptContinue();
-                    break;
-
-                case 7:
-                    doGenerateRollbackFrequencyReport();
-                    housekeepingCLI.promptContinue();
-                    break;
-
                 case 0:
                     running = false;
                     break;
@@ -243,12 +228,17 @@ public class HousekeepingControl {
 
         if (!isHousekeepingStatus(previousStatus)) {
 
-            housekeepingCLI.displayInvalidStatus();
+            housekeepingCLI.displayRoomNotInPipeline(
+                    room.getRoomNumber(),
+                    previousStatus
+            );
             return;
         }
 
         String newStatus =
-                housekeepingCLI.promptNewStatus();
+                housekeepingCLI.promptNewStatus(
+                        nextValidStatus(previousStatus)
+                );
 
         if (newStatus == null) {
 
@@ -325,6 +315,29 @@ public class HousekeepingControl {
                     roomType
             );
         }
+    }
+
+    /**
+     * The pipeline only ever allows exactly one next status from any given
+     * current status - this mirrors that same rule so the CLI can tell the
+     * staff which single choice will actually work, instead of making them
+     * guess through all 4 menu options.
+     */
+    private String nextValidStatus(String currentStatus) {
+
+        if (currentStatus.equalsIgnoreCase("NEEDS_CLEANING")) {
+            return "CLEANING_IN_PROGRESS";
+        }
+
+        if (currentStatus.equalsIgnoreCase("CLEANING_IN_PROGRESS")) {
+            return "INSPECTED";
+        }
+
+        if (currentStatus.equalsIgnoreCase("INSPECTED")) {
+            return "AVAILABLE";
+        }
+
+        return null;
     }
 
     private boolean isValidStatusTransition(
@@ -516,7 +529,7 @@ public class HousekeepingControl {
     // Housekeeping Status Report
     // =========================================================
 
-    private void doGenerateHousekeepingStatusReport() {
+    void doGenerateHousekeepingStatusReport() {
 
         String roomTypeFilter =
                 housekeepingCLI
@@ -655,7 +668,7 @@ public class HousekeepingControl {
     // Room History Activity Report
     // =========================================================
 
-    private void doGenerateRoomHistoryReport() {
+    void doGenerateRoomHistoryReport() {
 
         String roomTypeFilter =
                 housekeepingCLI
@@ -881,7 +894,7 @@ public class HousekeepingControl {
     // of every rollback that actually succeeded.
     // =========================================================
 
-    private void doGenerateRollbackFrequencyReport() {
+    void doGenerateRollbackFrequencyReport() {
 
         String roomNumberFilter =
                 housekeepingCLI.promptReportRoomNumber();
