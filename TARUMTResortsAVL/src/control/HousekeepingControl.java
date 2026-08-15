@@ -9,6 +9,7 @@ import entity.Room;
 import entity.RoomHistory;
 import entity.RollbackLogEntry;
 import java.time.LocalDate;
+import utility.ValidationUtility;
 
 /**
  * HousekeepingControl.java
@@ -162,6 +163,17 @@ public class HousekeepingControl {
 
     private void doViewHousekeepingRooms() {
 
+        housekeepingCLI.displayHousekeepingRooms(
+                buildHousekeepingRoomList().getIterator()
+        );
+    }
+
+    /**
+     * 目前处在housekeeping流程里(NEEDS_CLEANING/CLEANING_IN_PROGRESS/INSPECTED)
+     * 的房间清单——选项1(查看清单)、选项2(更新状态,只有这些房间能被操作)共用。
+     */
+    private ListInterface<Room> buildHousekeepingRoomList() {
+
         ListInterface<Room> housekeepingRooms =
                 new ArrayBasedList<>();
 
@@ -178,9 +190,56 @@ public class HousekeepingControl {
             }
         }
 
-        housekeepingCLI.displayHousekeepingRooms(
-                housekeepingRooms.getIterator()
-        );
+        return housekeepingRooms;
+    }
+
+    /**
+     * 全部房间的清单(不限housekeeping流程内),给选项3(回滚)、选项4(查历史)
+     * 用——这两个操作理论上任何房间都能查,不像选项2只限housekeeping流程内的房间。
+     */
+    private ListInterface<Room> buildAllRoomsList() {
+
+        ListInterface<Room> allRooms =
+                new ArrayBasedList<>();
+
+        for (int i = 1;
+                i <= roomList.getNumberOfEntries();
+                i++) {
+
+            allRooms.add(roomList.getEntry(i));
+        }
+
+        return allRooms;
+    }
+
+    /**
+     * 房号只能是数字,格式错误、查无此房都原地重问(不中止整个操作)——房号清单
+     * 已经列在上面,查无此房大概率是打错字,不像"这个人存不存在"那种真的需要
+     * 使用者自己确认的情况。空白才代表使用者要取消。
+     */
+    private Room promptValidRoom() {
+
+        while (true) {
+
+            String roomNumber = housekeepingCLI.promptRoomNumber();
+
+            if (ValidationUtility.isBlank(roomNumber)) {
+                return null;
+            }
+
+            if (!ValidationUtility.isDigitsOnly(roomNumber)) {
+                housekeepingCLI.displayInvalidRoomNumber(roomNumber);
+                continue;
+            }
+
+            Room room = findRoom(roomNumber);
+
+            if (room != null) {
+                return room;
+            }
+
+            housekeepingCLI.displayRoomNotFound(roomNumber);
+        }
     }
 
     private boolean isHousekeepingStatus(String status) {
@@ -204,17 +263,14 @@ public class HousekeepingControl {
 
     private void doUpdateRoomStatus() {
 
-        String roomNumber =
-                housekeepingCLI.promptRoomNumber();
+        housekeepingCLI.displayHousekeepingRooms(
+                buildHousekeepingRoomList().getIterator()
+        );
 
-        Room room = findRoom(roomNumber);
+        Room room = promptValidRoom();
 
         if (room == null) {
-
-            housekeepingCLI.displayRoomNotFound(
-                    roomNumber
-            );
-
+            housekeepingCLI.displayCancelled();
             return;
         }
 
@@ -276,7 +332,7 @@ public class HousekeepingControl {
         room.setStatus(newStatus);
 
         housekeepingCLI.displayStatusUpdated(
-                roomNumber,
+                room.getRoomNumber(),
                 previousStatus,
                 newStatus
         );
@@ -367,19 +423,18 @@ public class HousekeepingControl {
 
     private void doRollbackStatus() {
 
-        String roomNumber =
-                housekeepingCLI.promptRoomNumber();
+        housekeepingCLI.displayAllRooms(
+                buildAllRoomsList().getIterator()
+        );
 
-        Room room = findRoom(roomNumber);
+        Room room = promptValidRoom();
 
         if (room == null) {
-
-            housekeepingCLI.displayRoomNotFound(
-                    roomNumber
-            );
-
+            housekeepingCLI.displayCancelled();
             return;
         }
+
+        String roomNumber = room.getRoomNumber();
 
         RoomHistory history =
                 room.getRoomHistory();
@@ -488,17 +543,14 @@ public class HousekeepingControl {
 
     private void doViewStatusHistory() {
 
-        String roomNumber =
-                housekeepingCLI.promptRoomNumber();
+        housekeepingCLI.displayAllRooms(
+                buildAllRoomsList().getIterator()
+        );
 
-        Room room = findRoom(roomNumber);
+        Room room = promptValidRoom();
 
         if (room == null) {
-
-            housekeepingCLI.displayRoomNotFound(
-                    roomNumber
-            );
-
+            housekeepingCLI.displayCancelled();
             return;
         }
 
@@ -506,7 +558,7 @@ public class HousekeepingControl {
                 room.getRoomHistory();
 
         housekeepingCLI.displayRoomStatusHistory(
-                roomNumber,
+                room.getRoomNumber(),
                 room.getStatus(),
                 history.getStatusStack()
                         .getIterator()

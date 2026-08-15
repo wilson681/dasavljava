@@ -237,12 +237,23 @@ public class VipAllocationControl {
     // ========== 功能3:取消排队 ==========
 
     private void doCancel() {
-        String roomType = promptValidRoomType();
-        if (roomType == null) {
-            vipAllocationCLI.displayCancelled();
-            return;
+        // 先选房型、把这个房型的等待名单印出来,让使用者看清楚树里到底有什么
+        // (含bookingId)再决定要取消哪一笔,不用盲打——树是空的话,印完"没人在等"
+        // 的提示后直接回头重问房型,不会继续往下问一个注定查不到的bookingId
+        SearchTreeInterface<Booking> tree;
+        String roomType;
+        while (true) {
+            roomType = promptValidRoomType();
+            if (roomType == null) {
+                vipAllocationCLI.displayCancelled();
+                return;
+            }
+            tree = getTreeForRoomType(roomType);
+            vipAllocationCLI.displayWaitingList(roomType, tree.getInorderIterator());
+            if (!tree.isEmpty()) {
+                break;
+            }
         }
-        SearchTreeInterface<Booking> tree = getTreeForRoomType(roomType);
 
         // 用bookingId取消,不是confirmationNumber——同一个confirmationNumber可能同时
         // 有好几笔Booking在同一个房型的树里(一次订多间房),用confirmationNumber去找

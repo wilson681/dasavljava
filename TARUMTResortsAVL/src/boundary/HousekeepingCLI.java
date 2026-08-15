@@ -116,6 +116,48 @@ public class HousekeepingCLI {
         }
     }
 
+    /**
+     * Shows every room on record (not filtered to the housekeeping pipeline) —
+     * used before options 2/3/4 prompt for a room number, so the staff can see
+     * a real room number to type instead of guessing.
+     */
+    public void displayAllRooms(
+            Iterator<Room> rooms) {
+
+        System.out.println();
+        System.out.println(
+                "===== All Rooms ====="
+        );
+        System.out.println();
+
+        System.out.println(
+                String.format(
+                        "%-10s %-15s %-25s",
+                        "Room",
+                        "Room Type",
+                        "Status"
+                )
+        );
+
+        System.out.println(
+                "------------------------------------------------------"
+        );
+
+        while (rooms.hasNext()) {
+
+            Room room = rooms.next();
+
+            System.out.println(
+                    String.format(
+                            "%-10s %-15s %-25s",
+                            room.getRoomNumber(),
+                            room.getRoomType(),
+                            room.getStatus()
+                    )
+            );
+        }
+    }
+
     // =========================================================
     // Shared Input / Output
     // =========================================================
@@ -123,9 +165,19 @@ public class HousekeepingCLI {
     public String promptRoomNumber() {
 
         System.out.println();
-        System.out.print("Enter room number: ");
+        System.out.print("Enter room number (blank to cancel): ");
 
         return scanner.nextLine().trim();
+    }
+
+    public void displayInvalidRoomNumber(
+            String roomNumber) {
+
+        System.out.println();
+
+        System.out.println(
+                "\"" + roomNumber + "\" is not a valid room number. Must contain digits only."
+        );
     }
 
     public void displayRoomNotFound(
@@ -316,28 +368,20 @@ public class HousekeepingCLI {
             return;
         }
 
-        System.out.println("Most Recent");
-        System.out.println("     |");
-
-        int recordNumber = 1;
+        // statusHistory是Stack的迭代器,吐出来的顺序是"最新的先出来"——横向显示要
+        // 由旧到新排,所以每读到一笔就往目前累积字串的最前面插(用" -> "串接),
+        // 读完整个迭代顺序自然就反过来,变成"最旧在最左、最新在最右"
+        String timeline = "";
 
         while (statusHistory.hasNext()) {
 
             String status = statusHistory.next();
 
-            System.out.println(
-                    String.format(
-                            "%2d. %s",
-                            recordNumber,
-                            status
-                    )
-            );
-
-            recordNumber++;
+            timeline = status + (timeline.isEmpty() ? "" : " -> " + timeline);
         }
 
-        System.out.println("     |");
-        System.out.println("Oldest");
+        System.out.println("Oldest                                                        Most Recent");
+        System.out.println(timeline);
     }
 
     // =========================================================

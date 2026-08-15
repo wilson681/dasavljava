@@ -250,7 +250,7 @@ public class FrontDeskControl {
 
         Guest guest = findGuest(confirmationNumber);
         if (guest == null) {
-            frontDeskCLI.displayGuestNotFound();
+            frontDeskCLI.displayBillingRecordNotFound(confirmationNumber);
             return;
         }
 
@@ -260,11 +260,14 @@ public class FrontDeskControl {
         frontDeskCLI.displayBillingHeader(confirmationNumber, guest.getName(),
                 guestType, guest.getTier());
 
-        frontDeskCLI.displayCurrentCharges(
-                buildChargeLines(guest),
-                countCheckedInRooms(guest),
-                countCheckedInNights(guest),
-                calculateCurrentCharges(guest));
+        int roomsCheckedIn = countCheckedInRooms(guest);
+        if (roomsCheckedIn > 0) {
+            frontDeskCLI.displayCurrentCharges(
+                    buildChargeLines(guest),
+                    roomsCheckedIn,
+                    countCheckedInNights(guest),
+                    calculateCurrentCharges(guest));
+        }
 
         frontDeskCLI.displaySettledBills(
                 buildSettledLines(guest),
@@ -743,7 +746,7 @@ public class FrontDeskControl {
             String type = (room == null) ? booking.getRequestedRoomType() : room.getRoomType();
             double subtotal = rate * booking.getNumberOfNights();
 
-            result = result + String.format("  %-6s %-10s %12.2f %8d %14.2f%n",
+            result = result + String.format("  %-8s %-12s %14.2f %10d %16.2f%n",
                     booking.getAssignedRoomNo(), type, rate,
                     booking.getNumberOfNights(), subtotal);
         }
@@ -879,13 +882,7 @@ public class FrontDeskControl {
     }
 
     /**
-     * Builds one breakdown line per room type in scope.
-     *
-     * @param typeFilter the single type to report, or null for every type
-     * @return the formatted breakdown lines
-     */
-    /**
-     * Builds one line per room type: how many can be sold, how many cannot.
+     * Builds one line per room type: how many are available, how many are not.
      *
      * @param typeFilter the single type to report, or null for every type
      * @return the formatted breakdown lines
@@ -902,17 +899,17 @@ public class FrontDeskControl {
                 continue;
             }
 
-            int blocked = countRooms(type, null) - countRooms(type, "AVAILABLE");
+            int unavailable = countRooms(type, null) - countRooms(type, "AVAILABLE");
 
-            result = result + String.format("  %-10s %10d %9d%n",
-                    type, countRooms(type, "AVAILABLE"), blocked);
+            result = result + String.format("  %-12s %14d %14d%n",
+                    type, countRooms(type, "AVAILABLE"), unavailable);
         }
         return result;
     }
     /**
-     * Lists every room that can be sold right now.
+     * Lists every room that is available right now.
      *
-     * <p>Only an exact AVAILABLE status counts as sellable. Testing for "not
+     * <p>Only an exact AVAILABLE status counts as available. Testing for "not
      * OCCUPIED" instead would wrongly include rooms still in the housekeeping
      * pipeline and lead to overselling.</p>
      *
@@ -933,7 +930,7 @@ public class FrontDeskControl {
                 continue;
             }
 
-            result = result + String.format("  %-6s %-10s %12.2f%n",
+            result = result + String.format("  %-8s %-12s %14.2f%n",
                     room.getRoomNumber(), room.getRoomType(), room.getNightlyRate());
         }
         return result;

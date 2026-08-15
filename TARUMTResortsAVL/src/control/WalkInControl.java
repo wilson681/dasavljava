@@ -255,12 +255,23 @@ public class WalkInControl {
     // ========== 功能3:取消排队 ==========
 
     private void doCancel() {
-        String roomType = promptValidRoomType();
-        if (roomType == null) {
-            walkInCLI.displayCancelled();
-            return;
+        // 先选房型、把这个房型的等待名单印出来,让使用者看清楚队伍里到底有什么
+        // (含bookingId)再决定要取消哪一笔,不用盲打——队伍是空的话,印完"没人在等"
+        // 的提示后直接回头重问房型,不会继续往下问一个注定查不到的bookingId
+        QueueInterface<Booking> queue;
+        String roomType;
+        while (true) {
+            roomType = promptValidRoomType();
+            if (roomType == null) {
+                walkInCLI.displayCancelled();
+                return;
+            }
+            queue = getQueueForRoomType(roomType);
+            walkInCLI.displayWaitingList(roomType, queue.getIterator());
+            if (!queue.isEmpty()) {
+                break;
+            }
         }
-        QueueInterface<Booking> queue = getQueueForRoomType(roomType);
 
         // 用bookingId取消,不是confirmationNumber——同一个confirmationNumber可能同时
         // 有好几笔Booking在同一个房型的队伍里(一次订多间房),用confirmationNumber去找

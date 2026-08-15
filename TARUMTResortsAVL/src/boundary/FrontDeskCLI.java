@@ -88,6 +88,10 @@ public class FrontDeskCLI {
     public void displayGuestNotFound() {
         System.out.println("Guest not found.");
     }
+
+    public void displayBillingRecordNotFound(String confirmationNumber) {
+        System.out.println("No billing record found for confirmation number " + confirmationNumber + ".");
+    }
     /**
      * Tells the user a menu option is not available yet.
      *
@@ -115,18 +119,17 @@ public class FrontDeskCLI {
     /**
      * Prints the charges for rooms the guest is still occupying.
      */
+    /**
+     * Only called when the guest has at least one room still checked in —
+     * FrontDeskControl skips this whole block entirely otherwise, instead of
+     * printing an empty section under a header that doesn't apply.
+     */
     public void displayCurrentCharges(String chargeLines, int roomCount,
                                       int totalNights, double totalCharges) {
         System.out.println("------------------------------------------------------");
         System.out.println("CURRENT CHARGES  (rooms still checked in)");
         System.out.println("------------------------------------------------------");
-
-        if (roomCount == 0) {
-            System.out.println("  None - no room is currently checked in.");
-            return;
-        }
-
-        System.out.printf("  %-6s %-10s %12s %8s %14s%n",
+        System.out.printf("  %-8s %-12s %14s %10s %16s%n",
                 "Room", "Type", "Rate/night", "Nights", "Subtotal");
         System.out.print(chargeLines);
         System.out.println("------------------------------------------------------");
@@ -193,8 +196,8 @@ public class FrontDeskCLI {
     }
 
    /**
-     * Prints the room availability query: which rooms can be sold right now,
-     * and how many are blocked.
+     * Prints the room availability query: which rooms are available right
+     * now, and how many are unavailable.
      *
      * <p>This is an operational lookup, not an analysis. Occupancy rates,
      * revenue per room and idle capacity belong to the room utilisation report
@@ -213,21 +216,21 @@ public class FrontDeskCLI {
         System.out.println("======================================================");
         System.out.println("Filter : " + ((typeFilter == null) ? "All room types" : typeFilter));
         System.out.println("------------------------------------------------------");
-        System.out.printf("  %-10s %10s %9s%n", "Type", "Available", "Blocked");
+        System.out.printf("  %-12s %14s %14s%n", "Type", "Available", "Unavailable");
         System.out.print(breakdownLines);
         System.out.println("------------------------------------------------------");
-        System.out.println("ROOMS READY TO SELL  (" + available + ")");
+        System.out.println("AVAILABLE ROOMS  (" + available + ")");
         System.out.println("------------------------------------------------------");
 
         if (available == 0) {
-            System.out.println("  None - no room can be sold right now.");
+            System.out.println("  None - no room is available right now.");
         } else {
-            System.out.printf("  %-6s %-10s %12s%n", "Room", "Type", "Rate/night");
+            System.out.printf("  %-8s %-12s %14s%n", "Room", "Type", "Rate/night");
             System.out.print(availableLines);
         }
 
         System.out.println("------------------------------------------------------");
-        System.out.println("  " + available + " room(s) can be sold right now.");
+        System.out.println("  " + available + " room(s) available right now.");
         System.out.println("  " + (occupied + inHousekeeping) + " room(s) unavailable: "
                 + occupied + " occupied, " + inHousekeeping + " in housekeeping.");
         System.out.println("======================================================");
