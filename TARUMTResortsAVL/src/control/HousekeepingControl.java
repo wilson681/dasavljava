@@ -238,6 +238,11 @@ public class HousekeepingControl {
         String newStatus =
                 promptValidNewStatus(previousStatus);
 
+        if (newStatus == null) {
+            housekeepingCLI.displayCancelled();
+            return;
+        }
+
         RoomHistory history =
                 room.getRoomHistory();
 
@@ -516,8 +521,16 @@ public class HousekeepingControl {
     void doGenerateHousekeepingStatusReport() {
 
         String roomTypeFilter = promptValidReportRoomType();
+        if (roomTypeFilter == null) {
+            housekeepingCLI.displayCancelled();
+            return;
+        }
 
         String statusFilter = promptValidReportStatus();
+        if (statusFilter == null) {
+            housekeepingCLI.displayCancelled();
+            return;
+        }
 
         ListInterface<Room> result =
                 new ArrayBasedList<>();
@@ -635,8 +648,16 @@ public class HousekeepingControl {
     void doGenerateRoomHistoryReport() {
 
         String roomTypeFilter = promptValidReportRoomType();
+        if (roomTypeFilter == null) {
+            housekeepingCLI.displayCancelled();
+            return;
+        }
 
         int minimumRecords = promptValidMinimumHistoryRecords();
+        if (minimumRecords == Integer.MIN_VALUE) {
+            housekeepingCLI.displayCancelled();
+            return;
+        }
 
         ListInterface<Room> resultRooms =
                 new ArrayBasedList<>();
@@ -1008,73 +1029,91 @@ public class HousekeepingControl {
     // in place instead of aborting the whole operation)
     // =========================================================
 
+    /**
+     * housekeepingCLI.promptNewStatus()空白回传null代表取消;非空白但不是1~4
+     * 回传""(不是null)代表选项无效,要重问——跟"选了合法选项但转换本身不合法"
+     * (isValidStatusTransition为false)一样都要重问,只有真正空白才取消。
+     */
     private String promptValidNewStatus(String previousStatus) {
 
         String newStatus;
 
-        do {
+        while (true) {
+
             newStatus = housekeepingCLI.promptNewStatus(
                     nextValidStatus(previousStatus)
             );
 
-            if (newStatus == null
-                    || !isValidStatusTransition(previousStatus, newStatus)) {
-
-                housekeepingCLI.displayInvalidStatus();
-                newStatus = null;
+            if (newStatus == null) {
+                return null;
             }
 
-        } while (newStatus == null);
+            if (!newStatus.isEmpty() && isValidStatusTransition(previousStatus, newStatus)) {
+                return newStatus;
+            }
 
-        return newStatus;
+            housekeepingCLI.displayInvalidStatus();
+        }
     }
 
     private String promptValidReportRoomType() {
 
         String roomTypeFilter;
 
-        do {
+        while (true) {
+
             roomTypeFilter = housekeepingCLI.promptReportRoomType();
 
             if (roomTypeFilter == null) {
-                housekeepingCLI.displayInvalidReportFilter();
+                return null;
             }
 
-        } while (roomTypeFilter == null);
+            if (!roomTypeFilter.isEmpty()) {
+                return roomTypeFilter;
+            }
 
-        return roomTypeFilter;
+            housekeepingCLI.displayInvalidReportFilter();
+        }
     }
 
     private String promptValidReportStatus() {
 
         String statusFilter;
 
-        do {
+        while (true) {
+
             statusFilter = housekeepingCLI.promptReportStatus();
 
             if (statusFilter == null) {
-                housekeepingCLI.displayInvalidReportFilter();
+                return null;
             }
 
-        } while (statusFilter == null);
+            if (!statusFilter.isEmpty()) {
+                return statusFilter;
+            }
 
-        return statusFilter;
+            housekeepingCLI.displayInvalidReportFilter();
+        }
     }
 
     private int promptValidMinimumHistoryRecords() {
 
         int minimumRecords;
 
-        do {
+        while (true) {
+
             minimumRecords = housekeepingCLI.promptMinimumHistoryRecords();
 
-            if (minimumRecords < 0) {
-                housekeepingCLI.displayInvalidReportFilter();
+            if (minimumRecords == Integer.MIN_VALUE) {
+                return Integer.MIN_VALUE;
             }
 
-        } while (minimumRecords < 0);
+            if (minimumRecords >= 0) {
+                return minimumRecords;
+            }
 
-        return minimumRecords;
+            housekeepingCLI.displayInvalidReportFilter();
+        }
     }
 
     // =========================================================

@@ -115,9 +115,17 @@ public class WalkInControl {
 
     private void doRegister() {
         // 散客不是会员,直接问姓名、电话,不用像VIP那样先查会员资料——
-        // 格式错误(空白姓名、电话非数字)都原地重问到对为止,不会莫名其妙中止整个登记
+        // 格式错误(电话非数字)原地重问到对为止;空白代表使用者要取消,直接放弃整个登记
         String name = promptValidName();
+        if (name == null) {
+            walkInCLI.displayCancelled();
+            return;
+        }
         String phone = promptValidPhone();
+        if (phone == null) {
+            walkInCLI.displayCancelled();
+            return;
+        }
 
         // 一位客人可能一次要订好几间房(不一定同房型),所以姓名/电话只问一次,
         // 底下用同一个confirmationNumber循环开多笔Booking,直到客人说不用再加了
@@ -127,12 +135,20 @@ public class WalkInControl {
         boolean continueBooking = true;
         while (continueBooking) {
             String roomType = promptValidRoomType();
+            if (roomType == null) {
+                // 房型这里留空白,等同"不用再加房间了",直接结束这一轮登记,
+                // 不用额外印取消讯息——跟平常按"add another room? n"退出是一样的效果
+                break;
+            }
             QueueInterface<Booking> queue = getQueueForRoomType(roomType);
 
             // 住几晚要在客人还在面前的登记当下先问好,存进Booking——
             // 分房不再保证是当场发生的,之后可能是房间空出来才自动触发,
             // 到时候客人不一定还在,没办法临时问
             int numberOfNights = promptValidNumberOfNights();
+            if (numberOfNights == Integer.MIN_VALUE) {
+                break;
+            }
 
             arrivalCounter++;
             bookingCounter++;
@@ -240,6 +256,10 @@ public class WalkInControl {
 
     private void doCancel() {
         String roomType = promptValidRoomType();
+        if (roomType == null) {
+            walkInCLI.displayCancelled();
+            return;
+        }
         QueueInterface<Booking> queue = getQueueForRoomType(roomType);
 
         // 用bookingId取消,不是confirmationNumber——同一个confirmationNumber可能同时
@@ -247,6 +267,10 @@ public class WalkInControl {
         // 只会抓到排最前面那一笔,没办法让客人指定要取消的到底是哪一间;bookingId每笔
         // 都是唯一的,不会有这个歧义
         String bookingId = promptValidBookingId();
+        if (bookingId == null) {
+            walkInCLI.displayCancelled();
+            return;
+        }
         Booking target = findBookingInQueue(queue, bookingId);
         if (target == null) {
             walkInCLI.displayCancelResult(false);
@@ -264,6 +288,10 @@ public class WalkInControl {
 
     private void doViewWaitingList() {
         String roomType = promptValidRoomType();
+        if (roomType == null) {
+            walkInCLI.displayCancelled();
+            return;
+        }
         QueueInterface<Booking> queue = getQueueForRoomType(roomType);
         walkInCLI.displayWaitingList(roomType, queue.getIterator());
     }
@@ -481,59 +509,67 @@ public class WalkInControl {
 
     // ========== 输入重试(格式类校验失败就原地重问,不中止整个操作) ==========
 
+    /**
+     * 姓名唯一的校验就是"不能是空白",所以空白本身就直接当成"使用者要取消",
+     * 不用另外留一个专属的取消信号——回传null代表取消。
+     */
     private String promptValidName() {
-        String name;
-        do {
-            name = walkInCLI.promptName();
-            if (ValidationUtility.isBlank(name)) {
-                walkInCLI.displayInvalidName(name);
-            }
-        } while (ValidationUtility.isBlank(name));
-        return name;
+        String name = walkInCLI.promptName();
+        return ValidationUtility.isBlank(name) ? null : name;
     }
 
+    /**
+     * 空白代表取消(回传null);打了东西但不是纯数字才是真的格式错误,原地重问。
+     */
     private String promptValidPhone() {
         String phone;
-        do {
+        while (true) {
             phone = walkInCLI.promptPhone();
-            if (!ValidationUtility.isDigitsOnly(phone)) {
-                walkInCLI.displayInvalidPhone(phone);
+            if (ValidationUtility.isBlank(phone)) {
+                return null;
             }
-        } while (!ValidationUtility.isDigitsOnly(phone));
-        return phone;
+            if (ValidationUtility.isDigitsOnly(phone)) {
+                return phone;
+            }
+            walkInCLI.displayInvalidPhone(phone);
+        }
     }
 
     private String promptValidRoomType() {
         String roomType;
-        do {
+        while (true) {
             roomType = walkInCLI.promptRoomType();
-            if (getQueueForRoomType(roomType) == null) {
-                walkInCLI.displayInvalidRoomType(roomType);
+            if (ValidationUtility.isBlank(roomType)) {
+                return null;
             }
-        } while (getQueueForRoomType(roomType) == null);
-        return roomType;
+            if (getQueueForRoomType(roomType) != null) {
+                return roomType;
+            }
+            walkInCLI.displayInvalidRoomType(roomType);
+        }
     }
 
+    /**
+     * 空白由WalkInCLI转成Integer.MIN_VALUE(不会跟任何真实晚数或既有的-1无效值撞),
+     * 用来代表"使用者要取消",跟"打了但格式不对/不是正数"这种要重问的情况分开。
+     */
     private int promptValidNumberOfNights() {
         int numberOfNights;
-        do {
+        while (true) {
             numberOfNights = walkInCLI.promptNumberOfNights();
-            if (numberOfNights <= 0) {
-                walkInCLI.displayInvalidNumberOfNights(numberOfNights);
+            if (numberOfNights == Integer.MIN_VALUE) {
+                return Integer.MIN_VALUE;
             }
-        } while (numberOfNights <= 0);
-        return numberOfNights;
+            if (numberOfNights > 0) {
+                return numberOfNights;
+            }
+            walkInCLI.displayInvalidNumberOfNights(numberOfNights);
+        }
     }
 
     private String promptValidBookingId() {
-        String bookingId;
-        do {
-            bookingId = walkInCLI.promptBookingIdToCancel();
-            if (ValidationUtility.isBlank(bookingId)) {
-                walkInCLI.displayInvalidBookingId(bookingId);
-            }
-        } while (ValidationUtility.isBlank(bookingId));
-        return bookingId;
+        String bookingId = walkInCLI.promptBookingIdToCancel();
+        return ValidationUtility.isBlank(bookingId) ? null : bookingId;
     }
 
     private QueueInterface<Booking> getQueueForRoomType(String roomType) {

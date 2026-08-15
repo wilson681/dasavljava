@@ -88,6 +88,10 @@ public class FrontDeskControl {
     private void searchGuestByConfirmationNumber() {
 
         String confirmationNumber = promptValidConfirmationNumber();
+        if (confirmationNumber == null) {
+            frontDeskCLI.displayCancelled();
+            return;
+        }
         Guest foundGuest = findGuest(confirmationNumber);
 
         if (foundGuest == null) {
@@ -130,6 +134,10 @@ public class FrontDeskControl {
     private void doCheckOut() {
 
         String confirmationNumber = promptValidConfirmationNumber();
+        if (confirmationNumber == null) {
+            frontDeskCLI.displayCancelled();
+            return;
+        }
 
         Guest guest = findGuest(confirmationNumber);
         if (guest == null) {
@@ -181,6 +189,12 @@ public class FrontDeskControl {
         }
 
         double extraCharges = promptValidExtraCharges();
+        if (Double.isNaN(extraCharges)) {
+            // 房间已经选好了,但退房账单还没算、Booking状态也还没改成CHECKED_OUT,
+            // 这个时间点取消完全没有副作用要清理
+            frontDeskCLI.displayCancelled();
+            return;
+        }
 
         // 等级折扣是"个性化促销"的一种,只影响价格计算,不碰房型/房间状态——
         // 折扣用会员现在真正的等级算(不是Guest身上入住当天的快照),这样退房那一刻
@@ -229,6 +243,10 @@ public class FrontDeskControl {
     private void viewBillingDetails() {
 
         String confirmationNumber = promptValidConfirmationNumber();
+        if (confirmationNumber == null) {
+            frontDeskCLI.displayCancelled();
+            return;
+        }
 
         Guest guest = findGuest(confirmationNumber);
         if (guest == null) {
@@ -592,26 +610,39 @@ public class FrontDeskControl {
 
     // ========== 输入重试(格式类校验失败就原地重问,不中止整个操作) ==========
 
+    /**
+     * 空白代表使用者要取消(回传null),跟"打了但不是8位数字"这种要重问的情况分开。
+     */
     private String promptValidConfirmationNumber() {
         String confirmationNumber;
-        do {
+        while (true) {
             confirmationNumber = frontDeskCLI.promptConfirmationNumber();
-            if (!ValidationUtility.isEightDigitNumber(confirmationNumber)) {
-                frontDeskCLI.displayInvalidConfirmationNumber(confirmationNumber);
+            if (ValidationUtility.isBlank(confirmationNumber)) {
+                return null;
             }
-        } while (!ValidationUtility.isEightDigitNumber(confirmationNumber));
-        return confirmationNumber;
+            if (ValidationUtility.isEightDigitNumber(confirmationNumber)) {
+                return confirmationNumber;
+            }
+            frontDeskCLI.displayInvalidConfirmationNumber(confirmationNumber);
+        }
     }
 
+    /**
+     * frontDeskCLI.promptExtraCharges()空白时回传Double.NaN代表取消,
+     * 跟"打了但是负数/格式不对"这种要重问的情况分开。
+     */
     private double promptValidExtraCharges() {
         double extraCharges;
-        do {
+        while (true) {
             extraCharges = frontDeskCLI.promptExtraCharges();
-            if (extraCharges < 0) {
-                frontDeskCLI.displayInvalidExtraCharges(extraCharges);
+            if (Double.isNaN(extraCharges)) {
+                return Double.NaN;
             }
-        } while (extraCharges < 0);
-        return extraCharges;
+            if (extraCharges >= 0) {
+                return extraCharges;
+            }
+            frontDeskCLI.displayInvalidExtraCharges(extraCharges);
+        }
     }
 
     /**

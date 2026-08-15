@@ -42,9 +42,13 @@ public class FrontDeskCLI {
     public void displayInvalidChoice() {
         System.out.println("Invalid input, please try again.");
     }
+
+    public void displayCancelled() {
+        System.out.println("Cancelled. Returning to menu.");
+    }
     
     public String promptConfirmationNumber() {
-        System.out.print("Enter 8-digit confirmation number: ");
+        System.out.print("Enter 8-digit confirmation number (blank to cancel): ");
         return scanner.nextLine().trim();
     }
 
@@ -286,9 +290,13 @@ public class FrontDeskCLI {
     }
 
     public double promptExtraCharges() {
-        System.out.print("Enter extra charges (RM, 0 if none): ");
+        System.out.print("Enter extra charges (RM, 0 if none, blank to cancel): ");
+        String input = scanner.nextLine().trim();
+        if (input.isEmpty()) {
+            return Double.NaN;
+        }
         try {
-            return Double.parseDouble(scanner.nextLine().trim());
+            return Double.parseDouble(input);
         } catch (NumberFormatException e) {
             return -1.0;
         }

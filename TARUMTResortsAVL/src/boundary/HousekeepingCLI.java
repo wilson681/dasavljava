@@ -50,6 +50,10 @@ public class HousekeepingCLI {
         System.out.println("Invalid input, please try again.");
     }
 
+    public void displayCancelled() {
+        System.out.println("Cancelled. Returning to menu.");
+    }
+
     /**
      * Pauses the screen before returning to the
      * Housekeeping menu.
@@ -180,9 +184,13 @@ public class HousekeepingCLI {
         System.out.println("3. INSPECTED");
         System.out.println("4. AVAILABLE");
         System.out.println();
-        System.out.print("Enter your choice: ");
+        System.out.print("Enter your choice (blank to cancel): ");
 
         String choice = scanner.nextLine().trim();
+
+        if (choice.isEmpty()) {
+            return null;
+        }
 
         switch (choice) {
 
@@ -199,7 +207,7 @@ public class HousekeepingCLI {
                 return "AVAILABLE";
 
             default:
-                return null;
+                return "";
         }
     }
 
@@ -346,9 +354,13 @@ public class HousekeepingCLI {
         System.out.println("3. Deluxe");
         System.out.println("4. Suite");
         System.out.println();
-        System.out.print("Enter your choice: ");
+        System.out.print("Enter your choice (blank to cancel): ");
 
         String choice = scanner.nextLine().trim();
+
+        if (choice.isEmpty()) {
+            return null;
+        }
 
         switch (choice) {
 
@@ -365,7 +377,7 @@ public class HousekeepingCLI {
                 return "Suite";
 
             default:
-                return null;
+                return "";
         }
     }
 
@@ -379,9 +391,13 @@ public class HousekeepingCLI {
         System.out.println("4. INSPECTED");
         System.out.println("5. AVAILABLE");
         System.out.println();
-        System.out.print("Enter your choice: ");
+        System.out.print("Enter your choice (blank to cancel): ");
 
         String choice = scanner.nextLine().trim();
+
+        if (choice.isEmpty()) {
+            return null;
+        }
 
         switch (choice) {
 
@@ -401,7 +417,7 @@ public class HousekeepingCLI {
                 return "AVAILABLE";
 
             default:
-                return null;
+                return "";
         }
     }
 
@@ -490,10 +506,14 @@ public class HousekeepingCLI {
         System.out.println();
 
         System.out.print(
-                "Enter minimum number of history records: "
+                "Enter minimum number of history records (blank to cancel): "
         );
 
         String input = scanner.nextLine().trim();
+
+        if (input.isEmpty()) {
+            return Integer.MIN_VALUE;
+        }
 
         try {
             return Integer.parseInt(input);

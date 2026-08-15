@@ -97,8 +97,12 @@ public class VipAllocationControl {
 
     private void doRegister() {
         // 第一步:先查这个会员编号存不存在,不存在直接结束,不往下走——
-        // 空白是格式问题,原地重问;查无此人是真的没有这个人,不重问(重问也没用)
+        // 空白代表使用者要取消;查无此人是真的没有这个人,不重问(重问也没用)
         String memberId = promptValidMemberId();
+        if (memberId == null) {
+            vipAllocationCLI.displayCancelled();
+            return;
+        }
         Member member = findMemberById(memberId);
         if (member == null) {
             vipAllocationCLI.displayMemberNotFound(memberId);
@@ -123,12 +127,20 @@ public class VipAllocationControl {
         while (continueBooking) {
             // 问要什么房型,顺便决定这笔Booking该进哪一棵树
             String roomType = promptValidRoomType();
+            if (roomType == null) {
+                // 房型这里留空白,等同"不用再加房间了",直接结束这一轮登记,
+                // 不用额外印取消讯息——跟平常按"add another room? n"退出是一样的效果
+                break;
+            }
             SearchTreeInterface<Booking> tree = getTreeForRoomType(roomType);
 
             // 住几晚要在客人还在面前的登记当下先问好,存进Booking——
             // 分房不再保证是当场发生的,之后可能是房间空出来才自动触发,
             // 到时候客人不一定还在,没办法临时问
             int numberOfNights = promptValidNumberOfNights();
+            if (numberOfNights == Integer.MIN_VALUE) {
+                break;
+            }
 
             arrivalCounter++;
             bookingCounter++;
@@ -226,6 +238,10 @@ public class VipAllocationControl {
 
     private void doCancel() {
         String roomType = promptValidRoomType();
+        if (roomType == null) {
+            vipAllocationCLI.displayCancelled();
+            return;
+        }
         SearchTreeInterface<Booking> tree = getTreeForRoomType(roomType);
 
         // 用bookingId取消,不是confirmationNumber——同一个confirmationNumber可能同时
@@ -234,6 +250,10 @@ public class VipAllocationControl {
         // 只有bookingId,不知道这笔Booking的tierRank/arrivalSequence是多少,
         // 没办法直接叫树去比大小导航——所以先用in-order扫过去,找到"真正的那个物件"
         String bookingId = promptValidBookingId();
+        if (bookingId == null) {
+            vipAllocationCLI.displayCancelled();
+            return;
+        }
         Booking target = findBookingInTree(tree, bookingId);
         if (target == null) {
             vipAllocationCLI.displayCancelResult(false);
@@ -251,6 +271,10 @@ public class VipAllocationControl {
 
     private void doViewWaitingList() {
         String roomType = promptValidRoomType();
+        if (roomType == null) {
+            vipAllocationCLI.displayCancelled();
+            return;
+        }
         SearchTreeInterface<Booking> tree = getTreeForRoomType(roomType);
 
         // 直接把in-order遍历的iterator传给Boundary去印,不用自己先转成清单——
@@ -442,47 +466,41 @@ public class VipAllocationControl {
     // ========== 输入重试(格式类校验失败就原地重问,不中止整个操作) ==========
 
     private String promptValidMemberId() {
-        String memberId;
-        do {
-            memberId = vipAllocationCLI.promptMemberId();
-            if (ValidationUtility.isBlank(memberId)) {
-                vipAllocationCLI.displayBlankMemberId();
-            }
-        } while (ValidationUtility.isBlank(memberId));
-        return memberId;
+        String memberId = vipAllocationCLI.promptMemberId();
+        return ValidationUtility.isBlank(memberId) ? null : memberId;
     }
 
     private String promptValidRoomType() {
         String roomType;
-        do {
+        while (true) {
             roomType = vipAllocationCLI.promptRoomType();
-            if (getTreeForRoomType(roomType) == null) {
-                vipAllocationCLI.displayInvalidRoomType(roomType);
+            if (ValidationUtility.isBlank(roomType)) {
+                return null;
             }
-        } while (getTreeForRoomType(roomType) == null);
-        return roomType;
+            if (getTreeForRoomType(roomType) != null) {
+                return roomType;
+            }
+            vipAllocationCLI.displayInvalidRoomType(roomType);
+        }
     }
 
     private int promptValidNumberOfNights() {
         int numberOfNights;
-        do {
+        while (true) {
             numberOfNights = vipAllocationCLI.promptNumberOfNights();
-            if (numberOfNights <= 0) {
-                vipAllocationCLI.displayInvalidNumberOfNights(numberOfNights);
+            if (numberOfNights == Integer.MIN_VALUE) {
+                return Integer.MIN_VALUE;
             }
-        } while (numberOfNights <= 0);
-        return numberOfNights;
+            if (numberOfNights > 0) {
+                return numberOfNights;
+            }
+            vipAllocationCLI.displayInvalidNumberOfNights(numberOfNights);
+        }
     }
 
     private String promptValidBookingId() {
-        String bookingId;
-        do {
-            bookingId = vipAllocationCLI.promptBookingIdToCancel();
-            if (ValidationUtility.isBlank(bookingId)) {
-                vipAllocationCLI.displayInvalidBookingId(bookingId);
-            }
-        } while (ValidationUtility.isBlank(bookingId));
-        return bookingId;
+        String bookingId = vipAllocationCLI.promptBookingIdToCancel();
+        return ValidationUtility.isBlank(bookingId) ? null : bookingId;
     }
 
     /**
@@ -516,7 +534,7 @@ public class VipAllocationControl {
         Iterator<Member> iterator = memberList.getIterator();
         while (iterator.hasNext()) {
             Member member = iterator.next();
-            if (member.getMemberId().equals(memberId)) {
+            if (ValidationUtility.idsMatch(member.getMemberId(), memberId)) {
                 return member;
             }
         }

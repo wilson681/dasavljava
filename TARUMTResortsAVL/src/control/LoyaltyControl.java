@@ -84,18 +84,26 @@ public class LoyaltyControl {
 
     private void doViewExpiry() {
         String memberId = promptValidMemberId();
+        if (memberId == null) {
+            loyaltyCLI.displayCancelled();
+            return;
+        }
         Member member = findMemberById(memberId);
         if (member == null) {
             loyaltyCLI.displayMemberNotFound(memberId);
             return;
         }
-        loyaltyCLI.displayPointsExpiry(member, member.getPointsLedger().getIterator());
+        loyaltyCLI.displayPointsExpiry(member, member.getPointsLedger().getIterator(), calculateActivePoints(member));
     }
 
     // ========== 功能2:兑换积分 ==========
 
     private void doRedeem() {
         String memberId = promptValidMemberId();
+        if (memberId == null) {
+            loyaltyCLI.displayCancelled();
+            return;
+        }
         Member member = findMemberById(memberId);
         if (member == null) {
             loyaltyCLI.displayMemberNotFound(memberId, "Redemption failed.");
@@ -105,15 +113,25 @@ public class LoyaltyControl {
         // 先按pointsRequired由小到大把清单排好,再显示——自己写selection sort,
         // 不能用Collections.sort()
         sortCatalogByPoints();
-        loyaltyCLI.displayCatalog(redemptionCatalog.getIterator(), member.getCurrentPoints());
+        // 兑换用的余额一定要是"扣掉已过期批次"的真正可用余额,不能直接拿currentPoints——
+        // currentPoints只单纯累加/扣减,从来没有主动把过期的那部分减掉
+        int activePoints = calculateActivePoints(member);
+        loyaltyCLI.displayCatalog(redemptionCatalog.getIterator(), activePoints);
 
         RedemptionItem item = promptValidRedemptionChoice();
-
-        if (member.getCurrentPoints() < item.getPointsRequired()) {
-            loyaltyCLI.displayInsufficientPoints(member.getCurrentPoints(), item.getPointsRequired());
+        if (item == null) {
+            loyaltyCLI.displayCancelled();
             return;
         }
 
+        if (activePoints < item.getPointsRequired()) {
+            loyaltyCLI.displayInsufficientPoints(activePoints, item.getPointsRequired());
+            return;
+        }
+
+        // 直接扣currentPoints本身(不是activePoints)——currentPoints里还留着"已经过期
+        // 但从没被减掉"的那一块,每次要用余额时都靠calculateActivePoints()现算扣掉,
+        // 不需要、也不应该主动把它从currentPoints里挖掉(那笔明细本身不能被改,只能算)
         member.setCurrentPoints(member.getCurrentPoints() - item.getPointsRequired());
 
         // 兑换的东西只是符号化的项目(Free Breakfast、Spa Voucher这类),不会真的去动
@@ -122,13 +140,17 @@ public class LoyaltyControl {
                 item.getItemName(), item.getPointsRequired(), LocalDate.now().toString());
         redemptionHistory.add(transaction);
 
-        loyaltyCLI.displayRedemptionResult(transaction, member.getCurrentPoints());
+        loyaltyCLI.displayRedemptionResult(transaction, calculateActivePoints(member));
     }
 
     // ========== 功能3:手动加分 ==========
 
     private void doAddPoints() {
         String memberId = promptValidMemberId();
+        if (memberId == null) {
+            loyaltyCLI.displayCancelled();
+            return;
+        }
         Member member = findMemberById(memberId);
         if (member == null) {
             loyaltyCLI.displayMemberNotFound(memberId, "Add points failed.");
@@ -136,6 +158,10 @@ public class LoyaltyControl {
         }
 
         int pointsAmount = promptValidPointsAmount();
+        if (pointsAmount == Integer.MIN_VALUE) {
+            loyaltyCLI.displayCancelled();
+            return;
+        }
 
         // 加分前先记住原本的等级,加完才能比对有没有变,顺便告诉使用者升级了没有
         String tierBefore = member.getTier();
@@ -144,7 +170,7 @@ public class LoyaltyControl {
         LocalDate expiryDate = earnedDate.plusMonths(POINTS_VALIDITY_MONTHS);
         awardPoints(member, pointsAmount, earnedDate.toString(), expiryDate.toString());
 
-        loyaltyCLI.displayAddPointsResult(member, pointsAmount, tierBefore);
+        loyaltyCLI.displayAddPointsResult(member, pointsAmount, tierBefore, calculateActivePoints(member));
     }
 // ========== 功能4:手动调整等级 ==========
 
@@ -166,6 +192,10 @@ public class LoyaltyControl {
         loyaltyCLI.displayMemberTable(buildMemberRows());
 
         String memberId = promptValidMemberIdToAdjust();
+        if (memberId == null) {
+            loyaltyCLI.displayCancelled();
+            return;
+        }
         Member member = findMemberById(memberId);
         if (member == null) {
             loyaltyCLI.displayMemberNotFound(memberId, "Tier adjustment failed.");
@@ -180,6 +210,10 @@ public class LoyaltyControl {
 
         String oldTier = member.getTier();
         String newTier = promptValidTargetTier(oldTier, lowerTiers);
+        if (newTier == null) {
+            loyaltyCLI.displayCancelled();
+            return;
+        }
 
         if (!loyaltyCLI.promptConfirmAdjustment(member.getName(), oldTier, newTier)) {
             loyaltyCLI.displayAdjustmentCancelled();
@@ -463,71 +497,96 @@ public class LoyaltyControl {
         return String.format("%-9s| %-20s| %8d | %s%n",
                 member.getMemberId(),
                 member.getName(),
-                member.getCurrentPoints(),
+                calculateActivePoints(member),
                 member.getTier());
     }
     // ========== 输入重试(格式类校验失败就原地重问,不中止整个操作) ==========
 
     private String promptValidMemberId() {
-        String memberId;
-        do {
-            memberId = loyaltyCLI.promptMemberId();
-            if (ValidationUtility.isBlank(memberId)) {
-                loyaltyCLI.displayBlankMemberId();
-            }
-        } while (ValidationUtility.isBlank(memberId));
-        return memberId;
+        String memberId = loyaltyCLI.promptMemberId();
+        return ValidationUtility.isBlank(memberId) ? null : memberId;
     }
 
     private String promptValidMemberIdToAdjust() {
-        String memberId;
-        do {
-            memberId = loyaltyCLI.promptMemberIdToAdjust();
-            if (ValidationUtility.isBlank(memberId)) {
-                loyaltyCLI.displayBlankMemberId();
-            }
-        } while (ValidationUtility.isBlank(memberId));
-        return memberId;
+        String memberId = loyaltyCLI.promptMemberIdToAdjust();
+        return ValidationUtility.isBlank(memberId) ? null : memberId;
     }
 
     /**
      * 兑换清单在doRedeem()里显示之前一定先按points排好序,清单显示的编号(No.)
      * 直接对应ListInterface的position(都是从1开始),不用另外查名字。
+     * loyaltyCLI.promptItemNumber()空白时回传Integer.MIN_VALUE代表取消,
+     * 跟"打了数字但超出范围"这种要重问的情况分开。
      */
     private RedemptionItem promptValidRedemptionChoice() {
         int itemNumber;
-        do {
+        while (true) {
             itemNumber = loyaltyCLI.promptItemNumber();
-            if (itemNumber < 1 || itemNumber > redemptionCatalog.getNumberOfEntries()) {
-                loyaltyCLI.displayInvalidItemNumber(itemNumber, redemptionCatalog.getNumberOfEntries());
+            if (itemNumber == Integer.MIN_VALUE) {
+                return null;
             }
-        } while (itemNumber < 1 || itemNumber > redemptionCatalog.getNumberOfEntries());
-        return redemptionCatalog.getEntry(itemNumber);
+            if (itemNumber >= 1 && itemNumber <= redemptionCatalog.getNumberOfEntries()) {
+                return redemptionCatalog.getEntry(itemNumber);
+            }
+            loyaltyCLI.displayInvalidItemNumber(itemNumber, redemptionCatalog.getNumberOfEntries());
+        }
     }
 
     private int promptValidPointsAmount() {
         int pointsAmount;
-        do {
+        while (true) {
             pointsAmount = loyaltyCLI.promptPointsAmount();
-            if (pointsAmount <= 0) {
-                loyaltyCLI.displayInvalidPointsAmount(pointsAmount);
+            if (pointsAmount == Integer.MIN_VALUE) {
+                return Integer.MIN_VALUE;
             }
-        } while (pointsAmount <= 0);
-        return pointsAmount;
+            if (pointsAmount > 0) {
+                return pointsAmount;
+            }
+            loyaltyCLI.displayInvalidPointsAmount(pointsAmount);
+        }
     }
 
+    /**
+     * loyaltyCLI.promptTargetTier()空白回传null代表取消;非空白但不是合法选项
+     * 回传""(空字串,不是null)代表格式错误、要重问——用这两种不同的回传值分开
+     * "取消"跟"选错"这两种状况。
+     */
     private String promptValidTargetTier(String currentTier, String[] options) {
         String newTier;
-        do {
+        while (true) {
             newTier = loyaltyCLI.promptTargetTier(currentTier, options);
             if (newTier == null) {
-                loyaltyCLI.displayInvalidTier();
+                return null;
             }
-        } while (newTier == null);
-        return newTier;
+            if (!newTier.isEmpty()) {
+                return newTier;
+            }
+            loyaltyCLI.displayInvalidTier();
+        }
     }
 
     // ========== 内部辅助方法 ==========
+
+    /**
+     * 算出这位会员真正能拿去兑换/显示的余额——currentPoints本身只是单纯的
+     * "历史累加-历史兑换",从来没有主动把过期批次扣掉,所以每次要用余额之前都要
+     * 现算一次"已经过期、但还没被扣掉"的部分,从currentPoints里减掉再拿去用。
+     * 不直接改pointsLedger或存一个"已扣过期"旗标——PointsLedgerEntry是不可变的明细,
+     * 过期批次本身还是要留着给doViewExpiry()完整显示(只是被标成EXPIRED)。
+     * 因为这个函数每次都是从currentPoints现减,不是累加状态,重复呼叫也不会重复扣。
+     */
+    private int calculateActivePoints(Member member) {
+        int expiredTotal = 0;
+        LocalDate today = LocalDate.now();
+        Iterator<PointsLedgerEntry> iterator = member.getPointsLedger().getIterator();
+        while (iterator.hasNext()) {
+            PointsLedgerEntry entry = iterator.next();
+            if (LocalDate.parse(entry.getExpiryDate()).isBefore(today)) {
+                expiredTotal += entry.getPointsAmount();
+            }
+        }
+        return member.getCurrentPoints() - expiredTotal;
+    }
 
     /**
      * 在memberList里线性找出memberId相符的那位会员,找不到回传null。
@@ -539,7 +598,7 @@ public class LoyaltyControl {
         Iterator<Member> iterator = memberList.getIterator();
         while (iterator.hasNext()) {
             Member member = iterator.next();
-            if (member.getMemberId().equals(memberId)) {
+            if (ValidationUtility.idsMatch(member.getMemberId(), memberId)) {
                 return member;
             }
         }

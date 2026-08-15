@@ -33,4 +33,12 @@ public class ValidationUtility {
     public static boolean isDigitsOnly(String value) {
         return value != null && value.trim().matches("\\d+");
     }
+
+    /**
+     * 比较两个识别码(比如会员ID)是不是视为同一个,不分大小写——使用者手动输入ID
+     * 查找资料时,大小写不该影响查得到查不到。null-safe:任一边是null就视为不相符。
+     */
+    public static boolean idsMatch(String a, String b) {
+        return a != null && b != null && a.equalsIgnoreCase(b);
+    }
 }

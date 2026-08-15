@@ -4,6 +4,7 @@ import entity.Member;
 import entity.PointsLedgerEntry;
 import entity.RedemptionItem;
 import entity.RedemptionTransaction;
+import java.time.LocalDate;
 import java.util.Iterator;
 import java.util.Scanner;
 
@@ -19,7 +20,7 @@ import java.util.Scanner;
 public class LoyaltyCLI {
 
     private static final String DIVIDER = "--------------------------------------------------------";
-    private static final String LEDGER_TABLE_DIVIDER = "---- ---------- -------------- --------------";
+    private static final String LEDGER_TABLE_DIVIDER = "---- ---------- -------------- -------------- ----------";
     private static final String CATALOG_TABLE_DIVIDER = "---- -------------------------- -------------- ----------";
   
     private static final String MEMBER_TABLE_HEADER =
@@ -56,8 +57,12 @@ public class LoyaltyCLI {
         System.out.println("Invalid input, please try again.");
     }
 
+    public void displayCancelled() {
+        System.out.println("Cancelled. Returning to menu.");
+    }
+
     public String promptMemberId() {
-        System.out.print("Enter member ID: ");
+        System.out.print("Enter member ID (blank to cancel): ");
         return scanner.nextLine().trim();
     }
 
@@ -73,28 +78,29 @@ public class LoyaltyCLI {
         System.out.println("Member ID " + memberId + " not found. " + failedAction);
     }
 
-    public void displayBlankMemberId() {
-        System.out.println("Member ID cannot be blank.");
-    }
-
     // ========== 功能1:查看积分到期状况 ==========
 
-    public void displayPointsExpiry(Member member, Iterator<PointsLedgerEntry> ledger) {
+    public void displayPointsExpiry(Member member, Iterator<PointsLedgerEntry> ledger, int activePoints) {
         System.out.println();
         System.out.println("===== Points Ledger: " + member.getName() + " (" + member.getMemberId() + ") =====");
-        System.out.println("Current Balance: " + member.getCurrentPoints() + " pts | Tier: " + member.getTier());
+        System.out.println("Current Balance: " + activePoints + " pts | Tier: " + member.getTier());
         System.out.println();
         if (!ledger.hasNext()) {
             System.out.println("No points batches on record.");
             return;
         }
-        System.out.println(String.format("%-4s %-10s %-14s %-14s", "No.", "Points", "Earned", "Expires"));
+        System.out.println(String.format("%-4s %-10s %-14s %-14s %s", "No.", "Points", "Earned", "Expires", "Status"));
         System.out.println(LEDGER_TABLE_DIVIDER);
+        LocalDate today = LocalDate.now();
         int rank = 1;
         while (ledger.hasNext()) {
             PointsLedgerEntry entry = ledger.next();
-            System.out.println(String.format("%-4d %-10d %-14s %-14s",
-                    rank, entry.getPointsAmount(), entry.getEarnedDate(), entry.getExpiryDate()));
+            // 过期批次照样列出来(方便对账/查历史),但用EXPIRED标出来——
+            // 单纯文字标记,不用ANSI加粗转义码,避免在NetBeans/不支援ANSI的console下变成乱码
+            boolean expired = LocalDate.parse(entry.getExpiryDate()).isBefore(today);
+            String status = expired ? "EXPIRED" : "";
+            System.out.println(String.format("%-4d %-10d %-14s %-14s %s",
+                    rank, entry.getPointsAmount(), entry.getEarnedDate(), entry.getExpiryDate(), status));
             rank++;
         }
     }
@@ -119,9 +125,13 @@ public class LoyaltyCLI {
     }
 
     public int promptItemNumber() {
-        System.out.print("Enter the No. of the item to redeem: ");
+        System.out.print("Enter the No. of the item to redeem (blank to cancel): ");
+        String input = scanner.nextLine().trim();
+        if (input.isEmpty()) {
+            return Integer.MIN_VALUE;
+        }
         try {
-            return Integer.parseInt(scanner.nextLine().trim());
+            return Integer.parseInt(input);
         } catch (NumberFormatException e) {
             return -1;
         }
@@ -150,9 +160,13 @@ public class LoyaltyCLI {
     // ========== 功能3:手动加分 ==========
 
     public int promptPointsAmount() {
-        System.out.print("Enter points to add: ");
+        System.out.print("Enter points to add (blank to cancel): ");
+        String input = scanner.nextLine().trim();
+        if (input.isEmpty()) {
+            return Integer.MIN_VALUE;
+        }
         try {
-            return Integer.parseInt(scanner.nextLine().trim());
+            return Integer.parseInt(input);
         } catch (NumberFormatException e) {
             return -1;
         }
@@ -162,14 +176,14 @@ public class LoyaltyCLI {
         System.out.println("Invalid points amount (" + pointsAmount + "). Must be a positive whole number.");
     }
 
-    public void displayAddPointsResult(Member member, int pointsAdded, String tierBefore) {
+    public void displayAddPointsResult(Member member, int pointsAdded, String tierBefore, int activePoints) {
         System.out.println();
         System.out.println(DIVIDER);
         System.out.println("  POINTS ADDED");
         System.out.println(DIVIDER);
         System.out.println("  Member               : " + member.getName() + " (" + member.getMemberId() + ")");
         System.out.println("  Points Added         : +" + pointsAdded);
-        System.out.println("  New Balance          : " + member.getCurrentPoints());
+        System.out.println("  New Balance          : " + activePoints);
         System.out.println("  Tier                 : " + member.getTier());
         if (!tierBefore.equals(member.getTier())) {
             System.out.println("  >> Upgraded from " + tierBefore + " to " + member.getTier() + "!");
@@ -193,7 +207,7 @@ public class LoyaltyCLI {
 
     public String promptMemberIdToAdjust() {
         System.out.println();
-        System.out.print("Enter the Member ID to adjust: ");
+        System.out.print("Enter the Member ID to adjust (blank to cancel): ");
         return scanner.nextLine().trim();
     }
 
@@ -212,18 +226,21 @@ public class LoyaltyCLI {
         for (int i = 0; i < options.length; i++) {
             System.out.println("  " + (i + 1) + ") " + options[i]);
         }
-        System.out.print("Enter your choice: ");
+        System.out.print("Enter your choice (blank to cancel): ");
 
         String input = scanner.nextLine().trim();
+        if (input.isEmpty()) {
+            return null;
+        }
         try {
             int choice = Integer.parseInt(input);
             if (choice >= 1 && choice <= options.length) {
                 return options[choice - 1];
             }
         } catch (NumberFormatException e) {
-            return null;
+            // fall through to the invalid-but-not-blank return below
         }
-        return null;
+        return "";
     }
 
     public void displayInvalidTier() {

@@ -54,17 +54,21 @@ public class VipAllocationCLI {
         System.out.println("Invalid input, please try again.");
     }
 
+    public void displayCancelled() {
+        System.out.println("Cancelled. Returning to menu.");
+    }
+
     // ========== 功能1:VIP登记 ==========
 
     public String promptMemberId() {
-        System.out.print("Enter member ID: ");
+        System.out.print("Enter member ID (blank to cancel): ");
         return scanner.nextLine().trim();
     }
 
     public String promptRoomType() {
         System.out.println();
         System.out.println("Room Type: 1) Standard  2) Deluxe  3) Suite");
-        System.out.print("Select room type: ");
+        System.out.print("Select room type (blank to cancel): ");
         // 把数字选项换成实际房型文字,打错或直接打文字都原样传出去,交给Control判断合不合法
         String choice = scanner.nextLine().trim();
         switch (choice) {
@@ -81,10 +85,6 @@ public class VipAllocationCLI {
 
     public void displayMemberNotFound(String memberId) {
         System.out.println("Member ID " + memberId + " not found. Registration failed.");
-    }
-
-    public void displayBlankMemberId() {
-        System.out.println("Member ID cannot be blank.");
     }
 
     public void displayInvalidRoomType(String roomType) {
@@ -125,9 +125,13 @@ public class VipAllocationCLI {
     // ========== 分房结果(登记后自动触发,不再是独立菜单动作) ==========
 
     public int promptNumberOfNights() {
-        System.out.print("Enter number of nights: ");
+        System.out.print("Enter number of nights (blank to cancel): ");
+        String input = scanner.nextLine().trim();
+        if (input.isEmpty()) {
+            return Integer.MIN_VALUE;
+        }
         try {
-            return Integer.parseInt(scanner.nextLine().trim());
+            return Integer.parseInt(input);
         } catch (NumberFormatException e) {
             return -1;
         }
@@ -155,12 +159,8 @@ public class VipAllocationCLI {
     // ========== 功能2:取消排队 ==========
 
     public String promptBookingIdToCancel() {
-        System.out.print("Enter the booking ID to cancel: ");
+        System.out.print("Enter the booking ID to cancel (blank to cancel): ");
         return scanner.nextLine().trim();
-    }
-
-    public void displayInvalidBookingId(String bookingId) {
-        System.out.println("\"" + bookingId + "\" is not a valid booking ID.");
     }
 
     public void displayCancelResult(boolean success) {
