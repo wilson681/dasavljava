@@ -24,9 +24,22 @@ public class LoyaltyCLI {
     private static final String CATALOG_TABLE_DIVIDER = "---- -------------------------- -------------- ----------";
   
     private static final String MEMBER_TABLE_HEADER =
-            String.format("%-9s| %-20s| %8s | %s", "MemberId", "MemberName", "Point", "VipTier");
+            String.format("%-9s| %-20s| %8s | %-11s| %s",
+                    "MemberId", "MemberName", "Point", "VipTier", "Last Visited Date");
     private static final String MEMBER_TABLE_DIVIDER =
-            "---------|---------------------|----------|----------";
+            "---------|---------------------|----------|------------|------------";
+    private static final String EXPIRY_MEMBER_TABLE_HEADER =
+        String.format("%-9s| %-20s| %-11s",
+                "MemberId", "MemberName", "Tier");
+
+    private static final String EXPIRY_MEMBER_TABLE_DIVIDER =
+            "---------|---------------------|------------";
+    private static final String POINTS_MEMBER_TABLE_HEADER =
+            String.format("%-9s| %-20s| %8s | %s",
+                    "MemberId", "MemberName", "Point", "Tier");
+
+    private static final String POINTS_MEMBER_TABLE_DIVIDER =
+            "---------|---------------------|----------|------------";
     private Scanner scanner;
 
     public LoyaltyCLI() {
@@ -77,7 +90,25 @@ public class LoyaltyCLI {
     public void displayMemberNotFound(String memberId, String failedAction) {
         System.out.println("Member ID " + memberId + " not found. " + failedAction);
     }
-
+    
+    public void displayExpiryMemberTable(String rows) {
+        System.out.println();
+        System.out.println("===== Member Directory =====");
+        System.out.println();
+        System.out.println(EXPIRY_MEMBER_TABLE_HEADER);
+        System.out.println(EXPIRY_MEMBER_TABLE_DIVIDER);
+        System.out.print(rows);
+        System.out.println();
+    }
+    public void displayPointsMemberTable(String rows) {
+        System.out.println();
+        System.out.println("===== Member Directory =====");
+        System.out.println();
+        System.out.println(POINTS_MEMBER_TABLE_HEADER);
+        System.out.println(POINTS_MEMBER_TABLE_DIVIDER);
+        System.out.print(rows);
+        System.out.println();
+    }
     // ========== 功能1:查看积分到期状况 ==========
 
     public void displayPointsExpiry(Member member, Iterator<PointsLedgerEntry> ledger, int activePoints) {
@@ -194,7 +225,7 @@ public class LoyaltyCLI {
 
     public void displayMemberTable(String rows) {
         System.out.println();
-        System.out.println("===== Member Directory =====");
+        System.out.println("===== Member Directory (longest inactive first) =====");
         System.out.println();
         System.out.println(MEMBER_TABLE_HEADER);
         System.out.println(MEMBER_TABLE_DIVIDER);

@@ -82,19 +82,35 @@ public class LoyaltyControl {
 
     // ========== 功能1:查看积分到期状况 ==========
 
-    private void doViewExpiry() {
-        String memberId = promptValidMemberId();
-        if (memberId == null) {
-            loyaltyCLI.displayCancelled();
-            return;
-        }
-        Member member = findMemberById(memberId);
-        if (member == null) {
-            loyaltyCLI.displayMemberNotFound(memberId);
-            return;
-        }
-        loyaltyCLI.displayPointsExpiry(member, member.getPointsLedger().getIterator(), calculateActivePoints(member));
+  private void doViewExpiry() {
+
+    if (memberList.isEmpty()) {
+        loyaltyCLI.displayNoMembers();
+        return;
     }
+
+    // Display members sorted by Member ID
+    loyaltyCLI.displayExpiryMemberTable(buildExpiryMemberRows());
+
+    String memberId = promptValidMemberId();
+
+    if (memberId == null) {
+        loyaltyCLI.displayCancelled();
+        return;
+    }
+
+    Member member = findMemberById(memberId);
+
+    if (member == null) {
+        loyaltyCLI.displayMemberNotFound(memberId);
+        return;
+    }
+
+    loyaltyCLI.displayPointsExpiry(
+            member,
+            member.getPointsLedger().getIterator(),
+            calculateActivePoints(member));
+}
 
     // ========== 功能2:兑换积分 ==========
 
@@ -146,6 +162,14 @@ public class LoyaltyControl {
     // ========== 功能3:手动加分 ==========
 
     private void doAddPoints() {
+        
+        if (memberList.isEmpty()) {
+            loyaltyCLI.displayNoMembers();
+            return;
+        }
+
+        loyaltyCLI.displayPointsMemberTable(buildPointsMemberRows());
+        
         String memberId = promptValidMemberId();
         if (memberId == null) {
             loyaltyCLI.displayCancelled();
@@ -220,9 +244,11 @@ public class LoyaltyControl {
             return;
         }
 
-        member.setTier(newTier);
+       member.setTier(newTier);
 
-        loyaltyCLI.displayAdjustmentResult(buildMemberRow(member),
+        String lastEarned = findLatestEarnedDate(member);
+        loyaltyCLI.displayAdjustmentResult(
+                buildMemberRow(member, lastEarned.isEmpty() ? "-" : lastEarned),
                 oldTier, newTier,
                 TierRankUtility.tierToDiscountPercent(oldTier),
                 TierRankUtility.tierToDiscountPercent(newTier));
@@ -233,11 +259,12 @@ public class LoyaltyControl {
      * 手动调整只开放降级——升级应该靠消费赚积分取得,由职员直接给会绕过整个积分机制。
      *
      * @param currentTier 会员目前的等级
-     * @return 比它低的等级,由低到高;已经在最低等级时回传空阵列
+     * @return 比它低的等级,由高到低(最接近的降一级排第一);
+     *         已经在最低等级时回传空阵列
      */
     private String[] buildLowerTiers(String currentTier) {
 
-        String[] allTiers = {"Standard", "Elite", "Platinum", "Diamond"};
+        String[] allTiers = {"Diamond", "Platinum", "Elite", "Standard"};
         int currentRank = TierRankUtility.tierToRank(currentTier);
 
         int count = 0;
@@ -480,26 +507,141 @@ public class LoyaltyControl {
         return (member == null) ? null : member.getTier();
     }
 /**
-     * 把 memberList 里每一位会员组成一行表格资料。
+     * 把 memberList 里每一位会员组成一行表格资料,按「上次赚积分的日期」升序——
+     * 最久没来的排最前面,让职员一眼看出哪些会员该被关注。
      */
     private String buildMemberRows() {
-        String result = "";
+
+        ListInterface<Member> members = new ArrayBasedList<>();
+        ListInterface<String> lastEarnedDates = new ArrayBasedList<>();
+
         for (int i = 1; i <= memberList.getNumberOfEntries(); i++) {
-            result = result + buildMemberRow(memberList.getEntry(i));
+            Member member = memberList.getEntry(i);
+            members.add(member);
+            lastEarnedDates.add(findLatestEarnedDate(member));
+        }
+
+        sortByLastEarnedAscending(members, lastEarnedDates);
+
+        String result = "";
+        for (int i = 1; i <= members.getNumberOfEntries(); i++) {
+            String shown = lastEarnedDates.getEntry(i).isEmpty()
+                    ? "-" : lastEarnedDates.getEntry(i);
+            result = result + buildMemberRow(members.getEntry(i), shown);
         }
         return result;
     }
 
     /**
+     * selection sort:按上次赚分日期由早到晚,两条平行清单一起换位置。
+     * 空字串(从未赚过分)在字典序里最小,自然排到最前面——那正是最该被关注的会员。
+     */
+    private void sortByLastEarnedAscending(ListInterface<Member> members,
+                                            ListInterface<String> lastEarnedDates) {
+        int n = lastEarnedDates.getNumberOfEntries();
+        for (int i = 1; i <= n - 1; i++) {
+            int smallestPosition = i;
+            for (int j = i + 1; j <= n; j++) {
+                if (lastEarnedDates.getEntry(j)
+                        .compareTo(lastEarnedDates.getEntry(smallestPosition)) < 0) {
+                    smallestPosition = j;
+                }
+            }
+            if (smallestPosition != i) {
+                swap(members, i, smallestPosition);
+                swap(lastEarnedDates, i, smallestPosition);
+            }
+        }
+    }
+
+    /**
      * 把一位会员组成一行表格资料,栏宽跟 LoyaltyCLI 的表头一致。
      */
-    private String buildMemberRow(Member member) {
-        return String.format("%-9s| %-20s| %8d | %s%n",
+    /**
+     * 把一位会员组成一行表格资料,栏宽跟 LoyaltyCLI 的表头一致。
+     */
+    private String buildMemberRow(Member member, String lastEarned) {
+        return String.format("%-9s| %-20s| %8d | %-11s| %s%n",
                 member.getMemberId(),
                 member.getName(),
                 calculateActivePoints(member),
-                member.getTier());
+                member.getTier(),
+                lastEarned);
     }
+    
+    /**
+     * 把 memberList 组成「查看积分到期」用的简表,按 Member ID 升序。
+     *
+     * <p>跟 buildMemberRows() 分开是因为两个画面要看的东西不同:降级那张要看积分和
+     * 上次来访(所以按最久没来排),这张只是让职员从名单里挑一个人来查明细,按 ID
+     * 排最好找。</p>
+     */
+    private String buildExpiryMemberRows() {
+
+        ListInterface<Member> members = new ArrayBasedList<>();
+        for (int i = 1; i <= memberList.getNumberOfEntries(); i++) {
+            members.add(memberList.getEntry(i));
+        }
+
+        sortByMemberIdAscending(members);
+
+        String result = "";
+        for (int i = 1; i <= members.getNumberOfEntries(); i++) {
+            Member member = members.getEntry(i);
+            result = result + String.format("%-9s| %-20s| %-11s%n",
+                    member.getMemberId(),
+                    member.getName(),
+                    member.getTier());
+        }
+        return result;
+    }
+/**
+     * 把 memberList 组成「手动加分」用的简表,按 Member ID 升序。
+     *
+     * <p>比到期查询那张多一栏可用积分——加分前先看到目前余额,才好判断要加多少。
+     * 显示的是 calculateActivePoints(),不是 currentPoints,因为过期批次不该算进
+     * 可用余额里。</p>
+     */
+    private String buildPointsMemberRows() {
+
+        ListInterface<Member> members = new ArrayBasedList<>();
+        for (int i = 1; i <= memberList.getNumberOfEntries(); i++) {
+            members.add(memberList.getEntry(i));
+        }
+
+        sortByMemberIdAscending(members);
+
+        String result = "";
+        for (int i = 1; i <= members.getNumberOfEntries(); i++) {
+            Member member = members.getEntry(i);
+            result = result + String.format("%-9s| %-20s| %8d | %s%n",
+                    member.getMemberId(),
+                    member.getName(),
+                    calculateActivePoints(member),
+                    member.getTier());
+        }
+        return result;
+    }
+    /**
+     * selection sort:按 Member ID 由小到大。
+     * ID 是 M + 四位数字,长度固定,字典序即数值序。
+     */
+    private void sortByMemberIdAscending(ListInterface<Member> members) {
+        int n = members.getNumberOfEntries();
+        for (int i = 1; i <= n - 1; i++) {
+            int smallestPosition = i;
+            for (int j = i + 1; j <= n; j++) {
+                if (members.getEntry(j).getMemberId()
+                        .compareTo(members.getEntry(smallestPosition).getMemberId()) < 0) {
+                    smallestPosition = j;
+                }
+            }
+            if (smallestPosition != i) {
+                swap(members, i, smallestPosition);
+            }
+        }
+    }
+    
     // ========== 输入重试(格式类校验失败就原地重问,不中止整个操作) ==========
 
     private String promptValidMemberId() {
@@ -587,7 +729,27 @@ public class LoyaltyControl {
         }
         return member.getCurrentPoints() - expiredTotal;
     }
+    /**
+     * 找出这位会员积分明细里最晚的一笔 earnedDate。
+     * 积分是在退房结帐那一刻入帐的,所以这个日期就代表他最後一次完成入住的时间,
+     * 不需要在 Member 上另外多存一个「上次来访」栏位。
+     *
+     * @param member 要查的会员
+     * @return 最晚的赚分日期;从未赚过分时回传空字串
+     */
+    private String findLatestEarnedDate(Member member) {
 
+        String latest = "";
+        Iterator<PointsLedgerEntry> iterator = member.getPointsLedger().getIterator();
+        while (iterator.hasNext()) {
+            String earned = iterator.next().getEarnedDate();
+            // 日期是 yyyy-MM-dd,字典序即时间序,直接比字串就够
+            if (earned != null && earned.compareTo(latest) > 0) {
+                latest = earned;
+            }
+        }
+        return latest;
+    }
     /**
      * 在memberList里线性找出memberId相符的那位会员,找不到回传null。
      */
