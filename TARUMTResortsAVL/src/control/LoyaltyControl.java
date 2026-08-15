@@ -83,11 +83,7 @@ public class LoyaltyControl {
     // ========== 功能1:查看积分到期状况 ==========
 
     private void doViewExpiry() {
-        String memberId = loyaltyCLI.promptMemberId();
-        if (ValidationUtility.isBlank(memberId)) {
-            loyaltyCLI.displayMemberNotFound(memberId);
-            return;
-        }
+        String memberId = promptValidMemberId();
         Member member = findMemberById(memberId);
         if (member == null) {
             loyaltyCLI.displayMemberNotFound(memberId);
@@ -99,11 +95,7 @@ public class LoyaltyControl {
     // ========== 功能2:兑换积分 ==========
 
     private void doRedeem() {
-        String memberId = loyaltyCLI.promptMemberId();
-        if (ValidationUtility.isBlank(memberId)) {
-            loyaltyCLI.displayMemberNotFound(memberId, "Redemption failed.");
-            return;
-        }
+        String memberId = promptValidMemberId();
         Member member = findMemberById(memberId);
         if (member == null) {
             loyaltyCLI.displayMemberNotFound(memberId, "Redemption failed.");
@@ -115,11 +107,7 @@ public class LoyaltyControl {
         sortCatalogByPoints();
         loyaltyCLI.displayCatalog(redemptionCatalog.getIterator(), member.getCurrentPoints());
 
-        String itemName = loyaltyCLI.promptItemName();
-        if (ValidationUtility.isBlank(itemName)) {
-            loyaltyCLI.displayItemNotFound(itemName);
-            return;
-        }
+        String itemName = promptValidItemName();
         RedemptionItem item = findItemByName(itemName);
         if (item == null) {
             loyaltyCLI.displayItemNotFound(itemName);
@@ -145,22 +133,14 @@ public class LoyaltyControl {
     // ========== 功能3:手动加分 ==========
 
     private void doAddPoints() {
-        String memberId = loyaltyCLI.promptMemberId();
-        if (ValidationUtility.isBlank(memberId)) {
-            loyaltyCLI.displayMemberNotFound(memberId, "Add points failed.");
-            return;
-        }
+        String memberId = promptValidMemberId();
         Member member = findMemberById(memberId);
         if (member == null) {
             loyaltyCLI.displayMemberNotFound(memberId, "Add points failed.");
             return;
         }
 
-        int pointsAmount = loyaltyCLI.promptPointsAmount();
-        if (pointsAmount <= 0) {
-            loyaltyCLI.displayInvalidPointsAmount(pointsAmount);
-            return;
-        }
+        int pointsAmount = promptValidPointsAmount();
 
         // 加分前先记住原本的等级,加完才能比对有没有变,顺便告诉使用者升级了没有
         String tierBefore = member.getTier();
@@ -191,22 +171,14 @@ public class LoyaltyControl {
 
         loyaltyCLI.displayMemberTable(buildMemberRows());
 
-        String memberId = loyaltyCLI.promptMemberIdToAdjust();
-        if (ValidationUtility.isBlank(memberId)) {
-            loyaltyCLI.displayMemberNotFound(memberId, "Tier adjustment failed.");
-            return;
-        }
+        String memberId = promptValidMemberIdToAdjust();
         Member member = findMemberById(memberId);
         if (member == null) {
             loyaltyCLI.displayMemberNotFound(memberId, "Tier adjustment failed.");
             return;
         }
 
-        String newTier = loyaltyCLI.promptTargetTier(member.getTier());
-        if (newTier == null) {
-            loyaltyCLI.displayInvalidTier();
-            return;
-        }
+        String newTier = promptValidTargetTier(member.getTier());
 
         String oldTier = member.getTier();
         if (newTier.equals(oldTier)) {
@@ -471,6 +443,63 @@ public class LoyaltyControl {
                 member.getCurrentPoints(),
                 member.getTier());
     }
+    // ========== 输入重试(格式类校验失败就原地重问,不中止整个操作) ==========
+
+    private String promptValidMemberId() {
+        String memberId;
+        do {
+            memberId = loyaltyCLI.promptMemberId();
+            if (ValidationUtility.isBlank(memberId)) {
+                loyaltyCLI.displayBlankMemberId();
+            }
+        } while (ValidationUtility.isBlank(memberId));
+        return memberId;
+    }
+
+    private String promptValidMemberIdToAdjust() {
+        String memberId;
+        do {
+            memberId = loyaltyCLI.promptMemberIdToAdjust();
+            if (ValidationUtility.isBlank(memberId)) {
+                loyaltyCLI.displayBlankMemberId();
+            }
+        } while (ValidationUtility.isBlank(memberId));
+        return memberId;
+    }
+
+    private String promptValidItemName() {
+        String itemName;
+        do {
+            itemName = loyaltyCLI.promptItemName();
+            if (ValidationUtility.isBlank(itemName)) {
+                loyaltyCLI.displayBlankItemName();
+            }
+        } while (ValidationUtility.isBlank(itemName));
+        return itemName;
+    }
+
+    private int promptValidPointsAmount() {
+        int pointsAmount;
+        do {
+            pointsAmount = loyaltyCLI.promptPointsAmount();
+            if (pointsAmount <= 0) {
+                loyaltyCLI.displayInvalidPointsAmount(pointsAmount);
+            }
+        } while (pointsAmount <= 0);
+        return pointsAmount;
+    }
+
+    private String promptValidTargetTier(String currentTier) {
+        String newTier;
+        do {
+            newTier = loyaltyCLI.promptTargetTier(currentTier);
+            if (newTier == null) {
+                loyaltyCLI.displayInvalidTier();
+            }
+        } while (newTier == null);
+        return newTier;
+    }
+
     // ========== 内部辅助方法 ==========
 
     /**

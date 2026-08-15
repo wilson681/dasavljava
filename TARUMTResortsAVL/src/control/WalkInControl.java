@@ -114,17 +114,10 @@ public class WalkInControl {
     // ========== 功能1:登记新客人 ==========
 
     private void doRegister() {
-        // 散客不是会员,直接问姓名、电话,不用像VIP那样先查会员资料
-        String name = walkInCLI.promptName();
-        if (ValidationUtility.isBlank(name)) {
-            walkInCLI.displayInvalidName(name);
-            return;
-        }
-        String phone = walkInCLI.promptPhone();
-        if (!ValidationUtility.isDigitsOnly(phone)) {
-            walkInCLI.displayInvalidPhone(phone);
-            return;
-        }
+        // 散客不是会员,直接问姓名、电话,不用像VIP那样先查会员资料——
+        // 格式错误(空白姓名、电话非数字)都原地重问到对为止,不会莫名其妙中止整个登记
+        String name = promptValidName();
+        String phone = promptValidPhone();
 
         // 一位客人可能一次要订好几间房(不一定同房型),所以姓名/电话只问一次,
         // 底下用同一个confirmationNumber循环开多笔Booking,直到客人说不用再加了
@@ -133,34 +126,29 @@ public class WalkInControl {
 
         boolean continueBooking = true;
         while (continueBooking) {
-            String roomType = walkInCLI.promptRoomType();
+            String roomType = promptValidRoomType();
             QueueInterface<Booking> queue = getQueueForRoomType(roomType);
-            if (queue == null) {
-                walkInCLI.displayInvalidRoomType(roomType);
-            } else {
-                // 住几晚要在客人还在面前的登记当下先问好,存进Booking——
-                // 分房不再保证是当场发生的,之后可能是房间空出来才自动触发,
-                // 到时候客人不一定还在,没办法临时问
-                int numberOfNights = walkInCLI.promptNumberOfNights();
-                if (numberOfNights <= 0) {
-                    walkInCLI.displayInvalidNumberOfNights(numberOfNights);
-                } else {
-                    arrivalCounter++;
-                    bookingCounter++;
-                    String bookingId = "WB" + String.format("%06d", bookingCounter);
 
-                    // memberId是null、tierRank是0——散客没有等级,这两个字段跟VIP那边刻意留空/最低
-                    Booking booking = new Booking(bookingId, confirmationNumber, name, phone, null,
-                            roomType, BookingStatus.PENDING, "WALK_IN", arrivalCounter, 0, currentTimestamp());
-                    booking.setNumberOfNights(numberOfNights);
+            // 住几晚要在客人还在面前的登记当下先问好,存进Booking——
+            // 分房不再保证是当场发生的,之后可能是房间空出来才自动触发,
+            // 到时候客人不一定还在,没办法临时问
+            int numberOfNights = promptValidNumberOfNights();
 
-                    queue.enqueue(booking);
-                    walkInCLI.displayRegistrationResult(booking);
+            arrivalCounter++;
+            bookingCounter++;
+            String bookingId = "WB" + String.format("%06d", bookingCounter);
 
-                    // 登记完立刻检查一次这个房型能不能马上分房(VIP没人等、队伍轮到他、有空房)
-                    tryAllocate(roomType);
-                }
-            }
+            // memberId是null、tierRank是0——散客没有等级,这两个字段跟VIP那边刻意留空/最低
+            Booking booking = new Booking(bookingId, confirmationNumber, name, phone, null,
+                    roomType, BookingStatus.PENDING, "WALK_IN", arrivalCounter, 0, currentTimestamp());
+            booking.setNumberOfNights(numberOfNights);
+
+            queue.enqueue(booking);
+            walkInCLI.displayRegistrationResult(booking);
+
+            // 登记完立刻检查一次这个房型能不能马上分房(VIP没人等、队伍轮到他、有空房)
+            tryAllocate(roomType);
+
             continueBooking = walkInCLI.promptAddAnotherRoom();
         }
     }
@@ -251,22 +239,14 @@ public class WalkInControl {
     // ========== 功能3:取消排队 ==========
 
     private void doCancel() {
-        String roomType = walkInCLI.promptRoomType();
+        String roomType = promptValidRoomType();
         QueueInterface<Booking> queue = getQueueForRoomType(roomType);
-        if (queue == null) {
-            walkInCLI.displayInvalidRoomType(roomType);
-            return;
-        }
 
         // 用bookingId取消,不是confirmationNumber——同一个confirmationNumber可能同时
         // 有好几笔Booking在同一个房型的队伍里(一次订多间房),用confirmationNumber去找
         // 只会抓到排最前面那一笔,没办法让客人指定要取消的到底是哪一间;bookingId每笔
         // 都是唯一的,不会有这个歧义
-        String bookingId = walkInCLI.promptBookingIdToCancel();
-        if (ValidationUtility.isBlank(bookingId)) {
-            walkInCLI.displayInvalidBookingId(bookingId);
-            return;
-        }
+        String bookingId = promptValidBookingId();
         Booking target = findBookingInQueue(queue, bookingId);
         if (target == null) {
             walkInCLI.displayCancelResult(false);
@@ -283,13 +263,8 @@ public class WalkInControl {
     // ========== 功能4:查看排队名单 ==========
 
     private void doViewWaitingList() {
-        String roomType = walkInCLI.promptRoomType();
+        String roomType = promptValidRoomType();
         QueueInterface<Booking> queue = getQueueForRoomType(roomType);
-        if (queue == null) {
-            walkInCLI.displayInvalidRoomType(roomType);
-            return;
-        }
-
         walkInCLI.displayWaitingList(roomType, queue.getIterator());
     }
 
@@ -502,6 +477,63 @@ public class WalkInControl {
      */
     private String currentTimestamp() {
         return LocalDateTime.now().withNano(0).format(TIMESTAMP_FORMAT);
+    }
+
+    // ========== 输入重试(格式类校验失败就原地重问,不中止整个操作) ==========
+
+    private String promptValidName() {
+        String name;
+        do {
+            name = walkInCLI.promptName();
+            if (ValidationUtility.isBlank(name)) {
+                walkInCLI.displayInvalidName(name);
+            }
+        } while (ValidationUtility.isBlank(name));
+        return name;
+    }
+
+    private String promptValidPhone() {
+        String phone;
+        do {
+            phone = walkInCLI.promptPhone();
+            if (!ValidationUtility.isDigitsOnly(phone)) {
+                walkInCLI.displayInvalidPhone(phone);
+            }
+        } while (!ValidationUtility.isDigitsOnly(phone));
+        return phone;
+    }
+
+    private String promptValidRoomType() {
+        String roomType;
+        do {
+            roomType = walkInCLI.promptRoomType();
+            if (getQueueForRoomType(roomType) == null) {
+                walkInCLI.displayInvalidRoomType(roomType);
+            }
+        } while (getQueueForRoomType(roomType) == null);
+        return roomType;
+    }
+
+    private int promptValidNumberOfNights() {
+        int numberOfNights;
+        do {
+            numberOfNights = walkInCLI.promptNumberOfNights();
+            if (numberOfNights <= 0) {
+                walkInCLI.displayInvalidNumberOfNights(numberOfNights);
+            }
+        } while (numberOfNights <= 0);
+        return numberOfNights;
+    }
+
+    private String promptValidBookingId() {
+        String bookingId;
+        do {
+            bookingId = walkInCLI.promptBookingIdToCancel();
+            if (ValidationUtility.isBlank(bookingId)) {
+                walkInCLI.displayInvalidBookingId(bookingId);
+            }
+        } while (ValidationUtility.isBlank(bookingId));
+        return bookingId;
     }
 
     private QueueInterface<Booking> getQueueForRoomType(String roomType) {

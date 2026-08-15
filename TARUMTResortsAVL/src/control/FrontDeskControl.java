@@ -87,11 +87,7 @@ public class FrontDeskControl {
 
     private void searchGuestByConfirmationNumber() {
 
-        String confirmationNumber = frontDeskCLI.promptConfirmationNumber();
-        if (!ValidationUtility.isEightDigitNumber(confirmationNumber)) {
-            frontDeskCLI.displayInvalidConfirmationNumber(confirmationNumber);
-            return;
-        }
+        String confirmationNumber = promptValidConfirmationNumber();
         Guest foundGuest = findGuest(confirmationNumber);
 
         if (foundGuest == null) {
@@ -133,11 +129,7 @@ public class FrontDeskControl {
      */
     private void doCheckOut() {
 
-        String confirmationNumber = frontDeskCLI.promptConfirmationNumber();
-        if (!ValidationUtility.isEightDigitNumber(confirmationNumber)) {
-            frontDeskCLI.displayInvalidConfirmationNumber(confirmationNumber);
-            return;
-        }
+        String confirmationNumber = promptValidConfirmationNumber();
 
         Guest guest = findGuest(confirmationNumber);
         if (guest == null) {
@@ -188,11 +180,7 @@ public class FrontDeskControl {
             return;
         }
 
-        double extraCharges = frontDeskCLI.promptExtraCharges();
-        if (extraCharges < 0) {
-            frontDeskCLI.displayInvalidExtraCharges(extraCharges);
-            return;
-        }
+        double extraCharges = promptValidExtraCharges();
 
         // 等级折扣是"个性化促销"的一种,只影响价格计算,不碰房型/房间状态——
         // 折扣用会员现在真正的等级算(不是Guest身上入住当天的快照),这样退房那一刻
@@ -240,11 +228,7 @@ public class FrontDeskControl {
      */
     private void viewBillingDetails() {
 
-        String confirmationNumber = frontDeskCLI.promptConfirmationNumber();
-        if (!ValidationUtility.isEightDigitNumber(confirmationNumber)) {
-            frontDeskCLI.displayInvalidConfirmationNumber(confirmationNumber);
-            return;
-        }
+        String confirmationNumber = promptValidConfirmationNumber();
 
         Guest guest = findGuest(confirmationNumber);
         if (guest == null) {
@@ -604,6 +588,30 @@ public class FrontDeskControl {
             }
         }
         return null;
+    }
+
+    // ========== 输入重试(格式类校验失败就原地重问,不中止整个操作) ==========
+
+    private String promptValidConfirmationNumber() {
+        String confirmationNumber;
+        do {
+            confirmationNumber = frontDeskCLI.promptConfirmationNumber();
+            if (!ValidationUtility.isEightDigitNumber(confirmationNumber)) {
+                frontDeskCLI.displayInvalidConfirmationNumber(confirmationNumber);
+            }
+        } while (!ValidationUtility.isEightDigitNumber(confirmationNumber));
+        return confirmationNumber;
+    }
+
+    private double promptValidExtraCharges() {
+        double extraCharges;
+        do {
+            extraCharges = frontDeskCLI.promptExtraCharges();
+            if (extraCharges < 0) {
+                frontDeskCLI.displayInvalidExtraCharges(extraCharges);
+            }
+        } while (extraCharges < 0);
+        return extraCharges;
     }
 
     /**

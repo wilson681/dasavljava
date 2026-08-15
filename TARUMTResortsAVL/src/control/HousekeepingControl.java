@@ -236,23 +236,7 @@ public class HousekeepingControl {
         }
 
         String newStatus =
-                housekeepingCLI.promptNewStatus(
-                        nextValidStatus(previousStatus)
-                );
-
-        if (newStatus == null) {
-
-            housekeepingCLI.displayInvalidStatus();
-            return;
-        }
-
-        if (!isValidStatusTransition(
-                previousStatus,
-                newStatus)) {
-
-            housekeepingCLI.displayInvalidStatus();
-            return;
-        }
+                promptValidNewStatus(previousStatus);
 
         RoomHistory history =
                 room.getRoomHistory();
@@ -531,29 +515,9 @@ public class HousekeepingControl {
 
     void doGenerateHousekeepingStatusReport() {
 
-        String roomTypeFilter =
-                housekeepingCLI
-                        .promptReportRoomType();
+        String roomTypeFilter = promptValidReportRoomType();
 
-        if (roomTypeFilter == null) {
-
-            housekeepingCLI
-                    .displayInvalidReportFilter();
-
-            return;
-        }
-
-        String statusFilter =
-                housekeepingCLI
-                        .promptReportStatus();
-
-        if (statusFilter == null) {
-
-            housekeepingCLI
-                    .displayInvalidReportFilter();
-
-            return;
-        }
+        String statusFilter = promptValidReportStatus();
 
         ListInterface<Room> result =
                 new ArrayBasedList<>();
@@ -670,29 +634,9 @@ public class HousekeepingControl {
 
     void doGenerateRoomHistoryReport() {
 
-        String roomTypeFilter =
-                housekeepingCLI
-                        .promptReportRoomType();
+        String roomTypeFilter = promptValidReportRoomType();
 
-        if (roomTypeFilter == null) {
-
-            housekeepingCLI
-                    .displayInvalidReportFilter();
-
-            return;
-        }
-
-        int minimumRecords =
-                housekeepingCLI
-                        .promptMinimumHistoryRecords();
-
-        if (minimumRecords < 0) {
-
-            housekeepingCLI
-                    .displayInvalidReportFilter();
-
-            return;
-        }
+        int minimumRecords = promptValidMinimumHistoryRecords();
 
         ListInterface<Room> resultRooms =
                 new ArrayBasedList<>();
@@ -1057,6 +1001,80 @@ public class HousekeepingControl {
                     temporaryStack.pop()
             );
         }
+    }
+
+    // =========================================================
+    // Input Retry (format-class validation failures re-prompt
+    // in place instead of aborting the whole operation)
+    // =========================================================
+
+    private String promptValidNewStatus(String previousStatus) {
+
+        String newStatus;
+
+        do {
+            newStatus = housekeepingCLI.promptNewStatus(
+                    nextValidStatus(previousStatus)
+            );
+
+            if (newStatus == null
+                    || !isValidStatusTransition(previousStatus, newStatus)) {
+
+                housekeepingCLI.displayInvalidStatus();
+                newStatus = null;
+            }
+
+        } while (newStatus == null);
+
+        return newStatus;
+    }
+
+    private String promptValidReportRoomType() {
+
+        String roomTypeFilter;
+
+        do {
+            roomTypeFilter = housekeepingCLI.promptReportRoomType();
+
+            if (roomTypeFilter == null) {
+                housekeepingCLI.displayInvalidReportFilter();
+            }
+
+        } while (roomTypeFilter == null);
+
+        return roomTypeFilter;
+    }
+
+    private String promptValidReportStatus() {
+
+        String statusFilter;
+
+        do {
+            statusFilter = housekeepingCLI.promptReportStatus();
+
+            if (statusFilter == null) {
+                housekeepingCLI.displayInvalidReportFilter();
+            }
+
+        } while (statusFilter == null);
+
+        return statusFilter;
+    }
+
+    private int promptValidMinimumHistoryRecords() {
+
+        int minimumRecords;
+
+        do {
+            minimumRecords = housekeepingCLI.promptMinimumHistoryRecords();
+
+            if (minimumRecords < 0) {
+                housekeepingCLI.displayInvalidReportFilter();
+            }
+
+        } while (minimumRecords < 0);
+
+        return minimumRecords;
     }
 
     // =========================================================

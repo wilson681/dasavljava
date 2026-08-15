@@ -73,6 +73,10 @@ public class LoyaltyCLI {
         System.out.println("Member ID " + memberId + " not found. " + failedAction);
     }
 
+    public void displayBlankMemberId() {
+        System.out.println("Member ID cannot be blank.");
+    }
+
     // ========== 功能1:查看积分到期状况 ==========
 
     public void displayPointsExpiry(Member member, Iterator<PointsLedgerEntry> ledger) {
@@ -119,6 +123,10 @@ public class LoyaltyCLI {
 
     public void displayItemNotFound(String itemName) {
         System.out.println("Item \"" + itemName + "\" not found in the catalog.");
+    }
+
+    public void displayBlankItemName() {
+        System.out.println("Item name cannot be blank.");
     }
 
     public void displayInsufficientPoints(int currentPoints, int required) {
