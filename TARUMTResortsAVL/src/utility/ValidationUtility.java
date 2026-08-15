@@ -33,7 +33,28 @@ public class ValidationUtility {
     public static boolean isDigitsOnly(String value) {
         return value != null && value.trim().matches("\\d+");
     }
+    /**
+     * 判断字串是不是合法的人名——只允许字母、空格,以及名字里常见的
+     * 撇号(O'Brien)、连字号(Anne-Marie)、句点(Jr.)和斜线(A/L、A/P)。
+     * 数字和其他符号一律拒绝。
+     */
+    public static boolean isValidName(String value) {
 
+        if (isBlank(value)) {
+            return false;
+        }
+
+        String trimmed = value.trim();
+        for (int i = 0; i < trimmed.length(); i++) {
+            char c = trimmed.charAt(i);
+            boolean allowed = Character.isLetter(c)
+                    || c == ' ' || c == '\'' || c == '-' || c == '.' || c == '/';
+            if (!allowed) {
+                return false;
+            }
+        }
+        return true;
+    }
     /**
      * 比较两个识别码(比如会员ID)是不是视为同一个,不分大小写——使用者手动输入ID
      * 查找资料时,大小写不该影响查得到查不到。null-safe:任一边是null就视为不相符。

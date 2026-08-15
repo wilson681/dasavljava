@@ -134,14 +134,18 @@ public class LoyaltyControl {
         int activePoints = calculateActivePoints(member);
         loyaltyCLI.displayCatalog(redemptionCatalog.getIterator(), activePoints);
 
-        RedemptionItem item = promptValidRedemptionChoice();
-        if (item == null) {
-            loyaltyCLI.displayCancelled();
+        // 目录已经按 points 升序排好,第一笔就是最便宜的——连它都买不起就直接
+        // 告知,不要让使用者在清单里一个一个试
+        if (!redemptionCatalog.isEmpty()
+                && activePoints < redemptionCatalog.getEntry(1).getPointsRequired()) {
+            loyaltyCLI.displayCannotAffordAnything(activePoints,
+                    redemptionCatalog.getEntry(1).getPointsRequired());
             return;
         }
 
-        if (activePoints < item.getPointsRequired()) {
-            loyaltyCLI.displayInsufficientPoints(activePoints, item.getPointsRequired());
+        RedemptionItem item = promptValidRedemptionChoice(activePoints);
+        if (item == null) {
+            loyaltyCLI.displayCancelled();
             return;
         }
 
@@ -660,17 +664,38 @@ public class LoyaltyControl {
      * loyaltyCLI.promptItemNumber()空白时回传Integer.MIN_VALUE代表取消,
      * 跟"打了数字但超出范围"这种要重问的情况分开。
      */
-    private RedemptionItem promptValidRedemptionChoice() {
-        int itemNumber;
+    /**
+     * 兑换清单显示前一定先按 points 排好序,清单的 No. 直接对应 ListInterface 的
+     * position(都从 1 开始)。
+     *
+     * <p>「余额不足」跟「编号超出范围」一样属于可以重选的错误,所以两者都在这个
+     * 回圈里处理,不会把使用者踢回主选单。只有输入空白才代表取消。</p>
+     *
+     * @param activePoints 这位会员目前真正可用的余额
+     * @return 选到而且买得起的项目;取消时回传 null
+     */
+    private RedemptionItem promptValidRedemptionChoice(int activePoints) {
+
         while (true) {
-            itemNumber = loyaltyCLI.promptItemNumber();
+
+            int itemNumber = loyaltyCLI.promptItemNumber();
             if (itemNumber == Integer.MIN_VALUE) {
                 return null;
             }
-            if (itemNumber >= 1 && itemNumber <= redemptionCatalog.getNumberOfEntries()) {
-                return redemptionCatalog.getEntry(itemNumber);
+
+            if (itemNumber < 1 || itemNumber > redemptionCatalog.getNumberOfEntries()) {
+                loyaltyCLI.displayInvalidItemNumber(itemNumber,
+                        redemptionCatalog.getNumberOfEntries());
+                continue;
             }
-            loyaltyCLI.displayInvalidItemNumber(itemNumber, redemptionCatalog.getNumberOfEntries());
+
+            RedemptionItem item = redemptionCatalog.getEntry(itemNumber);
+            if (activePoints < item.getPointsRequired()) {
+                loyaltyCLI.displayInsufficientPoints(activePoints, item.getPointsRequired());
+                continue;
+            }
+
+            return item;
         }
     }
 

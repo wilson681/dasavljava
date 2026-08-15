@@ -524,9 +524,21 @@ public class WalkInControl {
      * 姓名唯一的校验就是"不能是空白",所以空白本身就直接当成"使用者要取消",
      * 不用另外留一个专属的取消信号——回传null代表取消。
      */
+    /**
+     * 空白代表取消(回传null);打了东西但含数字或符号才是真的格式错误,原地重问。
+     */
     private String promptValidName() {
-        String name = walkInCLI.promptName();
-        return ValidationUtility.isBlank(name) ? null : name;
+        String name;
+        while (true) {
+            name = walkInCLI.promptName();
+            if (ValidationUtility.isBlank(name)) {
+                return null;
+            }
+            if (ValidationUtility.isValidName(name)) {
+                return name;
+            }
+            walkInCLI.displayInvalidName(name);
+        }
     }
 
     /**

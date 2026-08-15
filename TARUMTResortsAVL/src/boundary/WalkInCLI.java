@@ -68,7 +68,10 @@ public class WalkInCLI {
     public void displayInvalidPhone(String phone) {
         System.out.println("Phone number \"" + phone + "\" is invalid. Must contain digits only.");
     }
-
+    public void displayInvalidName(String name) {
+        System.out.println("\"" + name + "\" is not a valid name.");
+        System.out.println("Letters and spaces only. Apostrophes, hyphens and \"A/L\" are allowed.");
+    }
     public String promptRoomType() {
         System.out.println();
         System.out.println("Room Type: 1) Standard  2) Deluxe  3) Suite");

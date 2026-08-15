@@ -176,7 +176,12 @@ public class LoyaltyCLI {
         System.out.println("Not enough points. You have " + currentPoints
                 + " pts, this item needs " + required + " pts.");
     }
-
+    public void displayCannotAffordAnything(int currentPoints, int cheapestRequired) {
+        System.out.println();
+        System.out.println("You have " + currentPoints + " pts. The cheapest item needs "
+                + cheapestRequired + " pts.");
+        System.out.println("Nothing can be redeemed right now.");
+    }
     public void displayRedemptionResult(RedemptionTransaction transaction, int remainingPoints) {
         System.out.println();
         System.out.println(DIVIDER);
