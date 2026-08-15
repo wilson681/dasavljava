@@ -154,13 +154,12 @@ public class LoyaltyControl {
 // ========== 功能4:手动调整等级 ==========
 
     /**
-     * 让职员手动把某位会员调到指定等级(升降都可以)。
-     * 只改 tier,不动 currentPoints 也不动 totalPointsEarned——
-     * 这是身份调整,不是没收积分。
+     * 让职员手动把某位会员降到较低的等级。
+     * 只开放降级——升级应该靠消费赚积分取得,由职员直接给会绕过整个积分机制。
+     * 只改 tier,不动 currentPoints 也不动 totalPointsEarned。
      *
-     * 注意:awardPoints() 会依 totalPointsEarned 自动重算等级,所以这个手动调整
-     * 会在该会员下一次赚分时被自动规则覆盖回去。这是刻意的取舍——
-     * 累计分代表会员的终身价值,不该因为管理动作被改写。
+     * 注意:awardPoints() 会依 totalPointsEarned 自动重算等级,所以这个降级
+     * 会在该会员下一次赚分时被覆盖回去——定位是临时性处分,客人恢复消费後身份自动回复。
      */
     private void doAdjustTier() {
 
@@ -178,13 +177,14 @@ public class LoyaltyControl {
             return;
         }
 
-        String newTier = promptValidTargetTier(member.getTier());
-
-        String oldTier = member.getTier();
-        if (newTier.equals(oldTier)) {
-            loyaltyCLI.displayTierUnchanged(newTier);
+        String[] lowerTiers = buildLowerTiers(member.getTier());
+        if (lowerTiers.length == 0) {
+            loyaltyCLI.displayAlreadyLowestTier(member.getName(), member.getTier());
             return;
         }
+
+        String oldTier = member.getTier();
+        String newTier = promptValidTargetTier(oldTier, lowerTiers);
 
         if (!loyaltyCLI.promptConfirmAdjustment(member.getName(), oldTier, newTier)) {
             loyaltyCLI.displayAdjustmentCancelled();
@@ -193,14 +193,42 @@ public class LoyaltyControl {
 
         member.setTier(newTier);
 
-        boolean isDowngrade = TierRankUtility.tierToRank(newTier)
-                < TierRankUtility.tierToRank(oldTier);
-
         loyaltyCLI.displayAdjustmentResult(buildMemberRow(member),
-                oldTier, newTier, isDowngrade,
+                oldTier, newTier,
                 TierRankUtility.tierToDiscountPercent(oldTier),
                 TierRankUtility.tierToDiscountPercent(newTier));
     }
+    
+    /**
+     * 找出比目前等级低的所有等级。
+     * 手动调整只开放降级——升级应该靠消费赚积分取得,由职员直接给会绕过整个积分机制。
+     *
+     * @param currentTier 会员目前的等级
+     * @return 比它低的等级,由低到高;已经在最低等级时回传空阵列
+     */
+    private String[] buildLowerTiers(String currentTier) {
+
+        String[] allTiers = {"Standard", "Elite", "Platinum", "Diamond"};
+        int currentRank = TierRankUtility.tierToRank(currentTier);
+
+        int count = 0;
+        for (int i = 0; i < allTiers.length; i++) {
+            if (TierRankUtility.tierToRank(allTiers[i]) < currentRank) {
+                count++;
+            }
+        }
+
+        String[] result = new String[count];
+        int index = 0;
+        for (int i = 0; i < allTiers.length; i++) {
+            if (TierRankUtility.tierToRank(allTiers[i]) < currentRank) {
+                result[index] = allTiers[i];
+                index++;
+            }
+        }
+        return result;
+    }
+    
     // ========== 报表1:积分即将到期提醒 ==========
 
     /**
@@ -489,10 +517,10 @@ public class LoyaltyControl {
         return pointsAmount;
     }
 
-    private String promptValidTargetTier(String currentTier) {
+    private String promptValidTargetTier(String currentTier, String[] options) {
         String newTier;
         do {
-            newTier = loyaltyCLI.promptTargetTier(currentTier);
+            newTier = loyaltyCLI.promptTargetTier(currentTier, options);
             if (newTier == null) {
                 loyaltyCLI.displayInvalidTier();
             }

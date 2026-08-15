@@ -39,7 +39,7 @@ public class LoyaltyCLI {
         System.out.println("  1) View Points Expiry");
         System.out.println("  2) Redeem Points");
         System.out.println("  3) Add Points (Manual)");
-        System.out.println("  4) Manual Tier Adjustment");
+        System.out.println("  4) Manual Tier Downgrade");
         System.out.println("  0) Back to Main Menu");
         System.out.println();
         System.out.print("Enter your choice: ");
@@ -195,44 +195,37 @@ public class LoyaltyCLI {
         return scanner.nextLine().trim();
     }
 
-    /**
-     * 让使用者用数字选目标等级,避免大小写或拼错的问题。
+    
+   /**
+     * 让使用者从「比目前低的等级」里选一个,用数字选避免拼错。
      *
      * @param currentTier 这位会员现在的等级
+     * @param options 可选的较低等级
      * @return 选到的等级文字,选项无效则回传 null
      */
-    public String promptTargetTier(String currentTier) {
+    public String promptTargetTier(String currentTier, String[] options) {
         System.out.println();
         System.out.println("Current tier: " + currentTier);
-        System.out.println("Select the new tier:");
-        System.out.println("  1) Standard");
-        System.out.println("  2) Elite");
-        System.out.println("  3) Platinum");
-        System.out.println("  4) Diamond");
+        System.out.println("Select the tier to downgrade to:");
+        for (int i = 0; i < options.length; i++) {
+            System.out.println("  " + (i + 1) + ") " + options[i]);
+        }
         System.out.print("Enter your choice: ");
 
         String input = scanner.nextLine().trim();
-        if (input.equals("1")) {
-            return "Standard";
-        }
-        if (input.equals("2")) {
-            return "Elite";
-        }
-        if (input.equals("3")) {
-            return "Platinum";
-        }
-        if (input.equals("4")) {
-            return "Diamond";
+        try {
+            int choice = Integer.parseInt(input);
+            if (choice >= 1 && choice <= options.length) {
+                return options[choice - 1];
+            }
+        } catch (NumberFormatException e) {
+            return null;
         }
         return null;
     }
 
     public void displayInvalidTier() {
         System.out.println("Invalid choice. No tier was changed.");
-    }
-
-    public void displayTierUnchanged(String tier) {
-        System.out.println("The member is already on " + tier + ". Nothing changed.");
     }
 
     public boolean promptConfirmAdjustment(String name, String oldTier, String newTier) {
@@ -254,13 +247,11 @@ public class LoyaltyCLI {
     }
 
     public void displayAdjustmentResult(String row, String oldTier, String newTier,
-                                        boolean isDowngrade,
                                         int oldDiscount, int newDiscount) {
         System.out.println();
         System.out.println(DIVIDER);
-        System.out.println("  TIER ADJUSTMENT SUCCESSFUL");
+        System.out.println("  TIER DOWNGRADE SUCCESSFUL");
         System.out.println(DIVIDER);
-        System.out.println("  Direction            : " + (isDowngrade ? "DOWNGRADE" : "UPGRADE"));
         System.out.println("  Tier                 : " + oldTier + "  ->  " + newTier);
         System.out.println("  Room Discount        : " + oldDiscount + "%  ->  " + newDiscount + "%");
         System.out.println(DIVIDER);
@@ -268,7 +259,10 @@ public class LoyaltyCLI {
         System.out.println(MEMBER_TABLE_DIVIDER);
         System.out.print(row);
     }
-
+    public void displayAlreadyLowestTier(String name, String tier) {
+        System.out.println(name + " is already on " + tier + ", the lowest tier. "
+                + "Nothing to downgrade.");
+    }
     // ========== 报表共用输入/输出 ==========
 
     public String promptReportTierFilter() {
