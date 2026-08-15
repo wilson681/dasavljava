@@ -27,6 +27,8 @@ public class FrontDeskCLI {
         System.out.println("2) Check Room Availability");
         System.out.println("3) View Billing Details");
         System.out.println("4) Process Check-Out");
+        System.out.println("5) Generate Check-Out Revenue Report");
+        System.out.println("6) Generate Room Utilisation & Status Report");
         System.out.println("0) Back to Main Menu");
         System.out.print("Enter your choice: ");
 
@@ -300,5 +302,157 @@ public class FrontDeskCLI {
             System.out.println("Member Tier         : " + memberTier);
         }
         System.out.println("======================================================");
+    }
+
+    // ========== 报表共用输入 ==========
+
+    public String promptReportFromDate() {
+        System.out.println();
+        System.out.print("Enter from-date (yyyy-MM-dd, blank = no lower bound): ");
+        String input = scanner.nextLine().trim();
+        return input.isEmpty() ? "0000-00-00" : input;
+    }
+
+    public String promptReportToDate() {
+        System.out.print("Enter to-date (yyyy-MM-dd, blank = no upper bound): ");
+        String input = scanner.nextLine().trim();
+        return input.isEmpty() ? "9999-99-99" : input;
+    }
+
+    public void displayNoReportRecords() {
+        System.out.println("No records match the selected criteria.");
+    }
+
+    public void displayReportEnd() {
+        System.out.println("======================================================");
+    }
+
+    // ========== 报表1:Check-Out Revenue Report ==========
+
+    public String promptReportTierFilter() {
+        System.out.println();
+        System.out.println("Tier Filter: 1) All  2) Standard  3) Elite  4) Platinum  5) Diamond");
+        System.out.print("Enter your choice: ");
+        String choice = scanner.nextLine().trim();
+        switch (choice) {
+            case "2":
+                return "Standard";
+            case "3":
+                return "Elite";
+            case "4":
+                return "Platinum";
+            case "5":
+                return "Diamond";
+            default:
+                return "ALL";
+        }
+    }
+
+    public double promptReportMinAmount() {
+        System.out.print("Enter minimum bill amount (RM, 0 for no minimum): ");
+        try {
+            return Double.parseDouble(scanner.nextLine().trim());
+        } catch (NumberFormatException e) {
+            return 0.0;
+        }
+    }
+
+    public void displayCheckOutRevenueReportHeader(String fromDate, String toDate,
+                                                    String tierFilter, double minAmount) {
+        System.out.println();
+        System.out.println("======================================================");
+        System.out.println("             CHECK-OUT REVENUE REPORT");
+        System.out.println("======================================================");
+        System.out.println("Date Range  : " + fromDate + " to " + toDate);
+        System.out.println("Tier Filter : " + tierFilter);
+        System.out.println("Min Amount  : RM " + minAmount);
+        System.out.println("------------------------------------------------------");
+        System.out.printf("  %-10s %-20s %-10s %s%n", "Bill ID", "Guest", "Tier", "Total (RM)");
+        System.out.println("------------------------------------------------------");
+    }
+
+    public void displayCheckOutRevenueReportRow(String billingId, String guestName,
+                                                 String tier, double totalAmount) {
+        System.out.printf("  %-10s %-20s %-10s %12.2f%n", billingId, guestName, tier, totalAmount);
+    }
+
+    public void displayCheckOutRevenueReportSummary(double totalRevenue, double averageRevenue,
+                                                     int totalPoints, double highestSpend,
+                                                     Iterator<String> tierNames, Iterator<Double> tierRevenue) {
+        System.out.println("------------------------------------------------------");
+        System.out.printf("  Total revenue                RM %12.2f%n", totalRevenue);
+        System.out.printf("  Average per bill              RM %12.2f%n", averageRevenue);
+        System.out.printf("  Highest single spend          RM %12.2f%n", highestSpend);
+        System.out.printf("  Total points issued           %15d%n", totalPoints);
+        System.out.println("------------------------------------------------------");
+        System.out.println("  Revenue by tier:");
+        while (tierNames.hasNext() && tierRevenue.hasNext()) {
+            System.out.printf("    %-12s RM %12.2f%n", tierNames.next(), tierRevenue.next());
+        }
+    }
+
+    // ========== 报表2:Room Utilisation & Status Report ==========
+
+    public String promptReportRoomTypeFilter() {
+        System.out.println();
+        System.out.println("Room Type Filter: 1) All  2) Standard  3) Deluxe  4) Suite");
+        System.out.print("Enter your choice: ");
+        String choice = scanner.nextLine().trim();
+        switch (choice) {
+            case "2":
+                return "Standard";
+            case "3":
+                return "Deluxe";
+            case "4":
+                return "Suite";
+            default:
+                return "ALL";
+        }
+    }
+
+    public String promptReportStatusFilter() {
+        System.out.println();
+        System.out.println("Status Filter: 1) All  2) AVAILABLE  3) OCCUPIED  4) NEEDS_CLEANING"
+                + "  5) CLEANING_IN_PROGRESS  6) INSPECTED");
+        System.out.print("Enter your choice: ");
+        String choice = scanner.nextLine().trim();
+        switch (choice) {
+            case "2":
+                return "AVAILABLE";
+            case "3":
+                return "OCCUPIED";
+            case "4":
+                return "NEEDS_CLEANING";
+            case "5":
+                return "CLEANING_IN_PROGRESS";
+            case "6":
+                return "INSPECTED";
+            default:
+                return "ALL";
+        }
+    }
+
+    public void displayRoomUtilisationReportHeader(String roomTypeFilter, String statusFilter,
+                                                    double occupancyRate, int occupied, int available,
+                                                    int inHousekeeping, double idleLoss) {
+        System.out.println();
+        System.out.println("======================================================");
+        System.out.println("          ROOM UTILISATION & STATUS REPORT");
+        System.out.println("======================================================");
+        System.out.println("Room Type Filter : " + roomTypeFilter);
+        System.out.println("Status Filter    : " + statusFilter);
+        System.out.println("------------------------------------------------------");
+        System.out.printf("  Occupancy rate                %11.1f%%%n", occupancyRate);
+        System.out.printf("  Occupied / Available           %8d / %d%n", occupied, available);
+        System.out.printf("  Rooms in housekeeping pipeline  %11d%n", inHousekeeping);
+        System.out.printf("  Idle capacity loss (1 night)  RM %12.2f%n", idleLoss);
+        System.out.println("------------------------------------------------------");
+        System.out.printf("  %-8s %-10s %-22s %s%n", "Room", "Type", "Status", "Cumulative Revenue (RM)");
+        System.out.println("------------------------------------------------------");
+    }
+
+    public void displayRoomUtilisationReportRow(String roomNumber, String roomType,
+                                                 String status, double cumulativeRevenue) {
+        System.out.printf("  %-8s %-10s %-22s %12.2f%n", roomNumber, roomType, status, cumulativeRevenue);
     }
 }

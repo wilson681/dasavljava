@@ -12,8 +12,6 @@ package entity;
  *   NEEDS_CLEANING          — 客人已退房,待清洁
  *   CLEANING_IN_PROGRESS    — 清洁中
  *   INSPECTED               — 已检查,即将转为可用
- *   OUT_OF_ORDER            — 设备故障,暂停使用;只能从 AVAILABLE 或 INSPECTED 进入,
- *                              维修完成后转回 NEEDS_CLEANING,重新走一次清洁流程
  */
 public class Room {
 

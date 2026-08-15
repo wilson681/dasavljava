@@ -38,6 +38,8 @@ public class VipAllocationCLI {
         System.out.println("  1) VIP Registration");
         System.out.println("  2) Cancel Waiting");
         System.out.println("  3) View VIP Waiting List");
+        System.out.println("  4) Generate VIP Waiting List Report");
+        System.out.println("  5) Generate Tier Allocation SLA Report");
         System.out.println("  0) Back to Main Menu");
         System.out.println();
         System.out.print("Enter your choice: ");
@@ -191,5 +193,99 @@ public class VipAllocationCLI {
                     (booking.getAssignedRoomNo() == null ? "-" : booking.getAssignedRoomNo())));
             rank++;
         }
+    }
+
+    // ========== 报表共用输入/输出 ==========
+
+    /**
+     * @return 等级排名数字(1=Elite,2=Platinum,3=Diamond),选"All"回传0代表不限等级
+     */
+    public int promptReportTierRank() {
+        System.out.println();
+        System.out.println("Tier Filter: 1) All  2) Elite  3) Platinum  4) Diamond");
+        System.out.print("Enter your choice: ");
+        String choice = scanner.nextLine().trim();
+        switch (choice) {
+            case "2":
+                return 1;
+            case "3":
+                return 2;
+            case "4":
+                return 3;
+            default:
+                return 0;
+        }
+    }
+
+    public String promptReportFromDate() {
+        System.out.println();
+        System.out.print("Enter from-date (yyyy-MM-dd, blank = no lower bound): ");
+        String input = scanner.nextLine().trim();
+        return input.isEmpty() ? "0000-00-00" : input;
+    }
+
+    public String promptReportToDate() {
+        System.out.print("Enter to-date (yyyy-MM-dd, blank = no upper bound): ");
+        String input = scanner.nextLine().trim();
+        return input.isEmpty() ? "9999-99-99" : input;
+    }
+
+    public void displayNoReportRecords() {
+        System.out.println("No records match the selected criteria.");
+    }
+
+    public void displayReportEnd() {
+        System.out.println(DIVIDER);
+    }
+
+    private String tierFilterLabel(int tierRankFilter) {
+        switch (tierRankFilter) {
+            case 1:
+                return "Elite";
+            case 2:
+                return "Platinum";
+            case 3:
+                return "Diamond";
+            default:
+                return "All";
+        }
+    }
+
+    // ========== 报表1:VIP等待名单实时报表 ==========
+
+    public void displayVipWaitingListReportHeader(int tierRankFilter) {
+        System.out.println();
+        System.out.println(DIVIDER);
+        System.out.println("             VIP WAITING LIST REPORT");
+        System.out.println(DIVIDER);
+        System.out.println("Tier Filter : " + tierFilterLabel(tierRankFilter));
+        System.out.println(DIVIDER);
+        System.out.println(String.format("%-20s %-10s %-20s %s",
+                "Guest", "Tier", "Arrival Time", "Wait (min)"));
+        System.out.println("-------------------------------------------------------");
+    }
+
+    public void displayVipWaitingListReportRow(String guestName, String tier,
+                                                String arrivalTime, int waitMinutes) {
+        System.out.println(String.format("%-20s %-10s %-20s %d",
+                guestName, tier, arrivalTime, waitMinutes));
+    }
+
+    // ========== 报表2:等级分房达标率报表 ==========
+
+    public void displayTierSlaReportHeader(int tierRankFilter, String fromDate, String toDate) {
+        System.out.println();
+        System.out.println(DIVIDER);
+        System.out.println("             TIER ALLOCATION SLA REPORT");
+        System.out.println(DIVIDER);
+        System.out.println("Tier Filter : " + tierFilterLabel(tierRankFilter));
+        System.out.println("Date Range  : " + fromDate + " to " + toDate);
+        System.out.println(DIVIDER);
+        System.out.println(String.format("%-10s %-8s %s", "Tier", "Count", "Avg Wait (min)"));
+        System.out.println("-------------------------------------------------------");
+    }
+
+    public void displayTierSlaReportRow(String tier, int count, double averageWaitMinutes) {
+        System.out.println(String.format("%-10s %-8d %.1f", tier, count, averageWaitMinutes));
     }
 }

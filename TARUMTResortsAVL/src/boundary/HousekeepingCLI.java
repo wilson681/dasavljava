@@ -35,6 +35,7 @@ public class HousekeepingCLI {
         System.out.println("4. View Room Status History");
         System.out.println("5. Generate Housekeeping Status Report");
         System.out.println("6. Generate Room History Activity Report");
+        System.out.println("7. Generate Rollback Frequency Report");
         System.out.println("0. Back to Main Menu");
         System.out.println();
         System.out.print("Enter your choice: ");
@@ -565,6 +566,107 @@ public class HousekeepingCLI {
 
         System.out.println(
                 "======================================================"
+        );
+    }
+
+    // =========================================================
+    // Report 3
+    // Rollback Frequency Report
+    // =========================================================
+
+    public String promptReportRoomNumber() {
+
+        System.out.println();
+        System.out.print(
+                "Enter room number to filter by (or ALL): "
+        );
+
+        String input = scanner.nextLine().trim();
+
+        if (input.isEmpty()) {
+            return "ALL";
+        }
+
+        return input;
+    }
+
+    public String promptReportFromDate() {
+
+        System.out.println();
+        System.out.print(
+                "Enter from-date (yyyy-MM-dd, blank = no lower bound): "
+        );
+
+        String input = scanner.nextLine().trim();
+
+        return input.isEmpty() ? "0000-00-00" : input;
+    }
+
+    public String promptReportToDate() {
+
+        System.out.print(
+                "Enter to-date (yyyy-MM-dd, blank = no upper bound): "
+        );
+
+        String input = scanner.nextLine().trim();
+
+        return input.isEmpty() ? "9999-99-99" : input;
+    }
+
+    public void displayRollbackFrequencyReportHeader(
+            String roomNumberFilter,
+            String fromDate,
+            String toDate) {
+
+        System.out.println();
+
+        System.out.println(
+                "======================================================"
+        );
+
+        System.out.println(
+                "          ROLLBACK FREQUENCY REPORT"
+        );
+
+        System.out.println(
+                "======================================================"
+        );
+
+        System.out.println(
+                "Room Filter : " + roomNumberFilter
+        );
+
+        System.out.println(
+                "Date Range  : " + fromDate + " to " + toDate
+        );
+
+        System.out.println(
+                "------------------------------------------------------"
+        );
+
+        System.out.println(
+                String.format(
+                        "%-15s %-15s",
+                        "Room",
+                        "Rollback Count"
+                )
+        );
+
+        System.out.println(
+                "------------------------------------------------------"
+        );
+    }
+
+    public void displayRollbackFrequencyReportRow(
+            String roomNumber,
+            int rollbackCount) {
+
+        System.out.println(
+                String.format(
+                        "%-15s %-15d",
+                        roomNumber,
+                        rollbackCount
+                )
         );
     }
 }

@@ -1,5 +1,6 @@
 package control;
 
+import adt.ArrayBasedList;
 import adt.HashTableInterface;
 import adt.ListInterface;
 import adt.QueueInterface;
@@ -11,6 +12,8 @@ import entity.Guest;
 import entity.Member;
 import entity.Room;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Iterator;
 import utility.TierRankUtility;
 import utility.ValidationUtility;
@@ -99,6 +102,12 @@ public class WalkInControl {
                 case 3:
                     doViewWaitingList();
                     break;
+                case 4:
+                    doDailyRegistrationReport();
+                    break;
+                case 5:
+                    doWaitTimeAnalysisReport();
+                    break;
                 case 0:
                     running = false;
                     break;
@@ -144,7 +153,7 @@ public class WalkInControl {
 
                     // memberId是null、tierRank是0——散客没有等级,这两个字段跟VIP那边刻意留空/最低
                     Booking booking = new Booking(bookingId, confirmationNumber, name, phone, null,
-                            roomType, BookingStatus.PENDING, "WALK_IN", arrivalCounter, 0);
+                            roomType, BookingStatus.PENDING, "WALK_IN", arrivalCounter, 0, currentTimestamp());
                     booking.setNumberOfNights(numberOfNights);
 
                     queue.enqueue(booking);
@@ -197,6 +206,7 @@ public class WalkInControl {
 
         frontBooking.setStatus(BookingStatus.CHECKED_IN);
         frontBooking.setAssignedRoomNo(availableRoom.getRoomNumber());
+        frontBooking.setAllocatedAt(currentTimestamp());
         availableRoom.setStatus("OCCUPIED");
         // 现在才真正把它从队伍拿掉,因为确定分房成功了
         queue.dequeue();
@@ -285,7 +295,213 @@ public class WalkInControl {
         walkInCLI.displayWaitingList(roomType, queue.getIterator());
     }
 
+    // ========== 报表1:每日入住登记明细表 ==========
+
+    /**
+     * filter=日期+房型,按登记时间排序。资料来源是"现在还在排队的" + "已经分房、
+     * 挂在guestTable底下客人身上的"两边合起来,这样不管有没有分到房都看得到——
+     * 唯一看不到的是已经取消排队的(doCancel()把它从队伍拿掉后就没有其他地方存了)。
+     */
+    private void doDailyRegistrationReport() {
+        String dateFilter = walkInCLI.promptReportDate();
+        String roomTypeFilter = walkInCLI.promptReportRoomType();
+
+        ListInterface<Booking> filtered = new ArrayBasedList<>();
+        ListInterface<Booking> allBookings = collectWalkInBookings();
+        for (int i = 1; i <= allBookings.getNumberOfEntries(); i++) {
+            Booking booking = allBookings.getEntry(i);
+            boolean dateMatches = "ALL".equals(dateFilter) || booking.getRegisteredAt().startsWith(dateFilter);
+            boolean typeMatches = "ALL".equalsIgnoreCase(roomTypeFilter)
+                    || booking.getRequestedRoomType().equalsIgnoreCase(roomTypeFilter);
+            if (dateMatches && typeMatches) {
+                filtered.add(booking);
+            }
+        }
+        sortBookingsByRegisteredAt(filtered);
+
+        walkInCLI.displayDailyRegistrationReportHeader(dateFilter, roomTypeFilter);
+        if (filtered.isEmpty()) {
+            walkInCLI.displayNoReportRecords();
+            walkInCLI.displayReportEnd();
+            return;
+        }
+        for (int i = 1; i <= filtered.getNumberOfEntries(); i++) {
+            Booking booking = filtered.getEntry(i);
+            boolean allocated = booking.getAssignedRoomNo() != null;
+            int waitMinutes = allocated
+                    ? minutesBetween(booking.getRegisteredAt(), booking.getAllocatedAt())
+                    : minutesBetween(booking.getRegisteredAt(), currentTimestamp());
+            walkInCLI.displayDailyRegistrationReportRow(booking.getGuestNameSnapshot(),
+                    booking.getRegisteredAt(), booking.getRequestedRoomType(), allocated, waitMinutes);
+        }
+        walkInCLI.displayReportEnd();
+    }
+
+    // ========== 报表2:等待时长分析报表 ==========
+
+    /**
+     * filter=最少等待分钟数+日期,按等待时长降序排序,另外按小时聚合平均等待时长——
+     * 给营运经理判断哪个时段该加开柜台用。
+     */
+    private void doWaitTimeAnalysisReport() {
+        int minWaitMinutes = walkInCLI.promptMinWaitMinutes();
+        String dateFilter = walkInCLI.promptReportDate();
+
+        ListInterface<Booking> filtered = new ArrayBasedList<>();
+        ListInterface<Integer> waitMinutesList = new ArrayBasedList<>();
+
+        int[] hourlyCount = new int[24];
+        int[] hourlyTotalWait = new int[24];
+
+        ListInterface<Booking> allBookings = collectWalkInBookings();
+        for (int i = 1; i <= allBookings.getNumberOfEntries(); i++) {
+            Booking booking = allBookings.getEntry(i);
+            boolean dateMatches = "ALL".equals(dateFilter) || booking.getRegisteredAt().startsWith(dateFilter);
+            if (!dateMatches) {
+                continue;
+            }
+
+            boolean allocated = booking.getAssignedRoomNo() != null;
+            int waitMinutes = allocated
+                    ? minutesBetween(booking.getRegisteredAt(), booking.getAllocatedAt())
+                    : minutesBetween(booking.getRegisteredAt(), currentTimestamp());
+
+            int hour = Integer.parseInt(booking.getRegisteredAt().substring(11, 13));
+            hourlyCount[hour]++;
+            hourlyTotalWait[hour] += waitMinutes;
+
+            if (waitMinutes >= minWaitMinutes) {
+                filtered.add(booking);
+                waitMinutesList.add(waitMinutes);
+            }
+        }
+
+        sortByWaitMinutesDescending(filtered, waitMinutesList);
+
+        walkInCLI.displayWaitTimeAnalysisHeader(minWaitMinutes, dateFilter);
+        if (filtered.isEmpty()) {
+            walkInCLI.displayNoReportRecords();
+        } else {
+            for (int i = 1; i <= filtered.getNumberOfEntries(); i++) {
+                Booking booking = filtered.getEntry(i);
+                walkInCLI.displayWaitTimeAnalysisRow(booking.getBookingId(), booking.getGuestNameSnapshot(),
+                        booking.getRequestedRoomType(), waitMinutesList.getEntry(i));
+            }
+        }
+
+        walkInCLI.displayHourlyBreakdownHeader();
+        for (int hour = 0; hour < 24; hour++) {
+            if (hourlyCount[hour] > 0) {
+                double average = (double) hourlyTotalWait[hour] / hourlyCount[hour];
+                walkInCLI.displayHourlyBreakdownRow(hour, hourlyCount[hour], average);
+            }
+        }
+        walkInCLI.displayReportEnd();
+    }
+
+    // ========== 报表共用辅助方法 ==========
+
+    /**
+     * 把"现在还在三条队伍里排队的" + "已经分房、串在guestTable底下客人身上的
+     * WALK_IN来源Booking"合起来,给两份报表共用。已取消的Booking在doCancel()
+     * 被queue.remove()拿掉后就没有其他地方存着了,报表看不到——这是刻意的取舍,
+     * 不是遗漏。
+     */
+    private ListInterface<Booking> collectWalkInBookings() {
+        ListInterface<Booking> result = new ArrayBasedList<>();
+        appendQueueBookings(standardQueue, result);
+        appendQueueBookings(deluxeQueue, result);
+        appendQueueBookings(suiteQueue, result);
+
+        Iterator<Guest> guestIterator = guestTable.getIterator();
+        while (guestIterator.hasNext()) {
+            Guest guest = guestIterator.next();
+            Iterator<Booking> bookingIterator = guest.getBookings().getIterator();
+            while (bookingIterator.hasNext()) {
+                Booking booking = bookingIterator.next();
+                if ("WALK_IN".equals(booking.getSource())) {
+                    result.add(booking);
+                }
+            }
+        }
+        return result;
+    }
+
+    private void appendQueueBookings(QueueInterface<Booking> queue, ListInterface<Booking> result) {
+        Iterator<Booking> iterator = queue.getIterator();
+        while (iterator.hasNext()) {
+            result.add(iterator.next());
+        }
+    }
+
+    /**
+     * 算两个"yyyy-MM-dd HH:mm:ss"时间字串相差几分钟。
+     */
+    private int minutesBetween(String start, String end) {
+        LocalDateTime startTime = LocalDateTime.parse(start, TIMESTAMP_FORMAT);
+        LocalDateTime endTime = LocalDateTime.parse(end, TIMESTAMP_FORMAT);
+        return (int) java.time.Duration.between(startTime, endTime).toMinutes();
+    }
+
+    /**
+     * 按registeredAt由小到大原地排序(selection sort),不能用Collections.sort()。
+     */
+    private void sortBookingsByRegisteredAt(ListInterface<Booking> bookings) {
+        int n = bookings.getNumberOfEntries();
+        for (int i = 1; i <= n - 1; i++) {
+            int smallestPosition = i;
+            for (int j = i + 1; j <= n; j++) {
+                if (bookings.getEntry(j).getRegisteredAt()
+                        .compareTo(bookings.getEntry(smallestPosition).getRegisteredAt()) < 0) {
+                    smallestPosition = j;
+                }
+            }
+            if (smallestPosition != i) {
+                Booking temp = bookings.getEntry(i);
+                bookings.replace(i, bookings.getEntry(smallestPosition));
+                bookings.replace(smallestPosition, temp);
+            }
+        }
+    }
+
+    /**
+     * 把bookings跟对应的waitMinutes两份清单,按等待分钟数由大到小同步排序(selection sort)。
+     */
+    private void sortByWaitMinutesDescending(ListInterface<Booking> bookings, ListInterface<Integer> waitMinutes) {
+        int n = bookings.getNumberOfEntries();
+        for (int i = 1; i <= n - 1; i++) {
+            int largestPosition = i;
+            for (int j = i + 1; j <= n; j++) {
+                if (waitMinutes.getEntry(j) > waitMinutes.getEntry(largestPosition)) {
+                    largestPosition = j;
+                }
+            }
+            if (largestPosition != i) {
+                Booking tempBooking = bookings.getEntry(i);
+                bookings.replace(i, bookings.getEntry(largestPosition));
+                bookings.replace(largestPosition, tempBooking);
+
+                Integer tempMinutes = waitMinutes.getEntry(i);
+                waitMinutes.replace(i, waitMinutes.getEntry(largestPosition));
+                waitMinutes.replace(largestPosition, tempMinutes);
+            }
+        }
+    }
+
     // ========== 内部辅助方法 ==========
+
+    // 报表要严格照这个格式 parse 时间字串算等待分钟数,所以固定长度格式,
+    // 不能用 LocalTime.toString()(秒数刚好整数时会省略,长度不固定)
+    private static final DateTimeFormatter TIMESTAMP_FORMAT =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
+    /**
+     * 组一个"yyyy-MM-dd HH:mm:ss"格式的当下时间字串,给 Booking 的 registeredAt/
+     * allocatedAt 用,也给报表算等待分钟数用。
+     */
+    private String currentTimestamp() {
+        return LocalDateTime.now().withNano(0).format(TIMESTAMP_FORMAT);
+    }
 
     private QueueInterface<Booking> getQueueForRoomType(String roomType) {
         if (roomType == null) {
@@ -322,7 +538,8 @@ public class WalkInControl {
     /**
      * 在roomList里找第一间"房型对得上、状态严格等于AVAILABLE"的房间。
      * 一定要用 equals("AVAILABLE"),不能只判断"不是OCCUPIED"——
-     * 因为OUT_OF_ORDER的房间也"不是OCCUPIED",但不该被分配出去。
+     * 因为NEEDS_CLEANING/CLEANING_IN_PROGRESS/INSPECTED这些房间也"不是OCCUPIED",
+     * 但清洁流程还没走完,不该被分配出去。
      */
     private Room findAvailableRoom(String roomType) {
         Iterator<Room> iterator = roomList.getIterator();

@@ -39,7 +39,9 @@ public class LoyaltyCLI {
         System.out.println("  1) View Points Expiry");
         System.out.println("  2) Redeem Points");
         System.out.println("  3) Add Points (Manual)");
-        System.out.println("  4) Manual Tier Adjustment");  
+        System.out.println("  4) Manual Tier Adjustment");
+        System.out.println("  5) Generate Points Expiry Report");
+        System.out.println("  6) Generate Top Redeemed Items Report");
         System.out.println("  0) Back to Main Menu");
         System.out.println();
         System.out.print("Enter your choice: ");
@@ -250,5 +252,95 @@ public class LoyaltyCLI {
         System.out.println(MEMBER_TABLE_HEADER);
         System.out.println(MEMBER_TABLE_DIVIDER);
         System.out.print(row);
+    }
+
+    // ========== 报表共用输入/输出 ==========
+
+    public String promptReportTierFilter() {
+        System.out.println();
+        System.out.println("Tier Filter: 1) All  2) Standard  3) Elite  4) Platinum  5) Diamond");
+        System.out.print("Enter your choice: ");
+        String choice = scanner.nextLine().trim();
+        switch (choice) {
+            case "2":
+                return "Standard";
+            case "3":
+                return "Elite";
+            case "4":
+                return "Platinum";
+            case "5":
+                return "Diamond";
+            default:
+                return "ALL";
+        }
+    }
+
+    public String promptReportFromDate() {
+        System.out.println();
+        System.out.print("Enter from-date (yyyy-MM-dd, blank = no lower bound): ");
+        String input = scanner.nextLine().trim();
+        return input.isEmpty() ? "0000-00-00" : input;
+    }
+
+    public String promptReportToDate() {
+        System.out.print("Enter to-date (yyyy-MM-dd, blank = no upper bound): ");
+        String input = scanner.nextLine().trim();
+        return input.isEmpty() ? "9999-99-99" : input;
+    }
+
+    public void displayNoReportRecords() {
+        System.out.println("No records match the selected criteria.");
+    }
+
+    public void displayReportEnd() {
+        System.out.println(DIVIDER);
+    }
+
+    // ========== 报表1:积分即将到期提醒 ==========
+
+    public int promptExpiryWindowDays() {
+        System.out.println();
+        System.out.print("Show points expiring within how many days (e.g. 30): ");
+        try {
+            return Integer.parseInt(scanner.nextLine().trim());
+        } catch (NumberFormatException e) {
+            return 30;
+        }
+    }
+
+    public void displayPointsExpiryReportHeader(int withinDays, String tierFilter) {
+        System.out.println();
+        System.out.println(DIVIDER);
+        System.out.println("          POINTS EXPIRY REPORT");
+        System.out.println(DIVIDER);
+        System.out.println("Expiring Within : " + withinDays + " day(s)");
+        System.out.println("Tier Filter     : " + tierFilter);
+        System.out.println(DIVIDER);
+        System.out.println(String.format("%-20s %-9s %-10s %-8s %s",
+                "Member", "MemberId", "Tier", "Points", "Expires"));
+        System.out.println(LEDGER_TABLE_DIVIDER);
+    }
+
+    public void displayPointsExpiryReportRow(String memberName, String memberId, String tier,
+                                              int pointsAmount, String expiryDate) {
+        System.out.println(String.format("%-20s %-9s %-10s %-8d %s",
+                memberName, memberId, tier, pointsAmount, expiryDate));
+    }
+
+    // ========== 报表2:最多人兑换的产品报表 ==========
+
+    public void displayTopRedeemedItemsReportHeader(String fromDate, String toDate) {
+        System.out.println();
+        System.out.println(DIVIDER);
+        System.out.println("          TOP REDEEMED ITEMS REPORT");
+        System.out.println(DIVIDER);
+        System.out.println("Date Range : " + fromDate + " to " + toDate);
+        System.out.println(DIVIDER);
+        System.out.println(String.format("%-26s %-16s %s", "Item", "Redemptions", "Total Points Used"));
+        System.out.println(CATALOG_TABLE_DIVIDER);
+    }
+
+    public void displayTopRedeemedItemsReportRow(String itemName, int redemptionCount, int totalPointsUsed) {
+        System.out.println(String.format("%-26s %-16d %d", itemName, redemptionCount, totalPointsUsed));
     }
 }

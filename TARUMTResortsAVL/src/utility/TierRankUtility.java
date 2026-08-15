@@ -39,6 +39,26 @@ public class TierRankUtility {
     }
 
     /**
+     * 把排名数字换算回等级文字,给报表要把 Booking.tierRankAtRequest(登记当下的等级排名)
+     * 显示成文字用——不能反查 Member 现在的 tier,因为会员可能之后又升降级了,
+     * 报表要呈现的是"登记当下"是什么等级,不是现在。
+     * @param rank 排名数字
+     * @return 对应的等级文字,认不得的数字回传"Standard"
+     */
+    public static String rankToTier(int rank) {
+        switch (rank) {
+            case 3:
+                return "Diamond";
+            case 2:
+                return "Platinum";
+            case 1:
+                return "Elite";
+            default:
+                return "Standard";
+        }
+    }
+
+    /**
      * 把会员历史累计总积分(totalPointsEarned)换算成该在的等级文字,给模块5升降级判断用。
      * 门槛数字压低,配合"消费RM10=1分"的赚分速度,让等级在合理的入住次数内够得到。
      * @param totalPointsEarned 历史累计总积分,只会越来越大,所以这个函数天生只会往上升级

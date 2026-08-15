@@ -1,5 +1,6 @@
 package control;
 
+import adt.ArrayBasedList;
 import adt.HashTableInterface;
 import adt.ListInterface;
 import adt.SearchTreeInterface;
@@ -10,6 +11,8 @@ import entity.Guest;
 import entity.Member;
 import entity.Room;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Iterator;
 import utility.TierRankUtility;
 import utility.ValidationUtility;
@@ -81,6 +84,12 @@ public class VipAllocationControl {
                 case 3:
                     doViewWaitingList();
                     break;
+                case 4:
+                    doVipWaitingListReport();
+                    break;
+                case 5:
+                    doTierSlaReport();
+                    break;
                 case 0:
                     running = false;
                     break;
@@ -143,7 +152,7 @@ public class VipAllocationControl {
                     // 因为这时候还没建Guest,这些资料要先存在Booking里,等真的分到房才拿出来用
                     Booking booking = new Booking(bookingId, confirmationNumber, member.getName(),
                             member.getPhone(), member.getMemberId(), roomType, BookingStatus.PENDING,
-                            "VIP", arrivalCounter, tierRank);
+                            "VIP", arrivalCounter, tierRank, currentTimestamp());
                     booking.setNumberOfNights(numberOfNights);
 
                     // 插进对应房型的树——AVLTree.add()内部会自己比较tierRank/arrivalSequence,
@@ -191,6 +200,7 @@ public class VipAllocationControl {
         // (它已经处理完了,不该继续留在"等待名单"里)
         topPriority.setStatus(BookingStatus.CHECKED_IN);
         topPriority.setAssignedRoomNo(availableRoom.getRoomNumber());
+        topPriority.setAllocatedAt(currentTimestamp());
         availableRoom.setStatus("OCCUPIED");
         tree.remove(topPriority);
 
@@ -275,7 +285,186 @@ public class VipAllocationControl {
         vipAllocationCLI.displayWaitingList(roomType, tree.getInorderIterator());
     }
 
+    // ========== 报表1:VIP等待名单实时报表 ==========
+
+    /**
+     * filter=等级,资料只取"现在还在树里"的(真正的实时等待名单)。排序刻意不用
+     * 树本身的中序顺序(那是tierRank+arrivalSequence),改成按"已经等了多久"降序——
+     * 这样报表层才是自己在做排序,不是单纯把树的既有顺序吐出来。
+     */
+    private void doVipWaitingListReport() {
+        int tierRankFilter = vipAllocationCLI.promptReportTierRank();
+
+        ListInterface<Booking> filtered = new ArrayBasedList<>();
+        ListInterface<Integer> waitMinutesList = new ArrayBasedList<>();
+
+        collectTierFiltered(standardTree, tierRankFilter, filtered, waitMinutesList);
+        collectTierFiltered(deluxeTree, tierRankFilter, filtered, waitMinutesList);
+        collectTierFiltered(suiteTree, tierRankFilter, filtered, waitMinutesList);
+
+        sortByWaitMinutesDescending(filtered, waitMinutesList);
+
+        vipAllocationCLI.displayVipWaitingListReportHeader(tierRankFilter);
+        if (filtered.isEmpty()) {
+            vipAllocationCLI.displayNoReportRecords();
+        } else {
+            for (int i = 1; i <= filtered.getNumberOfEntries(); i++) {
+                Booking booking = filtered.getEntry(i);
+                vipAllocationCLI.displayVipWaitingListReportRow(booking.getGuestNameSnapshot(),
+                        TierRankUtility.rankToTier(booking.getTierRankAtRequest()),
+                        booking.getRegisteredAt(), waitMinutesList.getEntry(i));
+            }
+        }
+        vipAllocationCLI.displayReportEnd();
+    }
+
+    private void collectTierFiltered(SearchTreeInterface<Booking> tree, int tierRankFilter,
+                                      ListInterface<Booking> filtered, ListInterface<Integer> waitMinutesList) {
+        Iterator<Booking> iterator = tree.getInorderIterator();
+        while (iterator.hasNext()) {
+            Booking booking = iterator.next();
+            if (tierRankFilter == 0 || booking.getTierRankAtRequest() == tierRankFilter) {
+                filtered.add(booking);
+                waitMinutesList.add(minutesBetween(booking.getRegisteredAt(), currentTimestamp()));
+            }
+        }
+    }
+
+    // ========== 报表2:等级分房达标率报表 ==========
+
+    /**
+     * filter=等级+日期区间(按分房那天算),把"登记到分房"的平均耗时按等级分组比较,
+     * 用来验证"VIP优先"这个承诺是不是真的兑现——如果高等级反而等更久,代表流程有问题。
+     */
+    private void doTierSlaReport() {
+        int tierRankFilter = vipAllocationCLI.promptReportTierRank();
+        String fromDate = vipAllocationCLI.promptReportFromDate();
+        String toDate = vipAllocationCLI.promptReportToDate();
+
+        // 固定3档(Diamond=3, Platinum=2, Elite=1),索引0不用
+        int[] count = new int[4];
+        int[] totalWaitMinutes = new int[4];
+
+        Iterator<Guest> guestIterator = guestTable.getIterator();
+        while (guestIterator.hasNext()) {
+            Guest guest = guestIterator.next();
+            Iterator<Booking> bookingIterator = guest.getBookings().getIterator();
+            while (bookingIterator.hasNext()) {
+                Booking booking = bookingIterator.next();
+                if (!"VIP".equals(booking.getSource()) || booking.getAllocatedAt() == null) {
+                    continue;
+                }
+                int rank = booking.getTierRankAtRequest();
+                if (rank < 1 || rank > 3) {
+                    continue;
+                }
+                if (tierRankFilter != 0 && rank != tierRankFilter) {
+                    continue;
+                }
+                String allocatedDate = booking.getAllocatedAt().substring(0, 10);
+                if (allocatedDate.compareTo(fromDate) < 0 || allocatedDate.compareTo(toDate) > 0) {
+                    continue;
+                }
+                count[rank]++;
+                totalWaitMinutes[rank] += minutesBetween(booking.getRegisteredAt(), booking.getAllocatedAt());
+            }
+        }
+
+        // 组成最多3行(有资料的等级才列),再按平均等待时长降序排(selection sort)
+        ListInterface<String> tierNames = new ArrayBasedList<>();
+        ListInterface<Integer> tierCounts = new ArrayBasedList<>();
+        ListInterface<Double> tierAverages = new ArrayBasedList<>();
+        for (int rank = 3; rank >= 1; rank--) {
+            if (count[rank] > 0) {
+                tierNames.add(TierRankUtility.rankToTier(rank));
+                tierCounts.add(count[rank]);
+                tierAverages.add(totalWaitMinutes[rank] / (double) count[rank]);
+            }
+        }
+        sortTierSummaryByAverageDescending(tierNames, tierCounts, tierAverages);
+
+        vipAllocationCLI.displayTierSlaReportHeader(tierRankFilter, fromDate, toDate);
+        if (tierNames.isEmpty()) {
+            vipAllocationCLI.displayNoReportRecords();
+        } else {
+            for (int i = 1; i <= tierNames.getNumberOfEntries(); i++) {
+                vipAllocationCLI.displayTierSlaReportRow(tierNames.getEntry(i),
+                        tierCounts.getEntry(i), tierAverages.getEntry(i));
+            }
+        }
+        vipAllocationCLI.displayReportEnd();
+    }
+
+    private void sortTierSummaryByAverageDescending(ListInterface<String> tierNames,
+                                                      ListInterface<Integer> tierCounts,
+                                                      ListInterface<Double> tierAverages) {
+        int n = tierNames.getNumberOfEntries();
+        for (int i = 1; i <= n - 1; i++) {
+            int largestPosition = i;
+            for (int j = i + 1; j <= n; j++) {
+                if (tierAverages.getEntry(j) > tierAverages.getEntry(largestPosition)) {
+                    largestPosition = j;
+                }
+            }
+            if (largestPosition != i) {
+                String tempName = tierNames.getEntry(i);
+                tierNames.replace(i, tierNames.getEntry(largestPosition));
+                tierNames.replace(largestPosition, tempName);
+
+                Integer tempCount = tierCounts.getEntry(i);
+                tierCounts.replace(i, tierCounts.getEntry(largestPosition));
+                tierCounts.replace(largestPosition, tempCount);
+
+                Double tempAverage = tierAverages.getEntry(i);
+                tierAverages.replace(i, tierAverages.getEntry(largestPosition));
+                tierAverages.replace(largestPosition, tempAverage);
+            }
+        }
+    }
+
+    // ========== 报表共用辅助方法 ==========
+
+    private int minutesBetween(String start, String end) {
+        LocalDateTime startTime = LocalDateTime.parse(start, TIMESTAMP_FORMAT);
+        LocalDateTime endTime = LocalDateTime.parse(end, TIMESTAMP_FORMAT);
+        return (int) java.time.Duration.between(startTime, endTime).toMinutes();
+    }
+
+    private void sortByWaitMinutesDescending(ListInterface<Booking> bookings, ListInterface<Integer> waitMinutes) {
+        int n = bookings.getNumberOfEntries();
+        for (int i = 1; i <= n - 1; i++) {
+            int largestPosition = i;
+            for (int j = i + 1; j <= n; j++) {
+                if (waitMinutes.getEntry(j) > waitMinutes.getEntry(largestPosition)) {
+                    largestPosition = j;
+                }
+            }
+            if (largestPosition != i) {
+                Booking tempBooking = bookings.getEntry(i);
+                bookings.replace(i, bookings.getEntry(largestPosition));
+                bookings.replace(largestPosition, tempBooking);
+
+                Integer tempMinutes = waitMinutes.getEntry(i);
+                waitMinutes.replace(i, waitMinutes.getEntry(largestPosition));
+                waitMinutes.replace(largestPosition, tempMinutes);
+            }
+        }
+    }
+
     // ========== 内部辅助方法 ==========
+
+    // 报表要严格照这个格式 parse 时间字串算等待分钟数,所以固定长度格式,
+    // 不能用 LocalTime.toString()(秒数刚好整数时会省略,长度不固定)
+    private static final DateTimeFormatter TIMESTAMP_FORMAT =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
+    /**
+     * 组一个"yyyy-MM-dd HH:mm:ss"格式的当下时间字串,给 Booking 的 registeredAt/
+     * allocatedAt 用,也给报表算等待分钟数用。
+     */
+    private String currentTimestamp() {
+        return LocalDateTime.now().withNano(0).format(TIMESTAMP_FORMAT);
+    }
 
     /**
      * 依房型决定要操作哪一棵VIP树,房型不合法回传null。
@@ -318,7 +507,8 @@ public class VipAllocationControl {
     /**
      * 在roomList里找第一间"房型对得上、状态严格等于AVAILABLE"的房间。
      * 一定要用 equals("AVAILABLE"),不能只判断"不是OCCUPIED"——
-     * 因为OUT_OF_ORDER的房间也"不是OCCUPIED",但不该被分配出去。
+     * 因为NEEDS_CLEANING/CLEANING_IN_PROGRESS/INSPECTED这些房间也"不是OCCUPIED",
+     * 但清洁流程还没走完,不该被分配出去。
      */
     private Room findAvailableRoom(String roomType) {
         Iterator<Room> iterator = roomList.getIterator();

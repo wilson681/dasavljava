@@ -33,6 +33,8 @@ public class WalkInCLI {
         System.out.println("  1) Register New Guest");
         System.out.println("  2) Cancel Waiting");
         System.out.println("  3) View Waiting List");
+        System.out.println("  4) Generate Daily Registration Report");
+        System.out.println("  5) Generate Wait Time Analysis Report");
         System.out.println("  0) Back to Main Menu");
         System.out.println();
         System.out.print("Enter your choice: ");
@@ -184,5 +186,104 @@ public class WalkInCLI {
                     (booking.getAssignedRoomNo() == null ? "-" : booking.getAssignedRoomNo())));
             rank++;
         }
+    }
+
+    // ========== 报表共用输入 ==========
+
+    /**
+     * @return "yyyy-MM-dd"格式的日期,留空回传"ALL"代表不限日期
+     */
+    public String promptReportDate() {
+        System.out.println();
+        System.out.print("Filter by date (yyyy-MM-dd, blank = all dates): ");
+        String input = scanner.nextLine().trim();
+        return input.isEmpty() ? "ALL" : input;
+    }
+
+    public String promptReportRoomType() {
+        System.out.println();
+        System.out.println("Room Type Filter: 1) All  2) Standard  3) Deluxe  4) Suite");
+        System.out.print("Enter your choice: ");
+        String choice = scanner.nextLine().trim();
+        switch (choice) {
+            case "2":
+                return "Standard";
+            case "3":
+                return "Deluxe";
+            case "4":
+                return "Suite";
+            default:
+                return "ALL";
+        }
+    }
+
+    public void displayNoReportRecords() {
+        System.out.println("No records match the selected criteria.");
+    }
+
+    public void displayReportEnd() {
+        System.out.println(DIVIDER);
+    }
+
+    // ========== 报表1:每日入住登记明细表 ==========
+
+    public void displayDailyRegistrationReportHeader(String dateFilter, String roomTypeFilter) {
+        System.out.println();
+        System.out.println(DIVIDER);
+        System.out.println("             DAILY REGISTRATION REPORT");
+        System.out.println(DIVIDER);
+        System.out.println("Date Filter      : " + dateFilter);
+        System.out.println("Room Type Filter : " + roomTypeFilter);
+        System.out.println(DIVIDER);
+        System.out.println(String.format("%-20s %-20s %-11s %-10s %s",
+                "Guest", "Registered At", "Room Type", "Allocated", "Wait (min)"));
+        System.out.println("-------------------------------------------------------------------");
+    }
+
+    public void displayDailyRegistrationReportRow(String guestName, String registeredAt,
+                                                   String roomType, boolean allocated, int waitMinutes) {
+        System.out.println(String.format("%-20s %-20s %-11s %-10s %d",
+                guestName, registeredAt, roomType, (allocated ? "Yes" : "No"), waitMinutes));
+    }
+
+    // ========== 报表2:等待时长分析报表 ==========
+
+    public int promptMinWaitMinutes() {
+        System.out.println();
+        System.out.print("Enter minimum wait time to include (minutes): ");
+        try {
+            return Integer.parseInt(scanner.nextLine().trim());
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    public void displayWaitTimeAnalysisHeader(int minWaitMinutes, String dateFilter) {
+        System.out.println();
+        System.out.println(DIVIDER);
+        System.out.println("             WAIT TIME ANALYSIS REPORT");
+        System.out.println(DIVIDER);
+        System.out.println("Minimum Wait  : " + minWaitMinutes + " min");
+        System.out.println("Date Filter   : " + dateFilter);
+        System.out.println(DIVIDER);
+        System.out.println(String.format("%-12s %-20s %-11s %s",
+                "Booking ID", "Guest", "Room Type", "Wait (min)"));
+        System.out.println("-------------------------------------------------------");
+    }
+
+    public void displayWaitTimeAnalysisRow(String bookingId, String guestName, String roomType, int waitMinutes) {
+        System.out.println(String.format("%-12s %-20s %-11s %d",
+                bookingId, guestName, roomType, waitMinutes));
+    }
+
+    public void displayHourlyBreakdownHeader() {
+        System.out.println();
+        System.out.println("Average Wait Time by Hour of Registration:");
+        System.out.println(String.format("%-6s %-8s %s", "Hour", "Count", "Avg Wait (min)"));
+        System.out.println("-----------------------");
+    }
+
+    public void displayHourlyBreakdownRow(int hour, int count, double averageWaitMinutes) {
+        System.out.println(String.format("%02d:00  %-8d %.1f", hour, count, averageWaitMinutes));
     }
 }

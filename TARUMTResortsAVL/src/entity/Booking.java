@@ -13,6 +13,9 @@ package entity;
  * - 一位客人(一个 confirmationNumber)可以同时开多笔 Booking(比如一次订多间房),
  *   所以 Booking 自己要有一个独立的 bookingId 当唯一识别,不能再借用 confirmationNumber
  * - arrivalSequence 给模块1(Walk-In FIFO排队)用,tierRankAtRequest 给模块2(VIP优先级分房)用
+ * - registeredAt/allocatedAt 是给报表算"等待时长"用的真实时间戳(格式 yyyy-MM-dd HH:mm:ss),
+ *   跟 arrivalSequence 不一样——arrivalSequence 只在同一条队伍/同一棵树内部比先后,
+ *   算不出实际等了几分钟;这两个字段才是给报表用的真时间
  * - 分房成功后,由Control层负责把结果同步写回 Guest.bookedRooms 和 Room.status,
  *   这两件事不属于 Booking 自己的职责
  * - implements Comparable<Booking>:给模块2的 AVL Tree 排序用,规则是
@@ -39,13 +42,16 @@ public class Booking implements Comparable<Booking> {
     private String checkInDate;          // null until the room is allocated
     private String checkOutDate;         // null until the room is allocated
     private int numberOfNights;          // collected at registration time; dates are filled in once actually allocated
+    private String registeredAt;         // real timestamp(yyyy-MM-dd HH:mm:ss) at the moment this booking was created, for wait-time reports
+    private String allocatedAt;          // real timestamp at the moment a room was allocated; null until then
     /**
      * 构造函数
      * 新建的订房请求,预设还没有分配到房间,所以 assignedRoomNo 初始化为 null
      */
     public Booking(String bookingId, String confirmationNumber, String guestNameSnapshot,
                    String phoneSnapshot, String memberId, String requestedRoomType,
-                   BookingStatus status, String source, int arrivalSequence, int tierRankAtRequest) {
+                   BookingStatus status, String source, int arrivalSequence, int tierRankAtRequest,
+                   String registeredAt) {
         this.bookingId = bookingId;
         this.confirmationNumber = confirmationNumber;
         this.guestNameSnapshot = guestNameSnapshot;
@@ -60,6 +66,8 @@ public class Booking implements Comparable<Booking> {
         this.checkInDate = null;
         this.checkOutDate = null;
         this.numberOfNights = 0;
+        this.registeredAt = registeredAt;
+        this.allocatedAt = null;
     }
 
     // ========== Getters ==========
@@ -117,6 +125,14 @@ public class Booking implements Comparable<Booking> {
     public int getNumberOfNights() {
         return numberOfNights;
     }
+
+    public String getRegisteredAt() {
+        return registeredAt;
+    }
+
+    public String getAllocatedAt() {
+        return allocatedAt;
+    }
     // ========== Setters ==========
     // bookingId、confirmationNumber、guestNameSnapshot、requestedRoomType、source、
     // arrivalSequence、tierRankAtRequest 登记后不会改变,所以不提供setter
@@ -154,6 +170,18 @@ public class Booking implements Comparable<Booking> {
      */
     public void setNumberOfNights(int numberOfNights) {
         this.numberOfNights = numberOfNights;
+    }
+
+    /**
+     * Records the real timestamp at which a room was allocated to this
+     * booking. Called by the Control layer's tryAllocate() alongside
+     * setStayPeriod(), so reports can compute registeredAt-to-allocatedAt
+     * wait durations.
+     *
+     * @param allocatedAt the allocation timestamp (yyyy-MM-dd HH:mm:ss)
+     */
+    public void setAllocatedAt(String allocatedAt) {
+        this.allocatedAt = allocatedAt;
     }
     // ========== Override 方法 ==========
 

@@ -23,6 +23,7 @@ import entity.Member;
 import entity.RedemptionItem;
 import entity.RedemptionTransaction;
 import entity.Room;
+import entity.RollbackLogEntry;
 
 /**
  * MainMenuControl.java - Controls the main menu flow: shows the main screen,
@@ -55,6 +56,9 @@ public class MainMenuControl {
     // ===== 共用容器,给模块5(Loyalty and Rewards)用 =====
     private final ListInterface<RedemptionItem> redemptionItemList;
     private final ListInterface<RedemptionTransaction> redemptionTransactionList;
+
+    // ===== 共用容器,给模块3(Housekeeping)自己写、自己读的回滚事件流水,其他模块不会用到 =====
+    private final ListInterface<RollbackLogEntry> rollbackLog;
 
     // ===== 各模块的Control只造一次、整个程式生命周期共用一份 =====
     // 之前每次进入模块都 new 一个新的Control,会把里面的bookingCounter/confirmationCounter
@@ -89,6 +93,8 @@ public class MainMenuControl {
 
         this.redemptionItemList = new ArrayBasedList<>();
         this.redemptionTransactionList = new ArrayBasedList<>();
+
+        this.rollbackLog = new ArrayBasedList<>();
 
         // 用DAO从txt把种子资料读进来,填满memberList/roomList/redemptionItemList,
         // 这样VIP/Walk-In/Loyalty模块才有真的会员/房间/兑换清单资料可以测试,不用硬编码
@@ -130,7 +136,8 @@ public class MainMenuControl {
                 new HousekeepingCLI(),
                 roomList,
                 vipAllocationControl,
-                walkInControl);
+                walkInControl,
+                rollbackLog);
 
         this.loyaltyControl = new LoyaltyControl(
                 new LoyaltyCLI(), memberList, redemptionItemList, redemptionTransactionList);

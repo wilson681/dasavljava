@@ -1,5 +1,6 @@
 package control;
 
+import adt.ArrayBasedList;
 import adt.ListInterface;
 import boundary.LoyaltyCLI;
 import entity.Member;
@@ -67,8 +68,14 @@ public class LoyaltyControl {
                 case 3:
                     doAddPoints();
                     break;
-                case 4:                          
+                case 4:
                     doAdjustTier();
+                    break;
+                case 5:
+                    doPointsExpiryReport();
+                    break;
+                case 6:
+                    doTopRedeemedItemsReport();
                     break;
                 case 0:
                     running = false;
@@ -228,6 +235,165 @@ public class LoyaltyControl {
                 TierRankUtility.tierToDiscountPercent(oldTier),
                 TierRankUtility.tierToDiscountPercent(newTier));
     }
+    // ========== 报表1:积分即将到期提醒 ==========
+
+    /**
+     * filter=未来N天内到期+等级,按到期日升序,跨全体会员扫描——
+     * 跟功能1(doViewExpiry)不一样,那个是查单一会员的完整明细,这个是给营销团队
+     * 一次拉出全体会员名单去发提醒邮件用。
+     */
+    private void doPointsExpiryReport() {
+        int withinDays = loyaltyCLI.promptExpiryWindowDays();
+        String tierFilter = loyaltyCLI.promptReportTierFilter();
+
+        LocalDate today = LocalDate.now();
+        LocalDate cutoff = today.plusDays(withinDays);
+
+        ListInterface<String> memberNames = new ArrayBasedList<>();
+        ListInterface<String> memberIds = new ArrayBasedList<>();
+        ListInterface<String> tiers = new ArrayBasedList<>();
+        ListInterface<Integer> pointsAmounts = new ArrayBasedList<>();
+        ListInterface<String> expiryDates = new ArrayBasedList<>();
+
+        Iterator<Member> memberIterator = memberList.getIterator();
+        while (memberIterator.hasNext()) {
+            Member member = memberIterator.next();
+            boolean tierMatches = "ALL".equalsIgnoreCase(tierFilter) || tierFilter.equalsIgnoreCase(member.getTier());
+            if (!tierMatches) {
+                continue;
+            }
+
+            Iterator<PointsLedgerEntry> ledgerIterator = member.getPointsLedger().getIterator();
+            while (ledgerIterator.hasNext()) {
+                PointsLedgerEntry entry = ledgerIterator.next();
+                LocalDate expiry = LocalDate.parse(entry.getExpiryDate());
+                if (!expiry.isBefore(today) && !expiry.isAfter(cutoff)) {
+                    memberNames.add(member.getName());
+                    memberIds.add(member.getMemberId());
+                    tiers.add(member.getTier());
+                    pointsAmounts.add(entry.getPointsAmount());
+                    expiryDates.add(entry.getExpiryDate());
+                }
+            }
+        }
+
+        sortByExpiryDateAscending(memberNames, memberIds, tiers, pointsAmounts, expiryDates);
+
+        loyaltyCLI.displayPointsExpiryReportHeader(withinDays, tierFilter);
+        if (memberNames.isEmpty()) {
+            loyaltyCLI.displayNoReportRecords();
+        } else {
+            for (int i = 1; i <= memberNames.getNumberOfEntries(); i++) {
+                loyaltyCLI.displayPointsExpiryReportRow(memberNames.getEntry(i), memberIds.getEntry(i),
+                        tiers.getEntry(i), pointsAmounts.getEntry(i), expiryDates.getEntry(i));
+            }
+        }
+        loyaltyCLI.displayReportEnd();
+    }
+
+    /**
+     * selection sort:按到期日由近到远,四条平行清单一起换位置。
+     */
+    private void sortByExpiryDateAscending(ListInterface<String> memberNames, ListInterface<String> memberIds,
+                                            ListInterface<String> tiers, ListInterface<Integer> pointsAmounts,
+                                            ListInterface<String> expiryDates) {
+        int n = expiryDates.getNumberOfEntries();
+        for (int i = 1; i <= n - 1; i++) {
+            int smallestPosition = i;
+            for (int j = i + 1; j <= n; j++) {
+                if (expiryDates.getEntry(j).compareTo(expiryDates.getEntry(smallestPosition)) < 0) {
+                    smallestPosition = j;
+                }
+            }
+            if (smallestPosition != i) {
+                swap(memberNames, i, smallestPosition);
+                swap(memberIds, i, smallestPosition);
+                swap(tiers, i, smallestPosition);
+                swap(pointsAmounts, i, smallestPosition);
+                swap(expiryDates, i, smallestPosition);
+            }
+        }
+    }
+
+    // ========== 报表2:最多人兑换的产品报表 ==========
+
+    /**
+     * filter=日期区间,遍历现有redemptionHistory,按itemRedeemed分组统计次数
+     * 跟消耗积分总额,按次数降序——不需要动任何entity,资料本来就有。
+     */
+    private void doTopRedeemedItemsReport() {
+        String fromDate = loyaltyCLI.promptReportFromDate();
+        String toDate = loyaltyCLI.promptReportToDate();
+
+        ListInterface<String> itemNames = new ArrayBasedList<>();
+        ListInterface<Integer> redemptionCounts = new ArrayBasedList<>();
+        ListInterface<Integer> totalPointsUsed = new ArrayBasedList<>();
+
+        Iterator<RedemptionTransaction> iterator = redemptionHistory.getIterator();
+        while (iterator.hasNext()) {
+            RedemptionTransaction transaction = iterator.next();
+            boolean dateMatches = transaction.getDate().compareTo(fromDate) >= 0
+                    && transaction.getDate().compareTo(toDate) <= 0;
+            if (!dateMatches) {
+                continue;
+            }
+
+            int position = itemNames.indexOf(transaction.getItemRedeemed());
+            if (position == -1) {
+                itemNames.add(transaction.getItemRedeemed());
+                redemptionCounts.add(1);
+                totalPointsUsed.add(transaction.getPointsUsed());
+            } else {
+                redemptionCounts.replace(position, redemptionCounts.getEntry(position) + 1);
+                totalPointsUsed.replace(position, totalPointsUsed.getEntry(position) + transaction.getPointsUsed());
+            }
+        }
+
+        sortByRedemptionCountDescending(itemNames, redemptionCounts, totalPointsUsed);
+
+        loyaltyCLI.displayTopRedeemedItemsReportHeader(fromDate, toDate);
+        if (itemNames.isEmpty()) {
+            loyaltyCLI.displayNoReportRecords();
+        } else {
+            for (int i = 1; i <= itemNames.getNumberOfEntries(); i++) {
+                loyaltyCLI.displayTopRedeemedItemsReportRow(itemNames.getEntry(i),
+                        redemptionCounts.getEntry(i), totalPointsUsed.getEntry(i));
+            }
+        }
+        loyaltyCLI.displayReportEnd();
+    }
+
+    /**
+     * selection sort:按兑换次数由大到小,三条平行清单一起换位置。
+     */
+    private void sortByRedemptionCountDescending(ListInterface<String> itemNames,
+                                                  ListInterface<Integer> redemptionCounts,
+                                                  ListInterface<Integer> totalPointsUsed) {
+        int n = itemNames.getNumberOfEntries();
+        for (int i = 1; i <= n - 1; i++) {
+            int largestPosition = i;
+            for (int j = i + 1; j <= n; j++) {
+                if (redemptionCounts.getEntry(j) > redemptionCounts.getEntry(largestPosition)) {
+                    largestPosition = j;
+                }
+            }
+            if (largestPosition != i) {
+                swap(itemNames, i, largestPosition);
+                swap(redemptionCounts, i, largestPosition);
+                swap(totalPointsUsed, i, largestPosition);
+            }
+        }
+    }
+
+    /**
+     * 把一份ListInterface里两个位置的值互换,给报表的平行清单排序共用。
+     */
+    private <T> void swap(ListInterface<T> list, int positionA, int positionB) {
+        T temp = list.getEntry(positionA);
+        list.replace(positionA, list.getEntry(positionB));
+        list.replace(positionB, temp);
+    }
+
     // ========== 赚积分(手动加分/退房结账都会触发) ==========
 
     /**

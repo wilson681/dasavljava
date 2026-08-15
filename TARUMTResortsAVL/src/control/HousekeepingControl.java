@@ -7,6 +7,8 @@ import adt.StackInterface;
 import boundary.HousekeepingCLI;
 import entity.Room;
 import entity.RoomHistory;
+import entity.RollbackLogEntry;
+import java.time.LocalDate;
 
 /**
  * HousekeepingControl.java
@@ -24,16 +26,21 @@ public class HousekeepingControl {
     private final VipAllocationControl vipAllocationControl;
     private final WalkInControl walkInControl;
 
+    // 只有 doRollbackStatus() 写、只有本模块自己的报表读,其他模块不会碰
+    private final ListInterface<RollbackLogEntry> rollbackLog;
+
     public HousekeepingControl(
             HousekeepingCLI housekeepingCLI,
             ListInterface<Room> roomList,
             VipAllocationControl vipAllocationControl,
-            WalkInControl walkInControl) {
+            WalkInControl walkInControl,
+            ListInterface<RollbackLogEntry> rollbackLog) {
 
         if (housekeepingCLI == null
                 || roomList == null
                 || vipAllocationControl == null
-                || walkInControl == null) {
+                || walkInControl == null
+                || rollbackLog == null) {
 
             throw new IllegalArgumentException(
                     "HousekeepingControl dependencies cannot be null"
@@ -44,6 +51,7 @@ public class HousekeepingControl {
         this.roomList = roomList;
         this.vipAllocationControl = vipAllocationControl;
         this.walkInControl = walkInControl;
+        this.rollbackLog = rollbackLog;
     }
 
     // =========================================================
@@ -91,6 +99,11 @@ public class HousekeepingControl {
                     break;
 
                 case 7:
+                    doGenerateRollbackFrequencyReport();
+                    housekeepingCLI.promptContinue();
+                    break;
+
+                case 0:
                     running = false;
                     break;
 
@@ -418,7 +431,46 @@ public class HousekeepingControl {
         String restoredStatus =
                 history.getStatusStack().peek();
 
+        /*
+         * Housekeeping may only roll back within its own
+         * pipeline (NEEDS_CLEANING/CLEANING_IN_PROGRESS/
+         * INSPECTED/AVAILABLE). OCCUPIED belongs to a real
+         * guest stay (Booking/BillingRecord/points already
+         * committed elsewhere), which Housekeeping has no
+         * way to see or safely restore — put the popped
+         * status back and refuse instead.
+         */
+        if (restoredStatus == null
+                || restoredStatus.equalsIgnoreCase(
+                        "OCCUPIED")) {
+
+            history.getStatusStack().push(
+                    removedStatus
+            );
+
+            housekeepingCLI
+                    .displayRollbackNotAvailable(
+                            roomNumber
+                    );
+
+            return;
+        }
+
         room.setStatus(restoredStatus);
+
+        /*
+         * Only a rollback that actually goes through reaches
+         * here (the two guard clauses above return early), so
+         * this log stays a clean, permanent record of real
+         * rollback events -- unlike the status Stack itself,
+         * which loses the evidence the moment it is popped.
+         */
+        rollbackLog.add(new RollbackLogEntry(
+                roomNumber,
+                removedStatus,
+                restoredStatus,
+                LocalDate.now().toString()
+        ));
 
         housekeepingCLI.displayRollbackResult(
                 roomNumber,
@@ -814,6 +866,137 @@ public class HousekeepingControl {
                         largestPosition,
                         tempCount
                 );
+            }
+        }
+    }
+
+    // =========================================================
+    // Report 3
+    // Rollback Frequency Report
+    //
+    // Answers "which room/shift keeps getting rolled back" --
+    // something the Stack-based history alone cannot answer,
+    // because a pop() destroys the evidence. This report reads
+    // only from rollbackLog, the permanent, append-only record
+    // of every rollback that actually succeeded.
+    // =========================================================
+
+    private void doGenerateRollbackFrequencyReport() {
+
+        String roomNumberFilter =
+                housekeepingCLI.promptReportRoomNumber();
+
+        String fromDate =
+                housekeepingCLI.promptReportFromDate();
+
+        String toDate =
+                housekeepingCLI.promptReportToDate();
+
+        ListInterface<String> roomNumbers =
+                new ArrayBasedList<>();
+
+        ListInterface<Integer> rollbackCounts =
+                new ArrayBasedList<>();
+
+        /*
+         * Linear Search + group-by-room, built without a Map:
+         * scan rollbackLog once, and for each entry either bump
+         * an existing room's counter or append a new one.
+         */
+        for (int i = 1;
+                i <= rollbackLog.getNumberOfEntries();
+                i++) {
+
+            RollbackLogEntry entry =
+                    rollbackLog.getEntry(i);
+
+            boolean roomMatches =
+                    "ALL".equalsIgnoreCase(roomNumberFilter)
+                    || entry.getRoomNumber()
+                            .equalsIgnoreCase(roomNumberFilter);
+
+            boolean dateMatches =
+                    entry.getDate().compareTo(fromDate) >= 0
+                    && entry.getDate().compareTo(toDate) <= 0;
+
+            if (!roomMatches || !dateMatches) {
+                continue;
+            }
+
+            int existingPosition =
+                    roomNumbers.indexOf(entry.getRoomNumber());
+
+            if (existingPosition == -1) {
+                roomNumbers.add(entry.getRoomNumber());
+                rollbackCounts.add(1);
+            } else {
+                int updatedCount =
+                        rollbackCounts.getEntry(existingPosition) + 1;
+                rollbackCounts.replace(existingPosition, updatedCount);
+            }
+        }
+
+        /*
+         * Selection Sort:
+         * highest rollback count first.
+         */
+        sortRollbackReport(roomNumbers, rollbackCounts);
+
+        housekeepingCLI.displayRollbackFrequencyReportHeader(
+                roomNumberFilter, fromDate, toDate);
+
+        if (roomNumbers.isEmpty()) {
+            housekeepingCLI.displayNoReportRecords();
+            housekeepingCLI.displayReportEnd();
+            return;
+        }
+
+        for (int i = 1; i <= roomNumbers.getNumberOfEntries(); i++) {
+            housekeepingCLI.displayRollbackFrequencyReportRow(
+                    roomNumbers.getEntry(i),
+                    rollbackCounts.getEntry(i));
+        }
+
+        housekeepingCLI.displayReportEnd();
+    }
+
+    private void sortRollbackReport(
+            ListInterface<String> roomNumbers,
+            ListInterface<Integer> rollbackCounts) {
+
+        int n = roomNumbers.getNumberOfEntries();
+
+        for (int i = 1; i <= n - 1; i++) {
+
+            int largestPosition = i;
+
+            for (int j = i + 1; j <= n; j++) {
+
+                int largestCount =
+                        rollbackCounts.getEntry(largestPosition);
+                int candidateCount =
+                        rollbackCounts.getEntry(j);
+
+                if (candidateCount > largestCount) {
+                    largestPosition = j;
+                } else if (candidateCount == largestCount) {
+                    // Tie: smaller room number first.
+                    if (roomNumbers.getEntry(j).compareToIgnoreCase(
+                            roomNumbers.getEntry(largestPosition)) < 0) {
+                        largestPosition = j;
+                    }
+                }
+            }
+
+            if (largestPosition != i) {
+
+                String tempRoom = roomNumbers.getEntry(i);
+                roomNumbers.replace(i, roomNumbers.getEntry(largestPosition));
+                roomNumbers.replace(largestPosition, tempRoom);
+
+                Integer tempCount = rollbackCounts.getEntry(i);
+                rollbackCounts.replace(i, rollbackCounts.getEntry(largestPosition));
+                rollbackCounts.replace(largestPosition, tempCount);
             }
         }
     }
