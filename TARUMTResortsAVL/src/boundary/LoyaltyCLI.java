@@ -20,7 +20,7 @@ public class LoyaltyCLI {
 
     private static final String DIVIDER = "--------------------------------------------------------";
     private static final String LEDGER_TABLE_DIVIDER = "---- ---------- -------------- --------------";
-    private static final String CATALOG_TABLE_DIVIDER = "-------------------------- -------------- ----------";
+    private static final String CATALOG_TABLE_DIVIDER = "---- -------------------------- -------------- ----------";
   
     private static final String MEMBER_TABLE_HEADER =
             String.format("%-9s| %-20s| %8s | %s", "MemberId", "MemberName", "Point", "VipTier");
@@ -106,27 +106,29 @@ public class LoyaltyCLI {
         System.out.println("===== Redemption Catalog (sorted by points required) =====");
         System.out.println("Your balance: " + currentPoints + " pts");
         System.out.println();
-        System.out.println(String.format("%-26s %-14s %s", "Item", "Points Required", "Affordable"));
+        System.out.println(String.format("%-4s %-26s %-14s %s", "No.", "Item", "Points Required", "Affordable"));
         System.out.println(CATALOG_TABLE_DIVIDER);
+        int rank = 1;
         while (catalog.hasNext()) {
             RedemptionItem item = catalog.next();
             String affordable = currentPoints >= item.getPointsRequired() ? "Yes" : "No";
-            System.out.println(String.format("%-26s %-14d %s",
-                    item.getItemName(), item.getPointsRequired(), affordable));
+            System.out.println(String.format("%-4d %-26s %-14d %s",
+                    rank, item.getItemName(), item.getPointsRequired(), affordable));
+            rank++;
         }
     }
 
-    public String promptItemName() {
-        System.out.print("Enter item name to redeem: ");
-        return scanner.nextLine().trim();
+    public int promptItemNumber() {
+        System.out.print("Enter the No. of the item to redeem: ");
+        try {
+            return Integer.parseInt(scanner.nextLine().trim());
+        } catch (NumberFormatException e) {
+            return -1;
+        }
     }
 
-    public void displayItemNotFound(String itemName) {
-        System.out.println("Item \"" + itemName + "\" not found in the catalog.");
-    }
-
-    public void displayBlankItemName() {
-        System.out.println("Item name cannot be blank.");
+    public void displayInvalidItemNumber(int itemNumber, int catalogSize) {
+        System.out.println("\"" + itemNumber + "\" is not a valid No. Enter a number between 1 and " + catalogSize + ".");
     }
 
     public void displayInsufficientPoints(int currentPoints, int required) {

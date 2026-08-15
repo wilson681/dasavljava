@@ -107,17 +107,12 @@ public class VipAllocationControl {
 
         // 把会员等级(文字)换算成排名数字,插进树时靠这个数字决定优先级——
         // 同一位会员这次登记的每一笔Booking等级都一样,只需要算一次
+        // tierRank<=0(比如Walk-In入住后自动开的Standard会员)一样放行——业务规则是
+        // "任何有memberId的会员,只要走VIP这条路登记,优先权本来就该高于Walk-In队伍",
+        // 不是只有Elite/Platinum/Diamond才算数。Standard插进树后排名自然垫底(compareTo
+        // 只看tierRank/arrivalSequence,0天生排在1/2/3后面),但仍然会跟真VIP一样,
+        // 排在WalkInControl.tryAllocate()挡住的Walk-In队伍前面——这就是要的效果
         int tierRank = TierRankUtility.tierToRank(member.getTier());
-
-        // tierRank<=0代表这不是真正的VIP等级(比如Walk-In入住后自动开的Standard会员)——
-        // 这种人虽然有memberId,但不该走VIP这条路登记。放行的话,他的Booking会被插进
-        // VIP树,树一非空就会挡住WalkInControl.tryAllocate()对这个房型的所有Walk-In
-        // 分房(那边的判断只看树是不是空的,不看里面tierRank多少),等于让一个不该有
-        // VIP优先权的人变相卡住所有Walk-In——所以要在这里直接拦下来,请他去Walk-In登记
-        if (tierRank <= 0) {
-            vipAllocationCLI.displayNotVip(memberId, member.getTier());
-            return;
-        }
 
         // 这位VIP可能一次要订好几间房(不一定同房型),所以会员资料只查一次,
         // 底下用同一个confirmationNumber循环开多笔Booking,直到不用再加了
