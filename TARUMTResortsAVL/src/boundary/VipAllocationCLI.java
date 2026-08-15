@@ -87,11 +87,6 @@ public class VipAllocationCLI {
         System.out.println("Member ID cannot be blank.");
     }
 
-    public void displayNotVip(String memberId, String tier) {
-        System.out.println("Member ID " + memberId + " (" + tier + ") is not a VIP tier."
-                + " Please use Walk-In registration instead.");
-    }
-
     public void displayInvalidRoomType(String roomType) {
         System.out.println("Room type \"" + roomType + "\" is invalid. Please try again.");
     }

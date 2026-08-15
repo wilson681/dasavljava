@@ -107,12 +107,7 @@ public class LoyaltyControl {
         sortCatalogByPoints();
         loyaltyCLI.displayCatalog(redemptionCatalog.getIterator(), member.getCurrentPoints());
 
-        String itemName = promptValidItemName();
-        RedemptionItem item = findItemByName(itemName);
-        if (item == null) {
-            loyaltyCLI.displayItemNotFound(itemName);
-            return;
-        }
+        RedemptionItem item = promptValidRedemptionChoice();
 
         if (member.getCurrentPoints() < item.getPointsRequired()) {
             loyaltyCLI.displayInsufficientPoints(member.getCurrentPoints(), item.getPointsRequired());
@@ -467,15 +462,19 @@ public class LoyaltyControl {
         return memberId;
     }
 
-    private String promptValidItemName() {
-        String itemName;
+    /**
+     * 兑换清单在doRedeem()里显示之前一定先按points排好序,清单显示的编号(No.)
+     * 直接对应ListInterface的position(都是从1开始),不用另外查名字。
+     */
+    private RedemptionItem promptValidRedemptionChoice() {
+        int itemNumber;
         do {
-            itemName = loyaltyCLI.promptItemName();
-            if (ValidationUtility.isBlank(itemName)) {
-                loyaltyCLI.displayBlankItemName();
+            itemNumber = loyaltyCLI.promptItemNumber();
+            if (itemNumber < 1 || itemNumber > redemptionCatalog.getNumberOfEntries()) {
+                loyaltyCLI.displayInvalidItemNumber(itemNumber, redemptionCatalog.getNumberOfEntries());
             }
-        } while (ValidationUtility.isBlank(itemName));
-        return itemName;
+        } while (itemNumber < 1 || itemNumber > redemptionCatalog.getNumberOfEntries());
+        return redemptionCatalog.getEntry(itemNumber);
     }
 
     private int promptValidPointsAmount() {
@@ -514,23 +513,6 @@ public class LoyaltyControl {
             Member member = iterator.next();
             if (member.getMemberId().equals(memberId)) {
                 return member;
-            }
-        }
-        return null;
-    }
-
-    /**
-     * 在redemptionCatalog里线性找出itemName相符的那个兑换项目,找不到回传null。
-     */
-    private RedemptionItem findItemByName(String itemName) {
-        if (itemName == null) {
-            return null;
-        }
-        Iterator<RedemptionItem> iterator = redemptionCatalog.getIterator();
-        while (iterator.hasNext()) {
-            RedemptionItem item = iterator.next();
-            if (item.getItemName().equalsIgnoreCase(itemName)) {
-                return item;
             }
         }
         return null;
