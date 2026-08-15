@@ -114,9 +114,17 @@ public class VipAllocationCLI {
      */
     public boolean promptAddAnotherRoom() {
         System.out.println();
-        System.out.print("Add another room for this guest? (y/n): ");
-        String input = scanner.nextLine().trim();
-        return input.equalsIgnoreCase("y");
+        while (true) {
+            System.out.print("Add another room for this guest? (y/n): ");
+            String input = scanner.nextLine().trim();
+            if (input.equalsIgnoreCase("y")) {
+                return true;
+            }
+            if (input.equalsIgnoreCase("n")) {
+                return false;
+            }
+            System.out.println("Invalid input. Please enter y or n.");
+        }
     }
 
     // ========== 分房结果(登记后自动触发,不再是独立菜单动作) ==========

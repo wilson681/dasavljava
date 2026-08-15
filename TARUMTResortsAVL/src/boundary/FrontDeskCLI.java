@@ -264,9 +264,17 @@ public class FrontDeskCLI {
     }
 
     public boolean promptCheckOutAnotherRoom() {
-        System.out.print("Check out another room under this confirmation number? (y/n): ");
-        String input = scanner.nextLine().trim();
-        return input.equalsIgnoreCase("y");
+        while (true) {
+            System.out.print("Check out another room under this confirmation number? (y/n): ");
+            String input = scanner.nextLine().trim();
+            if (input.equalsIgnoreCase("y")) {
+                return true;
+            }
+            if (input.equalsIgnoreCase("n")) {
+                return false;
+            }
+            System.out.println("Invalid input. Please enter y or n.");
+        }
     }
 
     public void displayNoRoomsSelected() {

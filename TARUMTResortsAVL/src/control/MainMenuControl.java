@@ -14,8 +14,15 @@ import boundary.VipAllocationCLI;
 import boundary.WalkInCLI;
 import boundary.FrontDeskCLI;
 import boundary.HousekeepingCLI;
+import dao.BillingRecordDao;
+import dao.BookingDao;
+import dao.GuestBookingDao;
+import dao.GuestDao;
 import dao.MemberDao;
+import dao.PointsLedgerDao;
+import dao.RedemptionHistoryDao;
 import dao.RedemptionItemDao;
+import dao.RollbackLogDao;
 import dao.RoomDao;
 import entity.Booking;
 import entity.Guest;
@@ -113,6 +120,16 @@ public class MainMenuControl {
                     .getStatusStack()
                     .isEmpty()) {
 
+                // 正在清洁流程中的房间,多补一笔"之前是OCCUPIED"的记录,让 Room History
+                // 报表的记录数不会每间房都长得一样,demo时数字才有变化可以展示
+                if (room.getStatus().equals("NEEDS_CLEANING")
+                        || room.getStatus().equals("CLEANING_IN_PROGRESS")
+                        || room.getStatus().equals("INSPECTED")) {
+                    room.getRoomHistory()
+                            .getStatusStack()
+                            .push("OCCUPIED");
+                }
+
                 room.getRoomHistory()
                         .getStatusStack()
                         .push(room.getStatus());
@@ -120,6 +137,20 @@ public class MainMenuControl {
         }
 
         new RedemptionItemDao().loadRedemptionItems(redemptionItemList);
+
+        // 额外的种子资料,让开机后 Reports 菜单的 11 份报表都已经有资料可以测,不用先手动
+        // 跑完整的登记/分房/退房流程——各自的格式/职责说明见 dao/ 底下对应类别的 javadoc。
+        // 编号(bookingId/confirmationNumber/billingId/ledgerId)都用跟真人操作不同的前缀/区间,
+        // 保证不会跟之后手动操作产生的编号撞号。
+        new PointsLedgerDao().loadPointsLedger(memberList);
+        new RedemptionHistoryDao().loadRedemptionHistory(redemptionTransactionList);
+        new RollbackLogDao().loadRollbackLog(rollbackLog);
+        new BookingDao().loadWaitingBookings(memberList,
+                standardWalkInQueue, deluxeWalkInQueue, suiteWalkInQueue,
+                standardVipTree, deluxeVipTree, suiteVipTree);
+        new GuestDao().loadGuests(guestTable);
+        new GuestBookingDao().loadGuestBookings(guestTable, memberList);
+        new BillingRecordDao().loadBillingRecords(guestTable);
 
         // WalkInControl也要拿到VIP的三棵树(只读,用来检查isEmpty())才能落实
         // "VIP永远优先"这条两个模块共用的规则

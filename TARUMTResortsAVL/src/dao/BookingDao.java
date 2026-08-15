@@ -1,0 +1,128 @@
+package dao;
+
+import adt.ListInterface;
+import adt.QueueInterface;
+import adt.SearchTreeInterface;
+import entity.Booking;
+import entity.BookingStatus;
+import entity.Member;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
+import java.util.Iterator;
+import utility.DataFileLocator;
+import utility.TierRankUtility;
+
+/**
+ * BookingDao.java - 负责把 data/bookings.txt 读进来,组成还在排队/树上、
+ * 还没分到房的 Booking,依 source+roomType 塞进对的 Queue 或 AVL Tree。
+ *
+ * @author 某某
+ *
+ * 说明:
+ * - 只做"读文件、组物件、塞进容器"这件事,不做任何业务判断
+ * - txt格式: source,roomType,confirmationNumber,guestName,phone,memberId,registeredAt
+ *   source 是 WALK_IN 或 VIP;memberId 空白代表非会员(WALK_IN)
+ * - bookingId/arrivalSequence 用自己的计数器,前缀跟真人操作的 WB/VB 不一样(SWB/SVB),
+ *   保证不会跟真人之后手动登记产生的编号撞号
+ * - VIP 的 tierRankAtRequest 靠 memberId 反查 memberList 拿 tier,再用 TierRankUtility 换算,
+ *   跟 VipAllocationControl.doRegister() 的做法一致
+ */
+public class BookingDao {
+
+    private static final String FILE_PATH = "data/bookings.txt";
+
+    private int arrivalCounter = 0;
+    private int walkInBookingCounter = 0;
+    private int vipBookingCounter = 0;
+
+    public void loadWaitingBookings(ListInterface<Member> memberList,
+                                     QueueInterface<Booking> standardWalkInQueue,
+                                     QueueInterface<Booking> deluxeWalkInQueue,
+                                     QueueInterface<Booking> suiteWalkInQueue,
+                                     SearchTreeInterface<Booking> standardVipTree,
+                                     SearchTreeInterface<Booking> deluxeVipTree,
+                                     SearchTreeInterface<Booking> suiteVipTree) {
+        File file = DataFileLocator.locate(BookingDao.class, FILE_PATH);
+        if (file == null) {
+            System.out.println("Failed to load " + FILE_PATH + ": file not found near project root");
+            return;
+        }
+        try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                line = line.trim();
+                if (line.isEmpty()) {
+                    continue;
+                }
+                String[] fields = line.split(",");
+                String source = fields[0].trim();
+                String roomType = fields[1].trim();
+                String confirmationNumber = fields[2].trim();
+                String guestName = fields[3].trim();
+                String phone = fields[4].trim();
+                String memberId = fields[5].trim();
+                String registeredAt = fields[6].trim();
+
+                int tierRank = 0;
+                if ("VIP".equals(source) && !memberId.isEmpty()) {
+                    Member member = findMemberById(memberList, memberId);
+                    if (member != null) {
+                        tierRank = TierRankUtility.tierToRank(member.getTier());
+                    }
+                }
+
+                arrivalCounter++;
+                String bookingId = "VIP".equals(source)
+                        ? "SVB" + String.format("%06d", ++vipBookingCounter)
+                        : "SWB" + String.format("%06d", ++walkInBookingCounter);
+
+                Booking booking = new Booking(bookingId, confirmationNumber, guestName,
+                        phone, memberId.isEmpty() ? null : memberId, roomType,
+                        BookingStatus.PENDING, source, arrivalCounter, tierRank, registeredAt);
+
+                if ("VIP".equals(source)) {
+                    getVipTreeForRoomType(roomType, standardVipTree, deluxeVipTree, suiteVipTree).add(booking);
+                } else {
+                    getWalkInQueueForRoomType(roomType, standardWalkInQueue, deluxeWalkInQueue, suiteWalkInQueue).enqueue(booking);
+                }
+            }
+        } catch (IOException e) {
+            System.out.println("Failed to load " + FILE_PATH + ": " + e.getMessage());
+        }
+    }
+
+    private QueueInterface<Booking> getWalkInQueueForRoomType(String roomType,
+            QueueInterface<Booking> standardQueue, QueueInterface<Booking> deluxeQueue,
+            QueueInterface<Booking> suiteQueue) {
+        if ("Deluxe".equalsIgnoreCase(roomType)) {
+            return deluxeQueue;
+        } else if ("Suite".equalsIgnoreCase(roomType)) {
+            return suiteQueue;
+        }
+        return standardQueue;
+    }
+
+    private SearchTreeInterface<Booking> getVipTreeForRoomType(String roomType,
+            SearchTreeInterface<Booking> standardTree, SearchTreeInterface<Booking> deluxeTree,
+            SearchTreeInterface<Booking> suiteTree) {
+        if ("Deluxe".equalsIgnoreCase(roomType)) {
+            return deluxeTree;
+        } else if ("Suite".equalsIgnoreCase(roomType)) {
+            return suiteTree;
+        }
+        return standardTree;
+    }
+
+    private Member findMemberById(ListInterface<Member> memberList, String memberId) {
+        Iterator<Member> iterator = memberList.getIterator();
+        while (iterator.hasNext()) {
+            Member member = iterator.next();
+            if (member.getMemberId().equals(memberId)) {
+                return member;
+            }
+        }
+        return null;
+    }
+}

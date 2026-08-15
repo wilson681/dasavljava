@@ -236,8 +236,17 @@ public class LoyaltyCLI {
     }
 
     public boolean promptConfirmAdjustment(String name, String oldTier, String newTier) {
-        System.out.print("Move " + name + " from " + oldTier + " to " + newTier + "? (y/n): ");
-        return scanner.nextLine().trim().equalsIgnoreCase("y");
+        while (true) {
+            System.out.print("Move " + name + " from " + oldTier + " to " + newTier + "? (y/n): ");
+            String input = scanner.nextLine().trim();
+            if (input.equalsIgnoreCase("y")) {
+                return true;
+            }
+            if (input.equalsIgnoreCase("n")) {
+                return false;
+            }
+            System.out.println("Invalid input. Please enter y or n.");
+        }
     }
 
     public void displayAdjustmentCancelled() {
