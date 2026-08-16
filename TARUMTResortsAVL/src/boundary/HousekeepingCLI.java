@@ -222,44 +222,42 @@ public class HousekeepingCLI {
         );
     }
 
+   /**
+     * Prompts for the next room status.
+     *
+     * <p>The housekeeping pipeline is strictly linear, so at any point there
+     * is exactly one legal next status. Only that one is offered, because
+     * listing the other three and then rejecting them would be offering a
+     * choice that does not exist.</p>
+     *
+     * @param suggestedNextStatus the only status this room may move to
+     * @return the chosen status, or null when the user cancels
+     */
     public String promptNewStatus(String suggestedNextStatus) {
 
-        System.out.println();
-        if (suggestedNextStatus != null) {
-            System.out.println(
-                    "The only valid next status from here is: " + suggestedNextStatus
-            );
-        }
-        System.out.println("Select New Status:");
-        System.out.println("1. NEEDS_CLEANING");
-        System.out.println("2. CLEANING_IN_PROGRESS");
-        System.out.println("3. INSPECTED");
-        System.out.println("4. AVAILABLE");
-        System.out.println();
-        System.out.print("Enter your choice (blank to cancel): ");
-
-        String choice = scanner.nextLine().trim();
-
-        if (choice.isEmpty()) {
+        if (suggestedNextStatus == null) {
             return null;
         }
 
-        switch (choice) {
+        while (true) {
 
-            case "1":
-                return "NEEDS_CLEANING";
+            System.out.println();
+            System.out.println("Select New Status:");
+            System.out.println("1. " + suggestedNextStatus);
+            System.out.println();
+            System.out.print("Enter your choice (blank to cancel): ");
 
-            case "2":
-                return "CLEANING_IN_PROGRESS";
+            String choice = scanner.nextLine().trim();
 
-            case "3":
-                return "INSPECTED";
+            if (choice.isEmpty()) {
+                return null;
+            }
 
-            case "4":
-                return "AVAILABLE";
+            if (choice.equals("1")) {
+                return suggestedNextStatus;
+            }
 
-            default:
-                return "";
+            System.out.println("Invalid input, please enter 1 or leave blank to cancel.");
         }
     }
 

@@ -171,30 +171,38 @@ public class FrontDeskCLI {
     /**
      * Asks which room type to report on.
      *
+     * <p>Option 4 returns null, which countRooms() reads as the "any type"
+     * wildcard. Because null already carries that meaning, an invalid entry
+     * must never be allowed to reach it.</p>
+     *
      * @return the room type name, or null when the user wants every type
      */
     public String promptRoomTypeFilter() {
-        System.out.println();
-        System.out.println("Filter by room type:");
-        System.out.println("  1) Standard");
-        System.out.println("  2) Deluxe");
-        System.out.println("  3) Suite");
-        System.out.println("  4) All types");
-        System.out.print("Enter your choice: ");
+        while (true) {
+            System.out.println();
+            System.out.println("Filter by room type:");
+            System.out.println("  1) Standard");
+            System.out.println("  2) Deluxe");
+            System.out.println("  3) Suite");
+            System.out.println("  4) All types");
+            System.out.print("Enter your choice: ");
 
-        String input = scanner.nextLine().trim();
-        if (input.equals("1")) {
-            return "Standard";
+            String input = scanner.nextLine().trim();
+            if (input.equals("1")) {
+                return "Standard";
+            }
+            if (input.equals("2")) {
+                return "Deluxe";
+            }
+            if (input.equals("3")) {
+                return "Suite";
+            }
+            if (input.equals("4")) {
+                return null;
+            }
+            System.out.println("Invalid input, please enter 1 - 4.");
         }
-        if (input.equals("2")) {
-            return "Deluxe";
-        }
-        if (input.equals("3")) {
-            return "Suite";
-        }
-        return null;
     }
-
    /**
      * Prints the room availability query: which rooms are available right
      * now, and how many are unavailable.
@@ -331,17 +339,33 @@ public class FrontDeskCLI {
 
     // ========== 报表共用输入 ==========
 
-    public String promptReportFromDate() {
-        System.out.println();
-        System.out.print("Enter from-date (yyyy-MM-dd, blank = no lower bound): ");
-        String input = scanner.nextLine().trim();
-        return input.isEmpty() ? "0000-00-00" : input;
+   public String promptReportFromDate() {
+        while (true) {
+            System.out.println();
+            System.out.print("Enter from-date (yyyy-MM-dd, blank = no lower bound): ");
+            String input = scanner.nextLine().trim();
+            if (input.isEmpty()) {
+                return "0000-00-00";
+            }
+            if (input.matches("\\d{4}-\\d{2}-\\d{2}")) {
+                return input;
+            }
+            System.out.println("Invalid date format, please use yyyy-MM-dd.");
+        }
     }
 
     public String promptReportToDate() {
-        System.out.print("Enter to-date (yyyy-MM-dd, blank = no upper bound): ");
-        String input = scanner.nextLine().trim();
-        return input.isEmpty() ? "9999-99-99" : input;
+        while (true) {
+            System.out.print("Enter to-date (yyyy-MM-dd, blank = no upper bound): ");
+            String input = scanner.nextLine().trim();
+            if (input.isEmpty()) {
+                return "9999-99-99";
+            }
+            if (input.matches("\\d{4}-\\d{2}-\\d{2}")) {
+                return input;
+            }
+            System.out.println("Invalid date format, please use yyyy-MM-dd.");
+        }
     }
 
     public void displayNoReportRecords() {
@@ -354,31 +378,37 @@ public class FrontDeskCLI {
 
     // ========== 报表1:Check-Out Revenue Report ==========
 
-    public String promptReportTierFilter() {
-        System.out.println();
-        System.out.println("Tier Filter: 1) All  2) Standard  3) Elite  4) Platinum  5) Diamond");
-        System.out.print("Enter your choice: ");
-        String choice = scanner.nextLine().trim();
-        switch (choice) {
-            case "2":
-                return "Standard";
-            case "3":
-                return "Elite";
-            case "4":
-                return "Platinum";
-            case "5":
-                return "Diamond";
-            default:
-                return "ALL";
+   public String promptReportTierFilter() {
+        while (true) {
+            System.out.println();
+            System.out.println("Tier Filter: 1) All  2) Standard  3) Elite  4) Platinum  5) Diamond");
+            System.out.print("Enter your choice: ");
+            String choice = scanner.nextLine().trim();
+            switch (choice) {
+                case "1":
+                    return "ALL";
+                case "2":
+                    return "Standard";
+                case "3":
+                    return "Elite";
+                case "4":
+                    return "Platinum";
+                case "5":
+                    return "Diamond";
+                default:
+                    System.out.println("Invalid input, please enter 1 - 5.");
+            }
         }
     }
 
     public double promptReportMinAmount() {
-        System.out.print("Enter minimum bill amount (RM, 0 for no minimum): ");
-        try {
-            return Double.parseDouble(scanner.nextLine().trim());
-        } catch (NumberFormatException e) {
-            return 0.0;
+        while (true) {
+            System.out.print("Enter minimum bill amount (RM, 0 for no minimum): ");
+            try {
+                return Double.parseDouble(scanner.nextLine().trim());
+            } catch (NumberFormatException e) {
+                System.out.println("Invalid amount, please enter a number.");
+            }
         }
     }
 
@@ -419,41 +449,49 @@ public class FrontDeskCLI {
     // ========== 报表2:Room Utilisation & Status Report ==========
 
     public String promptReportRoomTypeFilter() {
-        System.out.println();
-        System.out.println("Room Type Filter: 1) All  2) Standard  3) Deluxe  4) Suite");
-        System.out.print("Enter your choice: ");
-        String choice = scanner.nextLine().trim();
-        switch (choice) {
-            case "2":
-                return "Standard";
-            case "3":
-                return "Deluxe";
-            case "4":
-                return "Suite";
-            default:
-                return "ALL";
+        while (true) {
+            System.out.println();
+            System.out.println("Room Type Filter: 1) All  2) Standard  3) Deluxe  4) Suite");
+            System.out.print("Enter your choice: ");
+            String choice = scanner.nextLine().trim();
+            switch (choice) {
+                case "1":
+                    return "ALL";
+                case "2":
+                    return "Standard";
+                case "3":
+                    return "Deluxe";
+                case "4":
+                    return "Suite";
+                default:
+                    System.out.println("Invalid input, please enter 1 - 4.");
+            }
         }
     }
 
-    public String promptReportStatusFilter() {
-        System.out.println();
-        System.out.println("Status Filter: 1) All  2) AVAILABLE  3) OCCUPIED  4) NEEDS_CLEANING"
-                + "  5) CLEANING_IN_PROGRESS  6) INSPECTED");
-        System.out.print("Enter your choice: ");
-        String choice = scanner.nextLine().trim();
-        switch (choice) {
-            case "2":
-                return "AVAILABLE";
-            case "3":
-                return "OCCUPIED";
-            case "4":
-                return "NEEDS_CLEANING";
-            case "5":
-                return "CLEANING_IN_PROGRESS";
-            case "6":
-                return "INSPECTED";
-            default:
-                return "ALL";
+   public String promptReportStatusFilter() {
+        while (true) {
+            System.out.println();
+            System.out.println("Status Filter: 1) All  2) AVAILABLE  3) OCCUPIED  4) NEEDS_CLEANING"
+                    + "  5) CLEANING_IN_PROGRESS  6) INSPECTED");
+            System.out.print("Enter your choice: ");
+            String choice = scanner.nextLine().trim();
+            switch (choice) {
+                case "1":
+                    return "ALL";
+                case "2":
+                    return "AVAILABLE";
+                case "3":
+                    return "OCCUPIED";
+                case "4":
+                    return "NEEDS_CLEANING";
+                case "5":
+                    return "CLEANING_IN_PROGRESS";
+                case "6":
+                    return "INSPECTED";
+                default:
+                    System.out.println("Invalid input, please enter 1 - 6.");
+            }
         }
     }
 
