@@ -92,17 +92,10 @@ public class LoyaltyControl {
     // Display members sorted by Member ID
     loyaltyCLI.displayExpiryMemberTable(buildExpiryMemberRows());
 
-    String memberId = promptValidMemberId();
-
-    if (memberId == null) {
-        loyaltyCLI.displayCancelled();
-        return;
-    }
-
-    Member member = findMemberById(memberId);
+    Member member = promptValidMember(null);
 
     if (member == null) {
-        loyaltyCLI.displayMemberNotFound(memberId);
+        loyaltyCLI.displayCancelled();
         return;
     }
 
@@ -115,14 +108,9 @@ public class LoyaltyControl {
     // ========== 功能2:兑换积分 ==========
 
     private void doRedeem() {
-        String memberId = promptValidMemberId();
-        if (memberId == null) {
-            loyaltyCLI.displayCancelled();
-            return;
-        }
-        Member member = findMemberById(memberId);
+        Member member = promptValidMember("Please try again to continue the redemption.");
         if (member == null) {
-            loyaltyCLI.displayMemberNotFound(memberId, "Redemption failed.");
+            loyaltyCLI.displayCancelled();
             return;
         }
 
@@ -174,14 +162,9 @@ public class LoyaltyControl {
 
         loyaltyCLI.displayPointsMemberTable(buildPointsMemberRows());
         
-        String memberId = promptValidMemberId();
-        if (memberId == null) {
-            loyaltyCLI.displayCancelled();
-            return;
-        }
-        Member member = findMemberById(memberId);
+        Member member = promptValidMember("Please try again to continue adding points.");
         if (member == null) {
-            loyaltyCLI.displayMemberNotFound(memberId, "Add points failed.");
+            loyaltyCLI.displayCancelled();
             return;
         }
 
@@ -219,14 +202,9 @@ public class LoyaltyControl {
 
         loyaltyCLI.displayMemberTable(buildMemberRows());
 
-        String memberId = promptValidMemberIdToAdjust();
-        if (memberId == null) {
-            loyaltyCLI.displayCancelled();
-            return;
-        }
-        Member member = findMemberById(memberId);
+        Member member = promptValidMemberToAdjust("Please try again to continue the tier adjustment.");
         if (member == null) {
-            loyaltyCLI.displayMemberNotFound(memberId, "Tier adjustment failed.");
+            loyaltyCLI.displayCancelled();
             return;
         }
 
@@ -648,14 +626,62 @@ public class LoyaltyControl {
     
     // ========== 输入重试(格式类校验失败就原地重问,不中止整个操作) ==========
 
-    private String promptValidMemberId() {
-        String memberId = loyaltyCLI.promptMemberId();
-        return ValidationUtility.isBlank(memberId) ? null : memberId;
+   /**
+     * 问会员编号,一直问到查得到人为止。
+     *
+     * <p>「查无此人」跟「格式错」一样是可以恢复的错误——会员名单就印在这个 prompt
+     * 正上方,打错字的人只要重打就好,不该被踢回主选单。只有输入空白才代表取消。</p>
+     *
+     * @param retryHint 附在 "not found" 后面、各功能自己的提示语;传 null 就只印
+     *                  单纯的 "not found"
+     * @return 查到的会员;使用者取消时回传 null
+     */
+    private Member promptValidMember(String retryHint) {
+
+        while (true) {
+
+            String memberId = loyaltyCLI.promptMemberId();
+
+            if (ValidationUtility.isBlank(memberId)) {
+                return null;
+            }
+
+            Member member = findMemberById(memberId);
+            if (member != null) {
+                return member;
+            }
+
+            if (retryHint == null) {
+                loyaltyCLI.displayMemberNotFound(memberId);
+            } else {
+                loyaltyCLI.displayMemberNotFound(memberId, retryHint);
+            }
+        }
     }
 
-    private String promptValidMemberIdToAdjust() {
-        String memberId = loyaltyCLI.promptMemberIdToAdjust();
-        return ValidationUtility.isBlank(memberId) ? null : memberId;
+    /**
+     * 跟 promptValidMember() 同样的重试行为,只是用调整等级专用的提问文字。
+     *
+     * @param retryHint 附在 "not found" 后面的提示语
+     * @return 查到的会员;使用者取消时回传 null
+     */
+    private Member promptValidMemberToAdjust(String retryHint) {
+
+        while (true) {
+
+            String memberId = loyaltyCLI.promptMemberIdToAdjust();
+
+            if (ValidationUtility.isBlank(memberId)) {
+                return null;
+            }
+
+            Member member = findMemberById(memberId);
+            if (member != null) {
+                return member;
+            }
+
+            loyaltyCLI.displayMemberNotFound(memberId, retryHint);
+        }
     }
 
     /**

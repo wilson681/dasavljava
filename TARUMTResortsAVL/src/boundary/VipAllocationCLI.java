@@ -84,7 +84,7 @@ public class VipAllocationCLI {
     }
 
     public void displayMemberNotFound(String memberId) {
-        System.out.println("Member ID " + memberId + " not found. Registration failed.");
+        System.out.println("Member ID " + memberId + " not found.");
     }
 
     public void displayInvalidRoomType(String roomType) {

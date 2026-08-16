@@ -96,16 +96,11 @@ public class VipAllocationControl {
     // ========== 功能1:VIP登记 ==========
 
     private void doRegister() {
-        // 第一步:先查这个会员编号存不存在,不存在直接结束,不往下走——
-        // 空白代表使用者要取消;查无此人是真的没有这个人,不重问(重问也没用)
-        String memberId = promptValidMemberId();
-        if (memberId == null) {
-            vipAllocationCLI.displayCancelled();
-            return;
-        }
-        Member member = findMemberById(memberId);
+        // 第一步:先拿到会员本人。空白代表使用者要取消;打错编号就地重问,
+        // 不把人踢回主选单——打错字是最常见的情况,重问才是对的
+        Member member = promptValidMember();
         if (member == null) {
-            vipAllocationCLI.displayMemberNotFound(memberId);
+            vipAllocationCLI.displayCancelled();
             return;
         }
 
@@ -476,9 +471,31 @@ public class VipAllocationControl {
 
     // ========== 输入重试(格式类校验失败就原地重问,不中止整个操作) ==========
 
-    private String promptValidMemberId() {
-        String memberId = vipAllocationCLI.promptMemberId();
-        return ValidationUtility.isBlank(memberId) ? null : memberId;
+   /**
+     * Prompts for a member ID until it resolves to a real member.
+     *
+     * <p>A wrong ID is almost always a typo, so it is treated like any other
+     * format error and re-prompted in place. Only a blank entry cancels.</p>
+     *
+     * @return the member, or null when the user cancels
+     */
+    private Member promptValidMember() {
+
+        while (true) {
+
+            String memberId = vipAllocationCLI.promptMemberId();
+
+            if (ValidationUtility.isBlank(memberId)) {
+                return null;
+            }
+
+            Member member = findMemberById(memberId);
+            if (member != null) {
+                return member;
+            }
+
+            vipAllocationCLI.displayMemberNotFound(memberId);
+        }
     }
 
     private String promptValidRoomType() {
