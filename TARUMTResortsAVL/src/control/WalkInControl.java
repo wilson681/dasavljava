@@ -319,7 +319,8 @@ public class WalkInControl {
         String roomTypeFilter = walkInCLI.promptReportRoomType();
 
         ListInterface<Booking> filtered = new ArrayBasedList<>();
-        ListInterface<Booking> allBookings = collectWalkInBookings();
+        // 房型不是ALL时,collectWalkInBookings()只会去对应那一条队伍拿,另外两条完全不碰
+        ListInterface<Booking> allBookings = collectWalkInBookings(roomTypeFilter);
         for (int i = 1; i <= allBookings.getNumberOfEntries(); i++) {
             Booking booking = allBookings.getEntry(i);
             boolean dateMatches = "ALL".equals(dateFilter) || booking.getRegisteredAt().startsWith(dateFilter);
@@ -337,15 +338,65 @@ public class WalkInControl {
             walkInCLI.displayReportEnd();
             return;
         }
+
+        // 一边印明细一边把汇总要用的数字累加起来,不用为了统计再多扫一遍
+        int allocatedCount = 0;
+        int waitSumAllocated = 0;   // 只累加已分房的:还在等的等待时长会随报表跑的时间一直变大,混进平均会失真
+        int waitSamples = 0;        // 真的算得出等待时长的笔数;时间戳坏掉那种不计入,免得平均被-1污染
+        int longestWait = 0;
+        String longestWaitGuest = "-";
+        int longestWaiting = 0;     // 还在等的最长等待,跟已分房的分开统计
+        String longestWaitingGuest = "-";
+        String longestWaitingType = "-";
+        int standardCount = 0;
+        int deluxeCount = 0;
+        int suiteCount = 0;
+
         for (int i = 1; i <= filtered.getNumberOfEntries(); i++) {
             Booking booking = filtered.getEntry(i);
             boolean allocated = booking.getAssignedRoomNo() != null;
             int waitMinutes = allocated
                     ? minutesBetween(booking.getRegisteredAt(), booking.getAllocatedAt())
                     : minutesBetween(booking.getRegisteredAt(), currentTimestamp());
+
+            if (allocated) {
+                allocatedCount++;
+                if (waitMinutes >= 0) {
+                    waitSumAllocated = waitSumAllocated + waitMinutes;
+                    waitSamples++;
+                    if (waitMinutes > longestWait) {
+                        longestWait = waitMinutes;
+                        longestWaitGuest = booking.getGuestNameSnapshot();
+                    }
+                }
+            } else if (waitMinutes > longestWaiting) {
+                longestWaiting = waitMinutes;
+                longestWaitingGuest = booking.getGuestNameSnapshot();
+                longestWaitingType = booking.getRequestedRoomType();
+            }
+
+            if ("Deluxe".equalsIgnoreCase(booking.getRequestedRoomType())) {
+                deluxeCount++;
+            } else if ("Suite".equalsIgnoreCase(booking.getRequestedRoomType())) {
+                suiteCount++;
+            } else {
+                standardCount++;
+            }
+
+            // 还在等的没有"等多久才分到房"这个数字,明细栏印"-",
+            // 改由汇总区的 Longest still waiting 单独交代
             walkInCLI.displayDailyRegistrationReportRow(booking.getGuestNameSnapshot(),
-                    booking.getRegisteredAt(), booking.getRequestedRoomType(), allocated, waitMinutes);
+                    booking.getRegisteredAt(), booking.getRequestedRoomType(), allocated,
+                    allocated ? waitMinutes : -1);
         }
+
+        int total = filtered.getNumberOfEntries();
+        double averageWait = (waitSamples == 0) ? 0.0 : (double) waitSumAllocated / waitSamples;
+
+        walkInCLI.displayDailyRegistrationSummary(total, allocatedCount, total - allocatedCount,
+                averageWait, longestWait, longestWaitGuest,
+                longestWaiting, longestWaitingGuest, longestWaitingType);
+        walkInCLI.displayRoomTypeBreakdown(standardCount, deluxeCount, suiteCount);
         walkInCLI.displayReportEnd();
     }
 
@@ -365,7 +416,7 @@ public class WalkInControl {
         int[] hourlyCount = new int[24];
         int[] hourlyTotalWait = new int[24];
 
-        ListInterface<Booking> allBookings = collectWalkInBookings();
+        ListInterface<Booking> allBookings = collectWalkInBookings("ALL");
         for (int i = 1; i <= allBookings.getNumberOfEntries(); i++) {
             Booking booking = allBookings.getEntry(i);
             boolean dateMatches = "ALL".equals(dateFilter) || booking.getRegisteredAt().startsWith(dateFilter);
@@ -382,25 +433,78 @@ public class WalkInControl {
                 filtered.add(booking);
                 waitMinutesList.add(waitMinutes);
 
-                // 按小时聚合要跟主表用同一份"通过minWaitMinutes门槛"的资料,
-                // 不然门槛调高时主表显示"没有符合的记录",下面的小时明细却还是有数字,
-                // 使用者会看到自相矛盾的报表
-                int hour = Integer.parseInt(booking.getRegisteredAt().substring(11, 13));
-                hourlyCount[hour]++;
-                hourlyTotalWait[hour] += waitMinutes;
+                // 按小时聚合只收已分房的:还在等的等待时长是"算到此刻为止",会随着
+                // 报表什么时候跑而一直变大,混进平均值会把那个时段的数字整个拉爆
+                // (改之前 09:00 那格显示过 3934 分钟,就是被一笔还在等的记录污染的)
+                if (allocated) {
+                    int hour = Integer.parseInt(booking.getRegisteredAt().substring(11, 13));
+                    hourlyCount[hour]++;
+                    hourlyTotalWait[hour] += waitMinutes;
+                }
             }
         }
 
         sortByWaitMinutesDescending(filtered, waitMinutesList);
 
         walkInCLI.displayWaitTimeAnalysisHeader(minWaitMinutes, dateFilter);
+
+        int allocatedCount = 0;
+        int waitSumAllocated = 0;
+        int waitSamples = 0;
+        int longestWait = 0;
+        String longestWaitGuest = "-";
+        int longestWaiting = 0;
+        String longestWaitingGuest = "-";
+
         if (filtered.isEmpty()) {
             walkInCLI.displayNoReportRecords();
         } else {
             for (int i = 1; i <= filtered.getNumberOfEntries(); i++) {
                 Booking booking = filtered.getEntry(i);
+                int waitMinutes = waitMinutesList.getEntry(i);
+                boolean allocated = booking.getAssignedRoomNo() != null;
+
+                if (allocated) {
+                    allocatedCount++;
+                    if (waitMinutes >= 0) {
+                        waitSumAllocated = waitSumAllocated + waitMinutes;
+                        waitSamples++;
+                        if (waitMinutes > longestWait) {
+                            longestWait = waitMinutes;
+                            longestWaitGuest = booking.getGuestNameSnapshot();
+                        }
+                    }
+                } else if (waitMinutes > longestWaiting) {
+                    longestWaiting = waitMinutes;
+                    longestWaitingGuest = booking.getGuestNameSnapshot();
+                }
+
                 walkInCLI.displayWaitTimeAnalysisRow(booking.getBookingId(), booking.getGuestNameSnapshot(),
-                        booking.getRequestedRoomType(), waitMinutesList.getEntry(i));
+                        booking.getRequestedRoomType(), waitMinutes, allocated);
+            }
+
+            int total = filtered.getNumberOfEntries();
+            double averageWait = (waitSamples == 0) ? 0.0 : (double) waitSumAllocated / waitSamples;
+            walkInCLI.displayWaitTimeAnalysisSummary(total, allocatedCount, total - allocatedCount,
+                    averageWait, longestWait, longestWaitGuest, longestWaiting, longestWaitingGuest);
+        }
+
+        // 先找出笔数最多是多少:柱状图要拿它当满格基准
+        int maxHourlyCount = 0;
+        for (int hour = 0; hour < 24; hour++) {
+            if (hourlyCount[hour] > maxHourlyCount) {
+                maxHourlyCount = hourlyCount[hour];
+            }
+        }
+
+        // 再把"笔数刚好等于最大值"的时段全部收起来。资料少的时候很容易出现好几个
+        // 时段并列最忙,只报第一个会误导——跟报表1的 Busiest room type 同一个处理方式
+        ListInterface<Integer> busiestHours = new ArrayBasedList<>();
+        if (maxHourlyCount > 0) {
+            for (int hour = 0; hour < 24; hour++) {
+                if (hourlyCount[hour] == maxHourlyCount) {
+                    busiestHours.add(hour);
+                }
             }
         }
 
@@ -411,6 +515,8 @@ public class WalkInControl {
                 walkInCLI.displayHourlyBreakdownRow(hour, hourlyCount[hour], average);
             }
         }
+        walkInCLI.displayBusiestHour(busiestHours.getIterator(),
+                busiestHours.getNumberOfEntries(), maxHourlyCount);
         walkInCLI.displayReportEnd();
     }
 
@@ -421,12 +527,25 @@ public class WalkInControl {
      * WALK_IN来源Booking"合起来,给两份报表共用。已取消的Booking在doCancel()
      * 被queue.remove()拿掉后就没有其他地方存着了,报表看不到——这是刻意的取舍,
      * 不是遗漏。
+     *
+     * @param roomTypeFilter "ALL"就三条队伍都收;指定房型就只走对应那一条队伍
+     *                       (已分房的那部分不在队伍里,只能照旧扫guestTable)
      */
-    private ListInterface<Booking> collectWalkInBookings() {
+    private ListInterface<Booking> collectWalkInBookings(String roomTypeFilter) {
         ListInterface<Booking> result = new ArrayBasedList<>();
-        appendQueueBookings(standardQueue, result);
-        appendQueueBookings(deluxeQueue, result);
-        appendQueueBookings(suiteQueue, result);
+
+        // 三条队伍本来就按房型分开存,筛某个房型时直接选中那一条,另外两条根本不用碰——
+        // 分区本身就是索引,不必先全部倒出来再逐笔比对房型
+        if ("ALL".equalsIgnoreCase(roomTypeFilter)) {
+            appendQueueBookings(standardQueue, result);
+            appendQueueBookings(deluxeQueue, result);
+            appendQueueBookings(suiteQueue, result);
+        } else {
+            QueueInterface<Booking> queue = getQueueForRoomType(roomTypeFilter);
+            if (queue != null) {
+                appendQueueBookings(queue, result);
+            }
+        }
 
         Iterator<Guest> guestIterator = guestTable.getIterator();
         while (guestIterator.hasNext()) {
@@ -451,15 +570,27 @@ public class WalkInControl {
 
     /**
      * 算两个"yyyy-MM-dd HH:mm:ss"时间字串相差几分钟。
+     *
+     * 资料档里只要有一行时间戳格式写坏,LocalDateTime.parse()就会抛
+     * DateTimeParseException(unchecked),不接的话整个程序会直接退出、连主菜单
+     * 都回不去。报表宁可那一格显示不出数字,也不该因为一行坏资料而整个挂掉,
+     * 所以这里接住,回传-1让呼叫方当"算不出来"处理。
      */
     private int minutesBetween(String start, String end) {
-        LocalDateTime startTime = LocalDateTime.parse(start, TIMESTAMP_FORMAT);
-        LocalDateTime endTime = LocalDateTime.parse(end, TIMESTAMP_FORMAT);
-        return (int) java.time.Duration.between(startTime, endTime).toMinutes();
+        try {
+            LocalDateTime startTime = LocalDateTime.parse(start, TIMESTAMP_FORMAT);
+            LocalDateTime endTime = LocalDateTime.parse(end, TIMESTAMP_FORMAT);
+            return (int) java.time.Duration.between(startTime, endTime).toMinutes();
+        } catch (java.time.format.DateTimeParseException e) {
+            return -1;
+        }
     }
 
     /**
      * 按registeredAt由小到大原地排序(selection sort),不能用Collections.sort()。
+     *
+     * registeredAt 是固定宽度的 "yyyy-MM-dd HH:mm:ss",所以字串的字典序刚好
+     * 等于时间的先后顺序,不用先 parse 成 LocalDateTime 再比。
      */
     private void sortBookingsByRegisteredAt(ListInterface<Booking> bookings) {
         int n = bookings.getNumberOfEntries();
@@ -523,9 +654,7 @@ public class WalkInControl {
     /**
      * 姓名唯一的校验就是"不能是空白",所以空白本身就直接当成"使用者要取消",
      * 不用另外留一个专属的取消信号——回传null代表取消。
-     */
-    /**
-     * 空白代表取消(回传null);打了东西但含数字或符号才是真的格式错误,原地重问。
+     * 打了东西但含数字或符号才是真的格式错误,原地重问。
      */
     private String promptValidName() {
         String name;

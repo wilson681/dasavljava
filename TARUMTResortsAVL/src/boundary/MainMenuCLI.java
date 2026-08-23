@@ -98,6 +98,17 @@ public class MainMenuCLI {
     }
 
     /**
+     * Holds the screen after a report has been printed, so the actor can
+     * actually read it before the Reports menu is drawn again and scrolls
+     * it out of view.
+     */
+    public void promptContinue() {
+        System.out.println();
+        System.out.print("Press Enter to continue...");
+        scanner.nextLine();
+    }
+
+    /**
      * Tells the actor the module they picked isn't built yet.
      * @param moduleName the module's display name
      */

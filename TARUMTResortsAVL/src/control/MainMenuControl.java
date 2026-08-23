@@ -287,6 +287,12 @@ public class MainMenuControl {
                 default:
                     mainMenuCLI.displayInvalidChoice();
             }
+
+            // 报表印完先停住,等使用者按Enter再重画选单——不然报表会立刻被
+            // 下一次的Reports菜单顶上去,根本来不及看。选0是要离开,不用停。
+            if (running) {
+                mainMenuCLI.promptContinue();
+            }
         }
     }
 }
