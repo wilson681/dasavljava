@@ -4,6 +4,7 @@ import entity.Booking;
 import entity.BillingRecord;
 import java.util.Iterator;
 import java.util.Scanner;
+import utility.ValidationUtility;
 
 /**
  * FrontDeskCLI.java
@@ -339,7 +340,7 @@ public class FrontDeskCLI {
 
     // ========== 报表共用输入 ==========
 
-   public String promptReportFromDate() {
+    public String promptReportFromDate() {
         while (true) {
             System.out.println();
             System.out.print("Enter from-date (yyyy-MM-dd, blank = no lower bound): ");
@@ -347,24 +348,27 @@ public class FrontDeskCLI {
             if (input.isEmpty()) {
                 return "0000-00-00";
             }
-            if (input.matches("\\d{4}-\\d{2}-\\d{2}")) {
-                return input;
+            String normalised = ValidationUtility.normalizeDate(input);
+            if (normalised != null) {
+                return normalised;
             }
-            System.out.println("Invalid date format, please use yyyy-MM-dd.");
+            System.out.println("Invalid date, please use yyyy-MM-dd (e.g. 2026-08-13).");
         }
     }
 
     public String promptReportToDate() {
         while (true) {
+            System.out.println();
             System.out.print("Enter to-date (yyyy-MM-dd, blank = no upper bound): ");
             String input = scanner.nextLine().trim();
             if (input.isEmpty()) {
                 return "9999-99-99";
             }
-            if (input.matches("\\d{4}-\\d{2}-\\d{2}")) {
-                return input;
+            String normalised = ValidationUtility.normalizeDate(input);
+            if (normalised != null) {
+                return normalised;
             }
-            System.out.println("Invalid date format, please use yyyy-MM-dd.");
+            System.out.println("Invalid date, please use yyyy-MM-dd (e.g. 2026-08-13).");
         }
     }
 

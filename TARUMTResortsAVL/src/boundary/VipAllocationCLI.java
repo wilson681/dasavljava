@@ -4,6 +4,7 @@ import entity.Booking;
 import entity.Room;
 import java.util.Iterator;
 import java.util.Scanner;
+import utility.ValidationUtility;
 
 /**
  * VipAllocationCLI.java - 模块2(VIP & Loyalty Tier Priority Room Allocation)的 console 界面。
@@ -223,16 +224,35 @@ public class VipAllocationCLI {
     }
 
     public String promptReportFromDate() {
-        System.out.println();
-        System.out.print("Enter from-date (yyyy-MM-dd, blank = no lower bound): ");
-        String input = scanner.nextLine().trim();
-        return input.isEmpty() ? "0000-00-00" : input;
+        while (true) {
+            System.out.println();
+            System.out.print("Enter from-date (yyyy-MM-dd, blank = no lower bound): ");
+            String input = scanner.nextLine().trim();
+            if (input.isEmpty()) {
+                return "0000-00-00";
+            }
+            String normalised = ValidationUtility.normalizeDate(input);
+            if (normalised != null) {
+                return normalised;
+            }
+            System.out.println("Invalid date, please use yyyy-MM-dd (e.g. 2026-08-13).");
+        }
     }
 
     public String promptReportToDate() {
-        System.out.print("Enter to-date (yyyy-MM-dd, blank = no upper bound): ");
-        String input = scanner.nextLine().trim();
-        return input.isEmpty() ? "9999-99-99" : input;
+        while (true) {
+            System.out.println();
+            System.out.print("Enter to-date (yyyy-MM-dd, blank = no upper bound): ");
+            String input = scanner.nextLine().trim();
+            if (input.isEmpty()) {
+                return "9999-99-99";
+            }
+            String normalised = ValidationUtility.normalizeDate(input);
+            if (normalised != null) {
+                return normalised;
+            }
+            System.out.println("Invalid date, please use yyyy-MM-dd (e.g. 2026-08-13).");
+        }
     }
 
     public void displayNoReportRecords() {

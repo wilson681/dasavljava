@@ -4,6 +4,7 @@ import entity.Booking;
 import entity.Room;
 import java.util.Iterator;
 import java.util.Scanner;
+import utility.ValidationUtility;
 
 /**
  * WalkInCLI.java - 模块1(Walk-In Registrations & Standard Booking)的 console 界面。
@@ -222,12 +223,11 @@ public class WalkInCLI {
             if (input.isEmpty()) {
                 return "ALL";
             }
-            try {
-                java.time.LocalDate.parse(input);
-                return input;
-            } catch (java.time.format.DateTimeParseException e) {
-                System.out.println("Invalid date format, please use yyyy-MM-dd (e.g. 2026-08-13).");
+            String normalised = ValidationUtility.normalizeDate(input);
+            if (normalised != null) {
+                return normalised;
             }
+            System.out.println("Invalid date, please use yyyy-MM-dd (e.g. 2026-08-13).");
         }
     }
 
