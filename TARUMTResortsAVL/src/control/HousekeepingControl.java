@@ -629,12 +629,95 @@ public class HousekeepingControl {
          */
         sortRoomsByRoomNumber(result);
 
-        housekeepingCLI
-                .displayHousekeepingStatusReport(
-                        result.getIterator(),
-                        roomTypeFilter,
-                        statusFilter
-                );
+        housekeepingCLI.displayHousekeepingStatusReportHeader(
+                roomTypeFilter, statusFilter);
+
+        if (result.isEmpty()) {
+            housekeepingCLI.displayNoReportRecords();
+            housekeepingCLI.displayReportEnd();
+            return;
+        }
+
+        /*
+         * 一边印明细,一边把汇总要用的数字累加起来,不用为了统计再扫第二遍。
+         * 按房型分开数,是为了回答"哪一型房已经完全卖不出去了"——那是这份
+         * 报表真正的价值,光看明细表要自己一行一行比对才看得出来。
+         */
+        int availableCount = 0;
+        int occupiedCount = 0;
+        int needsCleaningCount = 0;
+        int cleaningInProgressCount = 0;
+        int inspectedCount = 0;
+
+        int standardTotal = 0;
+        int deluxeTotal = 0;
+        int suiteTotal = 0;
+        int standardAvailable = 0;
+        int deluxeAvailable = 0;
+        int suiteAvailable = 0;
+
+        for (int i = 1; i <= result.getNumberOfEntries(); i++) {
+
+            Room room = result.getEntry(i);
+            String status = room.getStatus();
+            String roomType = room.getRoomType();
+            boolean sellable = "AVAILABLE".equalsIgnoreCase(status);
+
+            if (sellable) {
+                availableCount++;
+            } else if ("OCCUPIED".equalsIgnoreCase(status)) {
+                occupiedCount++;
+            } else if ("NEEDS_CLEANING".equalsIgnoreCase(status)) {
+                needsCleaningCount++;
+            } else if ("CLEANING_IN_PROGRESS".equalsIgnoreCase(status)) {
+                cleaningInProgressCount++;
+            } else if ("INSPECTED".equalsIgnoreCase(status)) {
+                inspectedCount++;
+            }
+
+            if ("Deluxe".equalsIgnoreCase(roomType)) {
+                deluxeTotal++;
+                if (sellable) {
+                    deluxeAvailable++;
+                }
+            } else if ("Suite".equalsIgnoreCase(roomType)) {
+                suiteTotal++;
+                if (sellable) {
+                    suiteAvailable++;
+                }
+            } else {
+                standardTotal++;
+                if (sellable) {
+                    standardAvailable++;
+                }
+            }
+
+            housekeepingCLI.displayHousekeepingStatusReportRow(
+                    room.getRoomNumber(), roomType, status);
+        }
+
+        // 已经筛到单一状态时,"各状态占比""还有几间能卖"这些分析全都是必然的答案
+        // (筛OCCUPIED就一定100%是OCCUPIED、一定0间能卖),印出来只是噪音,所以跳过
+        boolean showStatusAnalysis = "ALL".equalsIgnoreCase(statusFilter);
+
+        housekeepingCLI.displayHousekeepingStatusSummary(
+                result.getNumberOfEntries(),
+                availableCount,
+                occupiedCount,
+                needsCleaningCount,
+                cleaningInProgressCount,
+                inspectedCount,
+                showStatusAnalysis);
+
+        housekeepingCLI.displayRoomTypeBreakdownHeader();
+        housekeepingCLI.displayRoomTypeBreakdown(
+                "Standard", standardTotal, standardAvailable, showStatusAnalysis);
+        housekeepingCLI.displayRoomTypeBreakdown(
+                "Deluxe", deluxeTotal, deluxeAvailable, showStatusAnalysis);
+        housekeepingCLI.displayRoomTypeBreakdown(
+                "Suite", suiteTotal, suiteAvailable, showStatusAnalysis);
+
+        housekeepingCLI.displayReportEnd();
     }
 
     private void sortRoomsByRoomNumber(
@@ -705,199 +788,264 @@ public class HousekeepingControl {
             return;
         }
 
-        int minimumRecords = promptValidMinimumHistoryRecords();
-        if (minimumRecords == Integer.MIN_VALUE) {
+        int minimumRollbacks = promptValidMinimumRollbacks();
+        if (minimumRollbacks == Integer.MIN_VALUE) {
             housekeepingCLI.displayCancelled();
             return;
         }
 
-        ListInterface<Room> resultRooms =
-                new ArrayBasedList<>();
-
-        ListInterface<Integer> recordCounts =
-                new ArrayBasedList<>();
+        ListInterface<Room> resultRooms = new ArrayBasedList<>();
+        ListInterface<Integer> updateCounts = new ArrayBasedList<>();
+        ListInterface<Integer> rollbackCounts = new ArrayBasedList<>();
 
         /*
          * Linear Search
          *
          * Filter 1 = Room Type
-         * Filter 2 = Minimum History Records
+         * Filter 2 = Minimum Rollbacks
+         * Filter 3 = 只收真的动过状态的房间(updates > 0);从开机到现在什么都没
+         *            发生的房间放进"活动报表"里只会把表格撑长,没有资讯量
          */
-        for (int i = 1;
-                i <= roomList.getNumberOfEntries();
-                i++) {
+        for (int i = 1; i <= roomList.getNumberOfEntries(); i++) {
 
-            Room room =
-                    roomList.getEntry(i);
-
-            int numberOfRecords =
-                    room.getRoomHistory()
-                            .getStatusStack()
-                            .size();
+            Room room = roomList.getEntry(i);
 
             boolean roomTypeMatches =
-                    "ALL".equalsIgnoreCase(
-                            roomTypeFilter)
-                    || room.getRoomType()
-                            .equalsIgnoreCase(
-                                    roomTypeFilter
-                            );
+                    "ALL".equalsIgnoreCase(roomTypeFilter)
+                    || room.getRoomType().equalsIgnoreCase(roomTypeFilter);
 
-            boolean recordCountMatches =
-                    numberOfRecords
-                    >= minimumRecords;
-
-            if (roomTypeMatches
-                    && recordCountMatches) {
-
-                resultRooms.add(room);
-
-                recordCounts.add(
-                        numberOfRecords
-                );
+            if (!roomTypeMatches) {
+                continue;
             }
+
+            int rollbacks = countRollbacksForRoom(room.getRoomNumber());
+
+            if (rollbacks < minimumRollbacks) {
+                continue;
+            }
+
+            int updates = countStatusUpdates(room, rollbacks);
+
+            if (updates == 0) {
+                continue;
+            }
+
+            resultRooms.add(room);
+            updateCounts.add(updates);
+            rollbackCounts.add(rollbacks);
         }
 
         /*
-         * Selection Sort:
-         * highest number of records first.
+         * Merge Sort: 回滚次数由多到少;次数一样时房号小的排前面。
+         * 排序键是回滚次数,因为这份报表要回答的是"哪间房最常出错"。
          */
-        sortHistoryReport(
-                resultRooms,
-                recordCounts
-        );
+        sortHistoryReport(resultRooms, updateCounts, rollbackCounts);
 
-        housekeepingCLI
-                .displayRoomHistoryReportHeader(
-                        roomTypeFilter,
-                        minimumRecords
-                );
+        housekeepingCLI.displayRoomHistoryReportHeader(
+                roomTypeFilter, minimumRollbacks);
 
         if (resultRooms.isEmpty()) {
-
-            housekeepingCLI
-                    .displayNoReportRecords();
-
-            housekeepingCLI
-                    .displayReportEnd();
-
+            housekeepingCLI.displayNoReportRecords();
+            housekeepingCLI.displayReportEnd();
             return;
         }
 
-        for (int i = 1;
-                i <= resultRooms
-                        .getNumberOfEntries();
-                i++) {
+        int totalUpdates = 0;
+        int totalRollbacks = 0;
 
-            housekeepingCLI
-                    .displayRoomHistoryReportRow(
-                            resultRooms.getEntry(i),
-                            recordCounts.getEntry(i)
-                    );
+        for (int i = 1; i <= resultRooms.getNumberOfEntries(); i++) {
+
+            Room room = resultRooms.getEntry(i);
+            int updates = updateCounts.getEntry(i);
+            int rollbacks = rollbackCounts.getEntry(i);
+
+            totalUpdates = totalUpdates + updates;
+            totalRollbacks = totalRollbacks + rollbacks;
+
+            housekeepingCLI.displayRoomHistoryReportRow(
+                    room.getRoomNumber(),
+                    room.getRoomType(),
+                    room.getStatus(),
+                    updates,
+                    rollbacks);
         }
+
+        // 排序后第一笔就是回滚最多的那间房
+        housekeepingCLI.displayRoomHistorySummary(
+                resultRooms.getNumberOfEntries(),
+                totalUpdates,
+                totalRollbacks,
+                resultRooms.getEntry(1).getRoomNumber(),
+                rollbackCounts.getEntry(1));
 
         housekeepingCLI.displayReportEnd();
     }
 
-    private void sortHistoryReport(
-            ListInterface<Room> rooms,
-            ListInterface<Integer> recordCounts) {
+    /**
+     * 数这间房在 rollbackLog 里出现几次。
+     *
+     * 为什么不看 statusStack:回滚会 pop 掉栈里那一笔,证据就消失了。
+     * rollbackLog 是只增不删的流水帐,只有它记得住这间房被回滚过几次。
+     */
+    private int countRollbacksForRoom(String roomNumber) {
 
-        int n =
-                rooms.getNumberOfEntries();
+        int count = 0;
 
-        for (int i = 1;
-                i <= n - 1;
-                i++) {
-
-            int largestPosition = i;
-
-            for (int j = i + 1;
-                    j <= n;
-                    j++) {
-
-                int largestCount =
-                        recordCounts.getEntry(
-                                largestPosition
-                        );
-
-                int candidateCount =
-                        recordCounts.getEntry(j);
-
-                /*
-                 * Higher record count first.
-                 */
-                if (candidateCount
-                        > largestCount) {
-
-                    largestPosition = j;
-
-                } else if (candidateCount
-                        == largestCount) {
-
-                    /*
-                     * Tie:
-                     * smaller room number first.
-                     */
-                    Room candidateRoom =
-                            rooms.getEntry(j);
-
-                    Room largestRoom =
-                            rooms.getEntry(
-                                    largestPosition
-                            );
-
-                    if (candidateRoom
-                            .getRoomNumber()
-                            .compareToIgnoreCase(
-                                    largestRoom
-                                            .getRoomNumber()
-                            ) < 0) {
-
-                        largestPosition = j;
-                    }
-                }
-            }
-
-            if (largestPosition != i) {
-
-                /*
-                 * Swap Room.
-                 */
-                Room tempRoom =
-                        rooms.getEntry(i);
-
-                rooms.replace(
-                        i,
-                        rooms.getEntry(
-                                largestPosition
-                        )
-                );
-
-                rooms.replace(
-                        largestPosition,
-                        tempRoom
-                );
-
-                /*
-                 * Swap corresponding history count.
-                 */
-                Integer tempCount =
-                        recordCounts.getEntry(i);
-
-                recordCounts.replace(
-                        i,
-                        recordCounts.getEntry(
-                                largestPosition
-                        )
-                );
-
-                recordCounts.replace(
-                        largestPosition,
-                        tempCount
-                );
+        for (int i = 1; i <= rollbackLog.getNumberOfEntries(); i++) {
+            if (rollbackLog.getEntry(i).getRoomNumber()
+                    .equalsIgnoreCase(roomNumber)) {
+                count++;
             }
         }
+        return count;
+    }
+
+    /**
+     * 还原这间房总共被记录过几次状态更新。
+     *
+     * 栈里现在剩几笔 = 推进过几次 - 回滚掉几次,反过来解:
+     *     更新次数 = (栈里笔数 - 1) + 回滚次数
+     * 减 1 是因为最底那笔是开机时的初始状态,不算一次"更新"。
+     *
+     * 注意:栈的容量上限是 MAX_HISTORY_RECORDS,满了之后最旧的会被挤掉,
+     * 那种情况这个数字会少算。以本系统的资料量不会发生。
+     */
+    private int countStatusUpdates(Room room, int rollbacks) {
+
+        int entries = room.getRoomHistory().getStatusStack().size();
+        int pushesKept = (entries > 0) ? entries - 1 : 0;
+
+        return pushesKept + rollbacks;
+    }
+
+    /**
+     * 报表2的排序:回滚次数由多到少;次数一样时,房号小的排前面。
+     *
+     * 用 merge sort(分治)而不是 selection sort:
+     * - 把区间对半切到只剩一个元素(天然有序),再两两合并回来,O(n log n);
+     *   selection sort 每一轮都要扫过剩下全部元素找最大的,是 O(n^2)
+     * - merge sort 是稳定排序:合并时"分不出先后"的情况优先取左半边,
+     *   原本的相对顺序不会被打乱
+     *
+     * 这里排的是三条并行清单(房间 / 更新次数 / 回滚次数),合并时必须一起搬,
+     * 否则第 i 笔的房号会对到别间房的数字。
+     */
+    private void sortHistoryReport(
+            ListInterface<Room> rooms,
+            ListInterface<Integer> updateCounts,
+            ListInterface<Integer> rollbackCounts) {
+
+        mergeSortHistoryReport(
+                rooms, updateCounts, rollbackCounts,
+                1, rooms.getNumberOfEntries());
+    }
+
+    /**
+     * 递归把 left..right 这一段排好:先各自排好左右两半,再合并。
+     */
+    private void mergeSortHistoryReport(
+            ListInterface<Room> rooms,
+            ListInterface<Integer> updateCounts,
+            ListInterface<Integer> rollbackCounts,
+            int left,
+            int right) {
+
+        // 只剩一个元素(或空的),本身就是有序的,递归到底
+        if (left >= right) {
+            return;
+        }
+
+        int middle = (left + right) / 2;
+
+        mergeSortHistoryReport(rooms, updateCounts, rollbackCounts, left, middle);
+        mergeSortHistoryReport(rooms, updateCounts, rollbackCounts, middle + 1, right);
+
+        mergeHistoryReport(rooms, updateCounts, rollbackCounts, left, middle, right);
+    }
+
+    /**
+     * 合并 left..middle 和 middle+1..right 这两段(各自已经排好序)。
+     * 两边各出一个比大小,该排前面的先放进暂存阵列,最后整段抄回清单。
+     */
+    private void mergeHistoryReport(
+            ListInterface<Room> rooms,
+            ListInterface<Integer> updateCounts,
+            ListInterface<Integer> rollbackCounts,
+            int left,
+            int middle,
+            int right) {
+
+        int size = right - left + 1;
+
+        // 普通 Java 阵列,不是 Collections Framework 的东西
+        Room[] mergedRooms = new Room[size];
+        int[] mergedUpdates = new int[size];
+        int[] mergedRollbacks = new int[size];
+
+        int i = left;          // 左半边目前看到哪
+        int j = middle + 1;    // 右半边目前看到哪
+        int k = 0;             // 暂存阵列该填第几格
+
+        while (i <= middle && j <= right) {
+
+            if (comesFirstInHistoryReport(
+                    rooms.getEntry(i), rollbackCounts.getEntry(i),
+                    rooms.getEntry(j), rollbackCounts.getEntry(j))) {
+
+                mergedRooms[k] = rooms.getEntry(i);
+                mergedUpdates[k] = updateCounts.getEntry(i);
+                mergedRollbacks[k] = rollbackCounts.getEntry(i);
+                i++;
+
+            } else {
+
+                mergedRooms[k] = rooms.getEntry(j);
+                mergedUpdates[k] = updateCounts.getEntry(j);
+                mergedRollbacks[k] = rollbackCounts.getEntry(j);
+                j++;
+            }
+            k++;
+        }
+
+        // 其中一边先走完,另一边剩下的直接接上去(它们本来就是排好的)
+        while (i <= middle) {
+            mergedRooms[k] = rooms.getEntry(i);
+            mergedUpdates[k] = updateCounts.getEntry(i);
+            mergedRollbacks[k] = rollbackCounts.getEntry(i);
+            i++;
+            k++;
+        }
+
+        while (j <= right) {
+            mergedRooms[k] = rooms.getEntry(j);
+            mergedUpdates[k] = updateCounts.getEntry(j);
+            mergedRollbacks[k] = rollbackCounts.getEntry(j);
+            j++;
+            k++;
+        }
+
+        for (k = 0; k < size; k++) {
+            rooms.replace(left + k, mergedRooms[k]);
+            updateCounts.replace(left + k, mergedUpdates[k]);
+            rollbackCounts.replace(left + k, mergedRollbacks[k]);
+        }
+    }
+
+    /**
+     * 排序规则:回滚次数多的排前面;次数一样时,房号小的排前面。
+     *
+     * @return true 代表 a 该排在 b 前面
+     */
+    private boolean comesFirstInHistoryReport(
+            Room roomA, int rollbacksA,
+            Room roomB, int rollbacksB) {
+
+        if (rollbacksA != rollbacksB) {
+            return rollbacksA > rollbacksB;
+        }
+
+        return roomA.getRoomNumber()
+                .compareToIgnoreCase(roomB.getRoomNumber()) <= 0;
     }
 
     // =========================================================
@@ -910,126 +1058,6 @@ public class HousekeepingControl {
     // only from rollbackLog, the permanent, append-only record
     // of every rollback that actually succeeded.
     // =========================================================
-
-    void doGenerateRollbackFrequencyReport() {
-
-        String roomNumberFilter =
-                housekeepingCLI.promptReportRoomNumber();
-
-        String fromDate =
-                housekeepingCLI.promptReportFromDate();
-
-        String toDate =
-                housekeepingCLI.promptReportToDate();
-
-        ListInterface<String> roomNumbers =
-                new ArrayBasedList<>();
-
-        ListInterface<Integer> rollbackCounts =
-                new ArrayBasedList<>();
-
-        /*
-         * Linear Search + group-by-room, built without a Map:
-         * scan rollbackLog once, and for each entry either bump
-         * an existing room's counter or append a new one.
-         */
-        for (int i = 1;
-                i <= rollbackLog.getNumberOfEntries();
-                i++) {
-
-            RollbackLogEntry entry =
-                    rollbackLog.getEntry(i);
-
-            boolean roomMatches =
-                    "ALL".equalsIgnoreCase(roomNumberFilter)
-                    || entry.getRoomNumber()
-                            .equalsIgnoreCase(roomNumberFilter);
-
-            boolean dateMatches =
-                    entry.getDate().compareTo(fromDate) >= 0
-                    && entry.getDate().compareTo(toDate) <= 0;
-
-            if (!roomMatches || !dateMatches) {
-                continue;
-            }
-
-            int existingPosition =
-                    roomNumbers.indexOf(entry.getRoomNumber());
-
-            if (existingPosition == -1) {
-                roomNumbers.add(entry.getRoomNumber());
-                rollbackCounts.add(1);
-            } else {
-                int updatedCount =
-                        rollbackCounts.getEntry(existingPosition) + 1;
-                rollbackCounts.replace(existingPosition, updatedCount);
-            }
-        }
-
-        /*
-         * Selection Sort:
-         * highest rollback count first.
-         */
-        sortRollbackReport(roomNumbers, rollbackCounts);
-
-        housekeepingCLI.displayRollbackFrequencyReportHeader(
-                roomNumberFilter, fromDate, toDate);
-
-        if (roomNumbers.isEmpty()) {
-            housekeepingCLI.displayNoReportRecords();
-            housekeepingCLI.displayReportEnd();
-            return;
-        }
-
-        for (int i = 1; i <= roomNumbers.getNumberOfEntries(); i++) {
-            housekeepingCLI.displayRollbackFrequencyReportRow(
-                    roomNumbers.getEntry(i),
-                    rollbackCounts.getEntry(i));
-        }
-
-        housekeepingCLI.displayReportEnd();
-    }
-
-    private void sortRollbackReport(
-            ListInterface<String> roomNumbers,
-            ListInterface<Integer> rollbackCounts) {
-
-        int n = roomNumbers.getNumberOfEntries();
-
-        for (int i = 1; i <= n - 1; i++) {
-
-            int largestPosition = i;
-
-            for (int j = i + 1; j <= n; j++) {
-
-                int largestCount =
-                        rollbackCounts.getEntry(largestPosition);
-                int candidateCount =
-                        rollbackCounts.getEntry(j);
-
-                if (candidateCount > largestCount) {
-                    largestPosition = j;
-                } else if (candidateCount == largestCount) {
-                    // Tie: smaller room number first.
-                    if (roomNumbers.getEntry(j).compareToIgnoreCase(
-                            roomNumbers.getEntry(largestPosition)) < 0) {
-                        largestPosition = j;
-                    }
-                }
-            }
-
-            if (largestPosition != i) {
-
-                String tempRoom = roomNumbers.getEntry(i);
-                roomNumbers.replace(i, roomNumbers.getEntry(largestPosition));
-                roomNumbers.replace(largestPosition, tempRoom);
-
-                Integer tempCount = rollbackCounts.getEntry(i);
-                rollbackCounts.replace(i, rollbackCounts.getEntry(largestPosition));
-                rollbackCounts.replace(largestPosition, tempCount);
-            }
-        }
-    }
 
     // =========================================================
     // Stack History Management
@@ -1148,20 +1176,20 @@ public class HousekeepingControl {
         }
     }
 
-    private int promptValidMinimumHistoryRecords() {
+    private int promptValidMinimumRollbacks() {
 
-        int minimumRecords;
+        int minimumRollbacks;
 
         while (true) {
 
-            minimumRecords = housekeepingCLI.promptMinimumHistoryRecords();
+            minimumRollbacks = housekeepingCLI.promptMinimumRollbacks();
 
-            if (minimumRecords == Integer.MIN_VALUE) {
+            if (minimumRollbacks == Integer.MIN_VALUE) {
                 return Integer.MIN_VALUE;
             }
 
-            if (minimumRecords >= 0) {
-                return minimumRecords;
+            if (minimumRollbacks >= 0) {
+                return minimumRollbacks;
             }
 
             housekeepingCLI.displayInvalidReportFilter();

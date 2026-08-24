@@ -79,13 +79,12 @@ public class MainMenuCLI {
         System.out.println("Housekeeping and Task Log");
         System.out.println("   5) Housekeeping Status Report");
         System.out.println("   6) Room History Activity Report");
-        System.out.println("   7) Rollback Frequency Report");
         System.out.println("Front-Desk Service");
-        System.out.println("   8) Check-Out Revenue Report");
-        System.out.println("   9) Room Utilisation & Status Report");
+        System.out.println("   7) Check-Out Revenue Report");
+        System.out.println("   8) Room Utilisation & Status Report");
         System.out.println("Loyalty and Rewards Service");
-        System.out.println("  10) Points Expiry Report");
-        System.out.println("  11) Top Redeemed Items Report");
+        System.out.println("   9) Points Expiry Report");
+        System.out.println("  10) Top Redeemed Items Report");
         System.out.println("   0) Back to Main Menu");
         System.out.print("Enter your choice: ");
 

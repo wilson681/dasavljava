@@ -467,19 +467,23 @@ public class WalkInCLI {
      *
      * 笔数超过 MAX_BAR_WIDTH 时截断并在结尾加"+",避免一行印几百颗星把表格撑爆;
      * 真正的数字本来就印在旁边那一栏,不会因为截断而看不到。
+     *
+     * 星号最多20颗,用字串直接一颗一颗串起来就够了。
      */
     private String bar(int value) {
         if (value <= 0) {
             return "";
         }
-        int stars = Math.min(value, MAX_BAR_WIDTH);
-        StringBuilder result = new StringBuilder();
+
+        int stars = (value < MAX_BAR_WIDTH) ? value : MAX_BAR_WIDTH;
+
+        String result = "";
         for (int i = 0; i < stars; i++) {
-            result.append('*');
+            result = result + "*";
         }
         if (value > MAX_BAR_WIDTH) {
-            result.append('+');
+            result = result + "+";
         }
-        return result.toString();
+        return result;
     }
 }
