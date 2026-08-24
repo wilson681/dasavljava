@@ -81,7 +81,7 @@ public class MainMenuCLI {
         System.out.println("   6) Room History Activity Report");
         System.out.println("Front-Desk Service");
         System.out.println("   7) Check-Out Revenue Report");
-        System.out.println("   8) Room Utilisation & Status Report");
+        System.out.println("   8) In-House Guests & Outstanding Charges");
         System.out.println("Loyalty and Rewards Service");
         System.out.println("   9) Points Expiry Report");
         System.out.println("  10) Top Redeemed Items Report");

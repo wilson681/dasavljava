@@ -287,7 +287,7 @@ public class MainMenuControl {
                     frontDeskControl.doCheckOutRevenueReport();
                     break;
                 case 8:
-                    frontDeskControl.doRoomUtilisationReport();
+                    frontDeskControl.doInHouseGuestsReport();
                     break;
                 case 9:
                     loyaltyControl.doPointsExpiryReport();
