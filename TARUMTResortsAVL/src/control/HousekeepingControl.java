@@ -1049,17 +1049,6 @@ public class HousekeepingControl {
     }
 
     // =========================================================
-    // Report 3
-    // Rollback Frequency Report
-    //
-    // Answers "which room/shift keeps getting rolled back" --
-    // something the Stack-based history alone cannot answer,
-    // because a pop() destroys the evidence. This report reads
-    // only from rollbackLog, the permanent, append-only record
-    // of every rollback that actually succeeded.
-    // =========================================================
-
-    // =========================================================
     // Stack History Management
     // =========================================================
 
