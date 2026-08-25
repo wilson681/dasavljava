@@ -4,6 +4,7 @@ import entity.Booking;
 import entity.BillingRecord;
 import java.util.Iterator;
 import java.util.Scanner;
+import utility.ValidationUtility;
 
 /**
  * FrontDeskCLI.java
@@ -12,6 +13,8 @@ import java.util.Scanner;
  * Responsible only for user input and output.
  */
 public class FrontDeskCLI {
+
+    private static final int MAX_BAR_WIDTH = 20;   // 星号柱状图最多印几颗
 
     private Scanner scanner;
 
@@ -118,8 +121,7 @@ public class FrontDeskCLI {
 
     /**
      * Prints the charges for rooms the guest is still occupying.
-     */
-    /**
+     *
      * Only called when the guest has at least one room still checked in —
      * FrontDeskControl skips this whole block entirely otherwise, instead of
      * printing an empty section under a header that doesn't apply.
@@ -339,7 +341,7 @@ public class FrontDeskCLI {
 
     // ========== 报表共用输入 ==========
 
-   public String promptReportFromDate() {
+    public String promptReportFromDate() {
         while (true) {
             System.out.println();
             System.out.print("Enter from-date (yyyy-MM-dd, blank = no lower bound): ");
@@ -347,24 +349,27 @@ public class FrontDeskCLI {
             if (input.isEmpty()) {
                 return "0000-00-00";
             }
-            if (input.matches("\\d{4}-\\d{2}-\\d{2}")) {
-                return input;
+            String normalised = ValidationUtility.normalizeDate(input);
+            if (normalised != null) {
+                return normalised;
             }
-            System.out.println("Invalid date format, please use yyyy-MM-dd.");
+            System.out.println("Invalid date, please use yyyy-MM-dd (e.g. 2026-08-13).");
         }
     }
 
     public String promptReportToDate() {
         while (true) {
+            System.out.println();
             System.out.print("Enter to-date (yyyy-MM-dd, blank = no upper bound): ");
             String input = scanner.nextLine().trim();
             if (input.isEmpty()) {
                 return "9999-99-99";
             }
-            if (input.matches("\\d{4}-\\d{2}-\\d{2}")) {
-                return input;
+            String normalised = ValidationUtility.normalizeDate(input);
+            if (normalised != null) {
+                return normalised;
             }
-            System.out.println("Invalid date format, please use yyyy-MM-dd.");
+            System.out.println("Invalid date, please use yyyy-MM-dd (e.g. 2026-08-13).");
         }
     }
 
@@ -401,49 +406,96 @@ public class FrontDeskCLI {
         }
     }
 
-    public double promptReportMinAmount() {
-        while (true) {
-            System.out.print("Enter minimum bill amount (RM, 0 for no minimum): ");
-            try {
-                return Double.parseDouble(scanner.nextLine().trim());
-            } catch (NumberFormatException e) {
-                System.out.println("Invalid amount, please enter a number.");
-            }
-        }
-    }
-
     public void displayCheckOutRevenueReportHeader(String fromDate, String toDate,
-                                                    String tierFilter, double minAmount) {
+                                                    String tierFilter) {
         System.out.println();
         System.out.println("======================================================");
         System.out.println("             CHECK-OUT REVENUE REPORT");
         System.out.println("======================================================");
-        System.out.println("Date Range  : " + fromDate + " to " + toDate);
-        System.out.println("Tier Filter : " + tierFilter);
-        System.out.println("Min Amount  : RM " + minAmount);
+        System.out.println("Generated at      : " + generatedAt());
+        System.out.println("Date Range        : " + fromDate + " to " + toDate);
+        System.out.println("Tier Filter       : " + tierFilter);
         System.out.println("------------------------------------------------------");
-        System.out.printf("  %-10s %-20s %-10s %s%n", "Bill ID", "Guest", "Tier", "Total (RM)");
+        System.out.printf("  %-10s %-18s %-9s %10s %11s %10s%n",
+                "Bill ID", "Guest", "Tier", "Room(RM)", "Extras(RM)", "Total(RM)");
         System.out.println("------------------------------------------------------");
     }
 
-    public void displayCheckOutRevenueReportRow(String billingId, String guestName,
-                                                 String tier, double totalAmount) {
-        System.out.printf("  %-10s %-20s %-10s %12.2f%n", billingId, guestName, tier, totalAmount);
+    /**
+     * 房费和额外消费分开印:酒店最在意的就是这个比例——房费是重资产、低毛利,
+     * 额外消费(餐饮、迷你吧)才是高毛利收入。只印总额会把这个资讯丢掉。
+     */
+    public void displayCheckOutRevenueReportRow(String billingId, String guestName, String tier,
+                                                 double roomFee, double extraCharges, double totalAmount) {
+        System.out.printf("  %-10s %-18s %-9s %10.2f %11.2f %10.2f%n",
+                billingId, guestName, tier, roomFee, extraCharges, totalAmount);
     }
 
-    public void displayCheckOutRevenueReportSummary(double totalRevenue, double averageRevenue,
-                                                     int totalPoints, double highestSpend,
-                                                     Iterator<String> tierNames, Iterator<Double> tierRevenue) {
+    /**
+     * 房费和额外消费不另外开一整块——明细表已经有那两栏了,再开一块加总只是
+     * 栏位求和,不算分析。并进 Total revenue 那一行,资讯留着、版面不浪费。
+     */
+    public void displayCheckOutRevenueReportSummary(int billCount, double totalRevenue,
+                                                     double roomRevenue, double extraRevenue,
+                                                     double averageRevenue, double highestSpend,
+                                                     String highestSpendGuest, int totalPoints) {
         System.out.println("------------------------------------------------------");
-        System.out.printf("  Total revenue                RM %12.2f%n", totalRevenue);
-        System.out.printf("  Average per bill              RM %12.2f%n", averageRevenue);
-        System.out.printf("  Highest single spend          RM %12.2f%n", highestSpend);
-        System.out.printf("  Total points issued           %15d%n", totalPoints);
-        System.out.println("------------------------------------------------------");
-        System.out.println("  Revenue by tier:");
+        System.out.printf("  Bills settled         : %d%n", billCount);
+        System.out.printf("  Total revenue         : RM %10.2f   (room %.2f + extras %.2f)%n",
+                totalRevenue, roomRevenue, extraRevenue);
+        System.out.printf("  Average per bill      : RM %10.2f%n", averageRevenue);
+        System.out.printf("  Highest single bill   : RM %10.2f   (%s)%n", highestSpend, highestSpendGuest);
+        // 积分是负债不是收入:客人以后可以拿去兑换,所以要跟收入分开看
+        System.out.printf("  Loyalty points issued : %13d%n", totalPoints);
+    }
+
+    private void printMixLine(String label, double amount, double totalRevenue) {
+        double share = (totalRevenue <= 0) ? 0.0 : amount * 100.0 / totalRevenue;
+        System.out.printf("  %-15s RM %10.2f  (%5.1f%%)  %s%n",
+                label, amount, share, bar(share));
+    }
+
+    /**
+     * 按会员等级看收入分布。最后一行直接讲结论——哪一级贡献最多,
+     * 不用读的人自己比柱状图长度。
+     */
+    public void displayRevenueByTier(Iterator<String> tierNames, Iterator<Double> tierRevenue,
+                                      double totalRevenue, String topTierName, double topTierRevenue) {
+        System.out.println();
+        System.out.println("REVENUE BY TIER   (each * = 5% of total)");
         while (tierNames.hasNext() && tierRevenue.hasNext()) {
-            System.out.printf("    %-12s RM %12.2f%n", tierNames.next(), tierRevenue.next());
+            printMixLine(tierNames.next(), tierRevenue.next(), totalRevenue);
         }
+
+        double topShare = (totalRevenue <= 0) ? 0.0 : topTierRevenue * 100.0 / totalRevenue;
+        System.out.printf("  Top contributor : %s (RM %.2f, %.1f%%)%n",
+                topTierName, topTierRevenue, topShare);
+    }
+
+    // ========== 报表共用的显示工具 ==========
+
+    /**
+     * 报表产生的时间戳——报表是给管理层看的文件,一定要标明这份数字是什么时候的快照。
+     */
+    private String generatedAt() {
+        return java.time.LocalDateTime.now().withNano(0)
+                .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+    }
+
+    /**
+     * 星号柱状图:一颗星 = 5% 占比,数得出来。金额的量级差很大(几百到几千),
+     * 所以这里按百分比画,不像房间数那种可以一颗代表一间。
+     */
+    private String bar(double percentage) {
+        int stars = (int) (percentage / 5.0);
+        if (stars > MAX_BAR_WIDTH) {
+            stars = MAX_BAR_WIDTH;
+        }
+        String result = "";
+        for (int i = 0; i < stars; i++) {
+            result = result + "*";
+        }
+        return result;
     }
 
     // ========== 报表2:Room Utilisation & Status Report ==========
@@ -469,53 +521,60 @@ public class FrontDeskCLI {
         }
     }
 
-   public String promptReportStatusFilter() {
-        while (true) {
-            System.out.println();
-            System.out.println("Status Filter: 1) All  2) AVAILABLE  3) OCCUPIED  4) NEEDS_CLEANING"
-                    + "  5) CLEANING_IN_PROGRESS  6) INSPECTED");
-            System.out.print("Enter your choice: ");
-            String choice = scanner.nextLine().trim();
-            switch (choice) {
-                case "1":
-                    return "ALL";
-                case "2":
-                    return "AVAILABLE";
-                case "3":
-                    return "OCCUPIED";
-                case "4":
-                    return "NEEDS_CLEANING";
-                case "5":
-                    return "CLEANING_IN_PROGRESS";
-                case "6":
-                    return "INSPECTED";
-                default:
-                    System.out.println("Invalid input, please enter 1 - 6.");
-            }
-        }
-    }
-
-    public void displayRoomUtilisationReportHeader(String roomTypeFilter, String statusFilter,
-                                                    double occupancyRate, int occupied, int available,
-                                                    int inHousekeeping, double idleLoss) {
+    public void displayInHouseReportHeader(String checkOutBefore, String roomTypeFilter) {
         System.out.println();
         System.out.println("======================================================");
-        System.out.println("          ROOM UTILISATION & STATUS REPORT");
+        System.out.println("       IN-HOUSE GUESTS & OUTSTANDING CHARGES");
         System.out.println("======================================================");
+        System.out.println("Generated at     : " + generatedAt());
+        System.out.println("Check-Out Before : " + checkOutBefore);
         System.out.println("Room Type Filter : " + roomTypeFilter);
-        System.out.println("Status Filter    : " + statusFilter);
         System.out.println("------------------------------------------------------");
-        System.out.printf("  Occupancy rate                %11.1f%%%n", occupancyRate);
-        System.out.printf("  Occupied / Available           %8d / %d%n", occupied, available);
-        System.out.printf("  Rooms in housekeeping pipeline  %11d%n", inHousekeeping);
-        System.out.printf("  Idle capacity loss (1 night)  RM %12.2f%n", idleLoss);
-        System.out.println("------------------------------------------------------");
-        System.out.printf("  %-8s %-10s %-22s %s%n", "Room", "Type", "Status", "Cumulative Revenue (RM)");
+        System.out.printf("  %-16s %-9s %-6s %-9s %-12s %7s %12s%n",
+                "Guest", "Tier", "Room", "Type", "Check-Out", "Nights", "Accrued(RM)");
         System.out.println("------------------------------------------------------");
     }
 
-    public void displayRoomUtilisationReportRow(String roomNumber, String roomType,
-                                                 String status, double cumulativeRevenue) {
-        System.out.printf("  %-8s %-10s %-22s %12.2f%n", roomNumber, roomType, status, cumulativeRevenue);
+    /**
+     * 一行代表一间还被占用的房间。同一位客人订了两间房就会有两行——
+     * 前台和客房部关心的单位是房间,不是人。
+     *
+     * @param accrued 到目前为止累积的房费,还没结帐
+     */
+    public void displayInHouseReportRow(String guestName, String tier, String roomNumber,
+                                         String roomType, String checkOutDate,
+                                         int nights, double accrued) {
+        System.out.printf("  %-16s %-9s %-6s %-9s %-12s %7d %12.2f%n",
+                guestName, tier, roomNumber, roomType, checkOutDate, nights, accrued);
     }
+
+    /**
+     * 汇总:三个部门各看一部分——
+     * 前台看有几位客人在店、谁最快要走;财务看未结款有多少;
+     * 客房部看占用率(还有多少房间被占着)。
+     */
+    public void displayInHouseSummary(int roomsOccupied, int totalRooms, double occupancyRate,
+                                       double totalAccrued, double averageAccrued,
+                                       String soonestGuest, String soonestDate, String soonestRoom) {
+        System.out.println("------------------------------------------------------");
+        System.out.printf("  Guests in house       : %d%n", roomsOccupied);
+        System.out.printf("  Rooms occupied        : %d of %d   (%.1f%%)%n",
+                roomsOccupied, totalRooms, occupancyRate);
+        // 这笔钱还没进帐——客人还在住,帐单要等退房才产生
+        System.out.printf("  Total accrued charges : RM %10.2f   (not yet settled)%n", totalAccrued);
+        System.out.printf("  Average per room      : RM %10.2f%n", averageAccrued);
+        System.out.printf("  Departing soonest     : %s  (%s, room %s)%n",
+                soonestGuest, soonestDate, soonestRoom);
+    }
+
+    public void displayDepartureScheduleHeader() {
+        System.out.println();
+        System.out.println("DEPARTURE SCHEDULE   (rooms freeing up)");
+    }
+
+    public void displayDepartureScheduleRow(String checkOutDate, int roomCount, String roomNumbers) {
+        System.out.printf("  %-12s %d room(s)   %s%n", checkOutDate, roomCount, roomNumbers);
+    }
+
+
 }

@@ -304,26 +304,33 @@ public class FrontDeskControl {
     // ========== 报表1:Check-Out Revenue Report ==========
 
     /**
-     * filter=日期区间+客人等级+金额门槛,按总额降序(merge sort)。资料来源是
-     * guestTable底下每位客人的billingRecords,等级用guest.getTier()——这是入住
-     * 那天的等级快照,反映的是"这笔消费发生当下客人是什么等级",不是现在的等级。
+     * filter=日期区间+客人等级,按总额降序(merge sort)。
+     *
+     * 刻意不做"最低金额"筛选:那会让 Total revenue 变成筛选后的子集,
+     * 一份叫 Revenue Report 的东西,总收入不该因为筛选条件而失真。
+     *
+     * 这是给管理层看的营运报表,所以不做"单一客人"的筛选——那是
+     * "3) View Billing Details" 那个 use case 的事,报表不该重复它。
+     *
+     * 等级用 guest.getTier(),那是入住那天的等级快照,反映"这笔消费发生当下客人
+     * 是什么等级",不是现在的等级。
      */
     void doCheckOutRevenueReport() {
         String fromDate = frontDeskCLI.promptReportFromDate();
         String toDate = frontDeskCLI.promptReportToDate();
         String tierFilter = frontDeskCLI.promptReportTierFilter();
-        double minAmount = frontDeskCLI.promptReportMinAmount();
 
         ListInterface<BillingRecord> filteredBills = new ArrayBasedList<>();
-        ListInterface<String> filteredNames = new ArrayBasedList<>();
-        ListInterface<String> filteredTiers = new ArrayBasedList<>();
 
         ListInterface<String> tierNames = new ArrayBasedList<>();
         ListInterface<Double> tierRevenue = new ArrayBasedList<>();
 
         double totalRevenue = 0.0;
+        double totalRoomFee = 0.0;
+        double totalExtras = 0.0;
         int totalPoints = 0;
         double highestSpend = 0.0;
+        String highestSpendGuest = "-";
 
         Iterator<Guest> guestIterator = guestTable.getIterator();
         while (guestIterator.hasNext()) {
@@ -335,19 +342,19 @@ public class FrontDeskControl {
                         && bill.getDate().compareTo(toDate) <= 0;
                 boolean tierMatches = "ALL".equalsIgnoreCase(tierFilter)
                         || tierFilter.equalsIgnoreCase(guest.getTier());
-                boolean amountMatches = bill.getTotalAmount() >= minAmount;
-                if (!dateMatches || !tierMatches || !amountMatches) {
+                if (!dateMatches || !tierMatches) {
                     continue;
                 }
 
                 filteredBills.add(bill);
-                filteredNames.add(guest.getName());
-                filteredTiers.add(guest.getTier());
 
                 totalRevenue = totalRevenue + bill.getTotalAmount();
+                totalRoomFee = totalRoomFee + bill.getRoomFee();
+                totalExtras = totalExtras + bill.getExtraCharges();
                 totalPoints = totalPoints + bill.getPointsEarned();
                 if (bill.getTotalAmount() > highestSpend) {
                     highestSpend = bill.getTotalAmount();
+                    highestSpendGuest = guest.getName();
                 }
                 addToTierRevenue(tierNames, tierRevenue, guest.getTier(), bill.getTotalAmount());
             }
@@ -355,27 +362,42 @@ public class FrontDeskControl {
 
         int n = filteredBills.getNumberOfEntries();
         BillingRecord[] bills = new BillingRecord[n];
-        String[] names = new String[n];
-        String[] tiers = new String[n];
         for (int i = 1; i <= n; i++) {
             bills[i - 1] = filteredBills.getEntry(i);
-            names[i - 1] = filteredNames.getEntry(i);
-            tiers[i - 1] = filteredTiers.getEntry(i);
         }
-        mergeSortBillsByAmountDescending(bills, names, tiers, 0, n - 1);
+        mergeSortBillsByAmountDescending(bills, 0, n - 1);
 
-        frontDeskCLI.displayCheckOutRevenueReportHeader(fromDate, toDate, tierFilter, minAmount);
+        frontDeskCLI.displayCheckOutRevenueReportHeader(fromDate, toDate, tierFilter);
+
         if (n == 0) {
             frontDeskCLI.displayNoReportRecords();
-        } else {
-            for (int i = 0; i < n; i++) {
-                frontDeskCLI.displayCheckOutRevenueReportRow(bills[i].getBillingId(), names[i], tiers[i],
-                        bills[i].getTotalAmount());
-            }
+            frontDeskCLI.displayReportEnd();
+            return;
         }
-        frontDeskCLI.displayCheckOutRevenueReportSummary(totalRevenue,
-                (n == 0) ? 0.0 : totalRevenue / n, totalPoints, highestSpend,
-                tierNames.getIterator(), tierRevenue.getIterator());
+
+        for (int i = 0; i < n; i++) {
+            // 帐单身上只有确认号,姓名/等级要靠它回查客人——hash table 查一次 O(1)
+            Guest owner = findGuest(bills[i].getConfirmationNumber());
+            frontDeskCLI.displayCheckOutRevenueReportRow(
+                    bills[i].getBillingId(),
+                    (owner == null) ? "-" : owner.getName(),
+                    (owner == null) ? "-" : owner.getTier(),
+                    bills[i].getRoomFee(),
+                    bills[i].getExtraCharges(),
+                    bills[i].getTotalAmount());
+        }
+
+        frontDeskCLI.displayCheckOutRevenueReportSummary(n, totalRevenue, totalRoomFee, totalExtras,
+                totalRevenue / n, highestSpend, highestSpendGuest, totalPoints);
+
+        // 贡献最多的那一级要先算出来,不能让 boundary 一边印一边比——
+        // 那样它就得记住上一行的数字,变成在做业务判断了
+        int topTierPosition = findTopTierPosition(tierRevenue);
+
+        frontDeskCLI.displayRevenueByTier(
+                tierNames.getIterator(), tierRevenue.getIterator(), totalRevenue,
+                tierNames.getEntry(topTierPosition), tierRevenue.getEntry(topTierPosition));
+
         frontDeskCLI.displayReportEnd();
     }
 
@@ -395,191 +417,285 @@ public class FrontDeskControl {
     }
 
     /**
-     * merge sort:按totalAmount由大到小,names/tiers两个平行阵列跟着一起换位置。
+     * 找出收入最高的那一级在清单里的位置。金额一样时取先出现的那一级
+     * (等级本来就是按第一次出现的顺序加进清单的,不另外定优先)。
+     *
+     * @return 位置(从1开始);清单是空的时回传1,呼叫方在 n==0 时已经提前 return 了
      */
-    private void mergeSortBillsByAmountDescending(BillingRecord[] bills, String[] names, String[] tiers,
-                                                   int left, int right) {
+    private int findTopTierPosition(ListInterface<Double> tierRevenue) {
+        int topPosition = 1;
+        for (int i = 2; i <= tierRevenue.getNumberOfEntries(); i++) {
+            if (tierRevenue.getEntry(i) > tierRevenue.getEntry(topPosition)) {
+                topPosition = i;
+            }
+        }
+        return topPosition;
+    }
+
+    /**
+     * merge sort:按 totalAmount 由大到小。
+     *
+     * 以前要同时搬三个平行阵列(帐单/客人名/等级),因为姓名和等级没存在帐单身上。
+     * 现在改成印每一行时用确认号回查客人(hash table O(1)),就只剩一个阵列要搬,
+     * 合并的程式码短了一半,也不会有"第 i 笔的帐单对到别人的名字"这种风险。
+     *
+     * 合并时用 >= 而不是 >:金额一样的两笔,左半边的先取用,保持稳定排序。
+     */
+    private void mergeSortBillsByAmountDescending(BillingRecord[] bills, int left, int right) {
         if (left >= right) {
             return;
         }
         int middle = (left + right) / 2;
-        mergeSortBillsByAmountDescending(bills, names, tiers, left, middle);
-        mergeSortBillsByAmountDescending(bills, names, tiers, middle + 1, right);
+        mergeSortBillsByAmountDescending(bills, left, middle);
+        mergeSortBillsByAmountDescending(bills, middle + 1, right);
 
-        BillingRecord[] mergedBills = new BillingRecord[right - left + 1];
-        String[] mergedNames = new String[right - left + 1];
-        String[] mergedTiers = new String[right - left + 1];
+        BillingRecord[] merged = new BillingRecord[right - left + 1];
         int i = left;
         int j = middle + 1;
         int k = 0;
         while (i <= middle && j <= right) {
             if (bills[i].getTotalAmount() >= bills[j].getTotalAmount()) {
-                mergedBills[k] = bills[i];
-                mergedNames[k] = names[i];
-                mergedTiers[k] = tiers[i];
+                merged[k] = bills[i];
                 i++;
             } else {
-                mergedBills[k] = bills[j];
-                mergedNames[k] = names[j];
-                mergedTiers[k] = tiers[j];
+                merged[k] = bills[j];
                 j++;
             }
             k++;
         }
         while (i <= middle) {
-            mergedBills[k] = bills[i];
-            mergedNames[k] = names[i];
-            mergedTiers[k] = tiers[i];
+            merged[k] = bills[i];
             i++;
             k++;
         }
         while (j <= right) {
-            mergedBills[k] = bills[j];
-            mergedNames[k] = names[j];
-            mergedTiers[k] = tiers[j];
+            merged[k] = bills[j];
             j++;
             k++;
         }
-        for (k = 0; k < mergedBills.length; k++) {
-            bills[left + k] = mergedBills[k];
-            names[left + k] = mergedNames[k];
-            tiers[left + k] = mergedTiers[k];
+        for (k = 0; k < merged.length; k++) {
+            bills[left + k] = merged[k];
         }
     }
 
     // ========== 报表2:Room Utilisation & Status Report ==========
 
     /**
-     * filter=房型+房态,按累积营收(merge sort)降序。累积营收是把这间房历史上
-     * 每一笔CHECKED_IN/CHECKED_OUT的Booking(rate x晚数)加总——用现在的房价算,
-     * 因为Room entity没有留历史房价。
+     * filter=预计退房日上限+房型,按预计退房日由近到远(merge sort)。
+     *
+     * 这份报表看的是"现在还住在店里、还没结帐"的客人——跟报表1(Check-Out Revenue)
+     * 刚好互补:那份看已经收到的钱,这份看还没收的钱,合起来才是完整的财务图像。
+     *
+     * 一行代表一间还被占用的房间(同一位客人订了两间房就会有两行),因为前台和
+     * 客房部关心的单位是房间,不是人。
      */
-    void doRoomUtilisationReport() {
+    void doInHouseGuestsReport() {
+        String checkOutBefore = frontDeskCLI.promptReportToDate();
         String roomTypeFilter = frontDeskCLI.promptReportRoomTypeFilter();
-        String statusFilter = frontDeskCLI.promptReportStatusFilter();
 
-        ListInterface<Room> filteredRooms = new ArrayBasedList<>();
-        for (int i = 1; i <= roomList.getNumberOfEntries(); i++) {
-            Room room = roomList.getEntry(i);
-            boolean typeMatches = "ALL".equalsIgnoreCase(roomTypeFilter)
-                    || room.getRoomType().equalsIgnoreCase(roomTypeFilter);
-            boolean statusMatches = "ALL".equalsIgnoreCase(statusFilter)
-                    || room.getStatus().equalsIgnoreCase(statusFilter);
-            if (typeMatches && statusMatches) {
-                filteredRooms.add(room);
-            }
-        }
+        ListInterface<Booking> inHouse = new ArrayBasedList<>();
+        ListInterface<Double> accrued = new ArrayBasedList<>();
+        ListInterface<String> guestNames = new ArrayBasedList<>();
+        ListInterface<String> guestTiers = new ArrayBasedList<>();
 
-        int n = filteredRooms.getNumberOfEntries();
-        Room[] rooms = new Room[n];
-        double[] revenue = new double[n];
-        for (int i = 1; i <= n; i++) {
-            rooms[i - 1] = filteredRooms.getEntry(i);
-            revenue[i - 1] = calculateRoomRevenue(rooms[i - 1].getRoomNumber());
-        }
-        mergeSortRoomsByRevenueDescending(rooms, revenue, 0, n - 1);
-
-        int occupied = 0;
-        int available = 0;
-        int inHousekeeping = 0;
-        double idleLoss = 0.0;
-        for (int i = 0; i < n; i++) {
-            String status = rooms[i].getStatus();
-            if ("OCCUPIED".equals(status)) {
-                occupied++;
-            } else if ("AVAILABLE".equals(status)) {
-                available++;
-                idleLoss = idleLoss + rooms[i].getNightlyRate();
-            } else if ("NEEDS_CLEANING".equals(status) || "CLEANING_IN_PROGRESS".equals(status)
-                    || "INSPECTED".equals(status)) {
-                inHousekeeping++;
-            }
-        }
-        double occupancyRate = (n == 0) ? 0.0 : (occupied * 100.0 / n);
-
-        frontDeskCLI.displayRoomUtilisationReportHeader(roomTypeFilter, statusFilter,
-                occupancyRate, occupied, available, inHousekeeping, idleLoss);
-        if (n == 0) {
-            frontDeskCLI.displayNoReportRecords();
-        } else {
-            for (int i = 0; i < n; i++) {
-                frontDeskCLI.displayRoomUtilisationReportRow(rooms[i].getRoomNumber(),
-                        rooms[i].getRoomType(), rooms[i].getStatus(), revenue[i]);
-            }
-        }
-        frontDeskCLI.displayReportEnd();
-    }
-
-    /**
-     * 把一间房历史上所有分配到它、已经入住过(CHECKED_IN或CHECKED_OUT)的Booking
-     * 房费加总,当作这间房的累积营收。
-     */
-    private double calculateRoomRevenue(String roomNumber) {
-        double total = 0.0;
-        Room room = findRoom(roomNumber);
-        double rate = (room == null) ? 0.0 : room.getNightlyRate();
-
+        /*
+         * Linear Search
+         *
+         * Filter 1 = 还住在店里(CHECKED_IN);已退房的归报表1管
+         * Filter 2 = 预计退房日在上限之前
+         * Filter 3 = 房型
+         */
         Iterator<Guest> guestIterator = guestTable.getIterator();
         while (guestIterator.hasNext()) {
             Guest guest = guestIterator.next();
             Iterator<Booking> bookingIterator = guest.getBookings().getIterator();
             while (bookingIterator.hasNext()) {
                 Booking booking = bookingIterator.next();
-                boolean sameRoom = roomNumber.equals(booking.getAssignedRoomNo());
-                boolean wasOccupied = booking.getStatus() == BookingStatus.CHECKED_IN
-                        || booking.getStatus() == BookingStatus.CHECKED_OUT;
-                if (sameRoom && wasOccupied) {
-                    total = total + rate * booking.getNumberOfNights();
+
+                if (booking.getStatus() != BookingStatus.CHECKED_IN
+                        || booking.getAssignedRoomNo() == null) {
+                    continue;
                 }
+
+                Room room = findRoom(booking.getAssignedRoomNo());
+                if (room == null) {
+                    continue;
+                }
+
+                boolean typeMatches = "ALL".equalsIgnoreCase(roomTypeFilter)
+                        || room.getRoomType().equalsIgnoreCase(roomTypeFilter);
+                boolean dateMatches = booking.getCheckOutDate() == null
+                        || booking.getCheckOutDate().compareTo(checkOutBefore) <= 0;
+
+                if (!typeMatches || !dateMatches) {
+                    continue;
+                }
+
+                inHouse.add(booking);
+                accrued.add(room.getNightlyRate() * booking.getNumberOfNights());
+                guestNames.add(guest.getName());
+                guestTiers.add(guest.getTier());
             }
         }
-        return total;
+
+        // Merge Sort:预计退房日由近到远——前台最先要处理的是今天就要走的客人
+        sortByCheckOutDate(inHouse, accrued, guestNames, guestTiers);
+
+        frontDeskCLI.displayInHouseReportHeader(checkOutBefore, roomTypeFilter);
+
+        int n = inHouse.getNumberOfEntries();
+        if (n == 0) {
+            frontDeskCLI.displayNoReportRecords();
+            frontDeskCLI.displayReportEnd();
+            return;
+        }
+
+        double totalAccrued = 0.0;
+        for (int i = 1; i <= n; i++) {
+            Booking booking = inHouse.getEntry(i);
+            Room room = findRoom(booking.getAssignedRoomNo());
+
+            totalAccrued = totalAccrued + accrued.getEntry(i);
+
+            frontDeskCLI.displayInHouseReportRow(
+                    guestNames.getEntry(i),
+                    guestTiers.getEntry(i),
+                    booking.getAssignedRoomNo(),
+                    (room == null) ? "-" : room.getRoomType(),
+                    orDash(booking.getCheckOutDate()),
+                    booking.getNumberOfNights(),
+                    accrued.getEntry(i));
+        }
+
+        // 排序后第一笔就是最快要走的那位
+        Booking soonest = inHouse.getEntry(1);
+        double occupancyRate = roomList.getNumberOfEntries() == 0
+                ? 0.0
+                : n * 100.0 / roomList.getNumberOfEntries();
+
+        frontDeskCLI.displayInHouseSummary(n, roomList.getNumberOfEntries(), occupancyRate,
+                totalAccrued, totalAccrued / n,
+                guestNames.getEntry(1), orDash(soonest.getCheckOutDate()),
+                soonest.getAssignedRoomNo());
+
+        displayDepartureSchedule(inHouse);
+
+        frontDeskCLI.displayReportEnd();
     }
 
     /**
-     * merge sort:按累积营收由大到小,revenue阵列跟着rooms一起换位置。
+     * 把在店订单按预计退房日分组,让客房部看得出哪一天会空出几间房。
+     * 资料已经按退房日排好序了,所以同一天的一定连在一起,扫一遍就能分组。
      */
-    private void mergeSortRoomsByRevenueDescending(Room[] rooms, double[] revenue, int left, int right) {
+    private void displayDepartureSchedule(ListInterface<Booking> inHouse) {
+
+        frontDeskCLI.displayDepartureScheduleHeader();
+
+        int i = 1;
+        while (i <= inHouse.getNumberOfEntries()) {
+
+            String date = orDash(inHouse.getEntry(i).getCheckOutDate());
+            String rooms = "";
+            int count = 0;
+
+            // 同一天的连续几笔一起收掉
+            while (i <= inHouse.getNumberOfEntries()
+                    && date.equals(orDash(inHouse.getEntry(i).getCheckOutDate()))) {
+                rooms = rooms.isEmpty()
+                        ? inHouse.getEntry(i).getAssignedRoomNo()
+                        : rooms + ", " + inHouse.getEntry(i).getAssignedRoomNo();
+                count++;
+                i++;
+            }
+
+            frontDeskCLI.displayDepartureScheduleRow(date, count, rooms);
+        }
+    }
+
+    /**
+     * Merge Sort:预计退房日由近到远;同一天的房号小的排前面。
+     *
+     * 四条并行清单(订单/累计房费/客人名/等级)合并时必须一起搬,
+     * 否则第 i 笔的房号会对到别人的名字。
+     */
+    private void sortByCheckOutDate(ListInterface<Booking> bookings, ListInterface<Double> accrued,
+                                     ListInterface<String> names, ListInterface<String> tiers) {
+        mergeSortByCheckOutDate(bookings, accrued, names, tiers, 1, bookings.getNumberOfEntries());
+    }
+
+    private void mergeSortByCheckOutDate(ListInterface<Booking> bookings, ListInterface<Double> accrued,
+                                          ListInterface<String> names, ListInterface<String> tiers,
+                                          int left, int right) {
         if (left >= right) {
             return;
         }
         int middle = (left + right) / 2;
-        mergeSortRoomsByRevenueDescending(rooms, revenue, left, middle);
-        mergeSortRoomsByRevenueDescending(rooms, revenue, middle + 1, right);
+        mergeSortByCheckOutDate(bookings, accrued, names, tiers, left, middle);
+        mergeSortByCheckOutDate(bookings, accrued, names, tiers, middle + 1, right);
 
-        Room[] mergedRooms = new Room[right - left + 1];
-        double[] mergedRevenue = new double[right - left + 1];
+        int size = right - left + 1;
+        Booking[] mergedBookings = new Booking[size];
+        double[] mergedAccrued = new double[size];
+        String[] mergedNames = new String[size];
+        String[] mergedTiers = new String[size];
+
         int i = left;
         int j = middle + 1;
         int k = 0;
         while (i <= middle && j <= right) {
-            if (revenue[i] >= revenue[j]) {
-                mergedRooms[k] = rooms[i];
-                mergedRevenue[k] = revenue[i];
+            if (departsFirst(bookings.getEntry(i), bookings.getEntry(j))) {
+                mergedBookings[k] = bookings.getEntry(i);
+                mergedAccrued[k] = accrued.getEntry(i);
+                mergedNames[k] = names.getEntry(i);
+                mergedTiers[k] = tiers.getEntry(i);
                 i++;
             } else {
-                mergedRooms[k] = rooms[j];
-                mergedRevenue[k] = revenue[j];
+                mergedBookings[k] = bookings.getEntry(j);
+                mergedAccrued[k] = accrued.getEntry(j);
+                mergedNames[k] = names.getEntry(j);
+                mergedTiers[k] = tiers.getEntry(j);
                 j++;
             }
             k++;
         }
         while (i <= middle) {
-            mergedRooms[k] = rooms[i];
-            mergedRevenue[k] = revenue[i];
+            mergedBookings[k] = bookings.getEntry(i);
+            mergedAccrued[k] = accrued.getEntry(i);
+            mergedNames[k] = names.getEntry(i);
+            mergedTiers[k] = tiers.getEntry(i);
             i++;
             k++;
         }
         while (j <= right) {
-            mergedRooms[k] = rooms[j];
-            mergedRevenue[k] = revenue[j];
+            mergedBookings[k] = bookings.getEntry(j);
+            mergedAccrued[k] = accrued.getEntry(j);
+            mergedNames[k] = names.getEntry(j);
+            mergedTiers[k] = tiers.getEntry(j);
             j++;
             k++;
         }
-        for (k = 0; k < mergedRooms.length; k++) {
-            rooms[left + k] = mergedRooms[k];
-            revenue[left + k] = mergedRevenue[k];
+        for (k = 0; k < size; k++) {
+            bookings.replace(left + k, mergedBookings[k]);
+            accrued.replace(left + k, mergedAccrued[k]);
+            names.replace(left + k, mergedNames[k]);
+            tiers.replace(left + k, mergedTiers[k]);
         }
+    }
+
+    /**
+     * 排序规则:退房日早的排前面;同一天的房号小的排前面。
+     * 退房日是 "yyyy-MM-dd" 固定宽度,字串字典序刚好等于日期先后。
+     *
+     * @return true 代表 a 该排在 b 前面
+     */
+    private boolean departsFirst(Booking a, Booking b) {
+        String dateA = orDash(a.getCheckOutDate());
+        String dateB = orDash(b.getCheckOutDate());
+        int result = dateA.compareTo(dateB);
+        if (result != 0) {
+            return result < 0;
+        }
+        return a.getAssignedRoomNo().compareToIgnoreCase(b.getAssignedRoomNo()) <= 0;
     }
 
     /**

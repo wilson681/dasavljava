@@ -43,6 +43,9 @@ import entity.RollbackLogEntry;
  */
 public class MainMenuControl {
 
+    // Reports 菜单目前有几份报表(1~10),用来判断使用者打的选项在不在范围内
+    private static final int REPORT_COUNT = 10;
+
     private final MainMenuCLI mainMenuCLI;
 
     // ===== 共用容器,按房型分开的三棵VIP树 =====
@@ -138,7 +141,7 @@ public class MainMenuControl {
 
         new RedemptionItemDao().loadRedemptionItems(redemptionItemList);
 
-        // 额外的种子资料,让开机后 Reports 菜单的 11 份报表都已经有资料可以测,不用先手动
+        // 额外的种子资料,让开机后 Reports 菜单的 10 份报表都已经有资料可以测,不用先手动
         // 跑完整的登记/分房/退房流程——各自的格式/职责说明见 dao/ 底下对应类别的 javadoc。
         // 编号(bookingId/confirmationNumber/billingId/ledgerId)都用跟真人操作不同的前缀/区间,
         // 保证不会跟之后手动操作产生的编号撞号。
@@ -247,6 +250,20 @@ public class MainMenuControl {
         boolean running = true;
         while (running) {
             int choice = mainMenuCLI.displayReportsMenuAndGetChoice();
+
+            // 选到0是要离开,直接走人
+            if (choice == 0) {
+                running = false;
+                continue;
+            }
+
+            // 选项打错就当场重问,不要停下来等Enter——画面上什么结果都还没出现,
+            // 没有东西需要"先看一下"。Press Enter 只在真的印出一份报表之后才有意义。
+            if (choice < 1 || choice > REPORT_COUNT) {
+                mainMenuCLI.displayInvalidChoice();
+                continue;
+            }
+
             switch (choice) {
                 case 1:
                     walkInControl.doDailyRegistrationReport();
@@ -267,26 +284,25 @@ public class MainMenuControl {
                     housekeepingControl.doGenerateRoomHistoryReport();
                     break;
                 case 7:
-                    housekeepingControl.doGenerateRollbackFrequencyReport();
-                    break;
-                case 8:
                     frontDeskControl.doCheckOutRevenueReport();
                     break;
-                case 9:
-                    frontDeskControl.doRoomUtilisationReport();
+                case 8:
+                    frontDeskControl.doInHouseGuestsReport();
                     break;
-                case 10:
+                case 9:
                     loyaltyControl.doPointsExpiryReport();
                     break;
-                case 11:
+                case 10:
                     loyaltyControl.doTopRedeemedItemsReport();
                     break;
-                case 0:
-                    running = false;
-                    break;
                 default:
-                    mainMenuCLI.displayInvalidChoice();
+                    // 上面的范围检查已经挡掉所有不合法的选项,走不到这里
+                    break;
             }
+
+            // 到这里代表一份报表已经印完了,先停住让使用者看清楚,
+            // 按Enter才重画选单——不然报表会立刻被下一次的Reports菜单顶掉
+            mainMenuCLI.promptContinue();
         }
     }
 }
