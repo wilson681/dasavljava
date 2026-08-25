@@ -221,16 +221,33 @@ public class Booking implements Comparable<Booking> {
     }
 
     /**
-     * compareTo: 给模块2的 AVL Tree 排优先级用,不是判断"是不是同一笔"(那是equals的事)
+     * compareTo: 给模块2的 AVL Tree 排优先级用。
      * 规则:tierRank 越高,compareTo 值越小(反过来比);tierRank 相同,arrivalSequence 越小
      * (越早到)compareTo 值也越小——两条规则都让"优先级越高"排在树的越左边,
      * in-order 遍历天生就是"优先级由高到低"
+     *
+     * 最后那条 bookingId 比较不是排序需求,是正确性需求:
+     *
+     * AVL 树全程只靠 compareTo 导航(getEntry() 和 remove() 都是),equals() 一次都不会
+     * 被呼叫到。所以对树来说,"compareTo 回传 0"就等于"同一个 key"。要是两笔不同的
+     * Booking 会算出 0,树就分不出它们,remove() 会导航到先撞上的那一个、把不该删的
+     * 那笔删掉——而且不会报错。
+     *
+     * 前两个字段挡不住这件事:tierRank 本来就会重复(同一等级的会员),arrivalSequence
+     * 也可能重复(种子资料和真人登记各有各的计数器)。bookingId 每笔唯一,补在最后就
+     * 保证了 compareTo == 0 只在"真的是同一笔"时成立——也就是跟 equals(比 bookingId)
+     * 对上,符合 Java 对 Comparable 的建议:compareTo 应当与 equals 保持一致。
+     *
+     * 这一条只在前两个字段完全并列时才会被用到,原本就分得出先后的排序结果完全不变。
      */
     @Override
     public int compareTo(Booking other) {
         if (this.tierRankAtRequest != other.tierRankAtRequest) {
             return other.tierRankAtRequest - this.tierRankAtRequest;
         }
-        return this.arrivalSequence - other.arrivalSequence;
+        if (this.arrivalSequence != other.arrivalSequence) {
+            return this.arrivalSequence - other.arrivalSequence;
+        }
+        return this.bookingId.compareTo(other.bookingId);
     }
 }
