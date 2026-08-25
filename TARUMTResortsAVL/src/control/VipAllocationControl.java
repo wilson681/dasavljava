@@ -326,7 +326,9 @@ public class VipAllocationControl {
         Iterator<Booking> iterator = tree.getInorderIterator();
         while (iterator.hasNext()) {
             Booking booking = iterator.next();
-            if (tierRankFilter == 0 || booking.getTierRankAtRequest() == tierRankFilter) {
+            // -1 = "All"(不限等级)。不能用0当哨兵,因为Standard会员现在也能走VIP
+            // 登记这条路,0是Standard真正的排名,不是"没有filter"的意思
+            if (tierRankFilter == -1 || booking.getTierRankAtRequest() == tierRankFilter) {
                 filtered.add(booking);
                 waitMinutesList.add(minutesBetween(booking.getRegisteredAt(), currentTimestamp()));
             }
@@ -344,7 +346,8 @@ public class VipAllocationControl {
         String fromDate = vipAllocationCLI.promptReportFromDate();
         String toDate = vipAllocationCLI.promptReportToDate();
 
-        // 固定3档(Diamond=3, Platinum=2, Elite=1),索引0不用
+        // 固定4档(Diamond=3, Platinum=2, Elite=1, Standard=0)——Standard会员现在
+        // 也能走VIP登记这条路(排名垫底但仍插进树里),所以0档也要统计,不能排除
         int[] count = new int[4];
         int[] totalWaitMinutes = new int[4];
 
@@ -358,10 +361,12 @@ public class VipAllocationControl {
                     continue;
                 }
                 int rank = booking.getTierRankAtRequest();
-                if (rank < 1 || rank > 3) {
+                if (rank < 0 || rank > 3) {
                     continue;
                 }
-                if (tierRankFilter != 0 && rank != tierRankFilter) {
+                // -1 = "All"(不限等级),tierRankFilter本身可能是0(Standard),
+                // 不能再用0当哨兵去判断"有没有filter"
+                if (tierRankFilter != -1 && rank != tierRankFilter) {
                     continue;
                 }
                 String allocatedDate = booking.getAllocatedAt().substring(0, 10);
@@ -373,11 +378,11 @@ public class VipAllocationControl {
             }
         }
 
-        // 组成最多3行(有资料的等级才列),再按平均等待时长降序排(selection sort)
+        // 组成最多4行(有资料的等级才列,含Standard),再按平均等待时长降序排(selection sort)
         ListInterface<String> tierNames = new ArrayBasedList<>();
         ListInterface<Integer> tierCounts = new ArrayBasedList<>();
         ListInterface<Double> tierAverages = new ArrayBasedList<>();
-        for (int rank = 3; rank >= 1; rank--) {
+        for (int rank = 3; rank >= 0; rank--) {
             if (count[rank] > 0) {
                 tierNames.add(TierRankUtility.rankToTier(rank));
                 tierCounts.add(count[rank]);

@@ -203,22 +203,26 @@ public class VipAllocationCLI {
     // ========== 报表共用输入/输出 ==========
 
     /**
-     * @return 等级排名数字(1=Elite,2=Platinum,3=Diamond),选"All"回传0代表不限等级
+     * @return 等级排名数字(0=Standard,1=Elite,2=Platinum,3=Diamond),选"All"回传-1
+     *         代表不限等级——不能用0当"All"的哨兵值,因为0现在是Standard真正的排名
+     *         (业务规则改了之后,Standard会员也能走VIP登记这条路,只是排名垫底)
      */
     public int promptReportTierRank() {
         System.out.println();
-        System.out.println("Tier Filter: 1) All  2) Elite  3) Platinum  4) Diamond");
+        System.out.println("Tier Filter: 1) All  2) Standard  3) Elite  4) Platinum  5) Diamond");
         System.out.print("Enter your choice: ");
         String choice = scanner.nextLine().trim();
         switch (choice) {
             case "2":
-                return 1;
+                return 0;
             case "3":
-                return 2;
+                return 1;
             case "4":
+                return 2;
+            case "5":
                 return 3;
             default:
-                return 0;
+                return -1;
         }
     }
 
@@ -245,6 +249,8 @@ public class VipAllocationCLI {
 
     private String tierFilterLabel(int tierRankFilter) {
         switch (tierRankFilter) {
+            case 0:
+                return "Standard";
             case 1:
                 return "Elite";
             case 2:
