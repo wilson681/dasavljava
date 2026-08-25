@@ -310,9 +310,14 @@ public class WalkInControl {
     // ========== 报表1:每日入住登记明细表 ==========
 
     /**
-     * filter=日期+房型,按登记时间排序。资料来源是"现在还在排队的" + "已经分房、
-     * 挂在guestTable底下客人身上的"两边合起来,这样不管有没有分到房都看得到——
-     * 唯一看不到的是已经取消排队的(doCancel()把它从队伍拿掉后就没有其他地方存了)。
+     * filter=日期+房型,按登记时间由早到晚(selection sort)。
+     *
+     * 这份报表只讲"登记"这件事:谁来了、要什么房型、拿到没有、拿到哪一间。
+     * 所有跟"等多久"有关的统计都归报表2(Wait Time Analysis)——两份用的是同一批
+     * 资料,分工不划清楚就会变成两份讲同一件事。
+     *
+     * 资料来源是"现在还在排队的" + "已经分房、挂在guestTable底下客人身上的"两边
+     * 合起来,这样不管有没有分到房都看得到。
      */
     void doDailyRegistrationReport() {
         String dateFilter = walkInCLI.promptReportDate();
@@ -339,76 +344,70 @@ public class WalkInControl {
             return;
         }
 
-        // 一边印明细一边把汇总要用的数字累加起来,不用为了统计再多扫一遍
+        // 一边印明细一边累加,不用为了统计再多扫一遍。
+        // 每一型房要分开数"要了几间"和"拿到几间",差额就是没被满足的需求。
         int allocatedCount = 0;
-        int waitSumAllocated = 0;   // 只累加已分房的:还在等的等待时长会随报表跑的时间一直变大,混进平均会失真
-        int waitSamples = 0;        // 真的算得出等待时长的笔数;时间戳坏掉那种不计入,免得平均被-1污染
-        int longestWait = 0;
-        String longestWaitGuest = "-";
-        int longestWaiting = 0;     // 还在等的最长等待,跟已分房的分开统计
-        String longestWaitingGuest = "-";
-        String longestWaitingType = "-";
         int standardCount = 0;
         int deluxeCount = 0;
         int suiteCount = 0;
+        int standardAllocated = 0;
+        int deluxeAllocated = 0;
+        int suiteAllocated = 0;
 
         for (int i = 1; i <= filtered.getNumberOfEntries(); i++) {
             Booking booking = filtered.getEntry(i);
             boolean allocated = booking.getAssignedRoomNo() != null;
-            int waitMinutes = allocated
-                    ? minutesBetween(booking.getRegisteredAt(), booking.getAllocatedAt())
-                    : minutesBetween(booking.getRegisteredAt(), currentTimestamp());
 
             if (allocated) {
                 allocatedCount++;
-                if (waitMinutes >= 0) {
-                    waitSumAllocated = waitSumAllocated + waitMinutes;
-                    waitSamples++;
-                    if (waitMinutes > longestWait) {
-                        longestWait = waitMinutes;
-                        longestWaitGuest = booking.getGuestNameSnapshot();
-                    }
-                }
-            } else if (waitMinutes > longestWaiting) {
-                longestWaiting = waitMinutes;
-                longestWaitingGuest = booking.getGuestNameSnapshot();
-                longestWaitingType = booking.getRequestedRoomType();
             }
 
             if ("Deluxe".equalsIgnoreCase(booking.getRequestedRoomType())) {
                 deluxeCount++;
+                if (allocated) {
+                    deluxeAllocated++;
+                }
             } else if ("Suite".equalsIgnoreCase(booking.getRequestedRoomType())) {
                 suiteCount++;
+                if (allocated) {
+                    suiteAllocated++;
+                }
             } else {
                 standardCount++;
+                if (allocated) {
+                    standardAllocated++;
+                }
             }
 
-            // 还在等的没有"等多久才分到房"这个数字,明细栏印"-",
-            // 改由汇总区的 Longest still waiting 单独交代
-            walkInCLI.displayDailyRegistrationReportRow(booking.getGuestNameSnapshot(),
-                    booking.getRegisteredAt(), booking.getRequestedRoomType(), allocated,
-                    allocated ? waitMinutes : -1);
+            // registeredAt 是 "yyyy-MM-dd HH:mm:ss",这里只取日期——
+            // 时分秒是报表2按小时分析用的,这份报表显示到分秒等于踩过去
+            walkInCLI.displayDailyRegistrationReportRow(
+                    booking.getGuestNameSnapshot(),
+                    booking.getRegisteredAt().substring(0, 10),
+                    booking.getRequestedRoomType(),
+                    allocated,
+                    allocated ? booking.getAssignedRoomNo() : "-");
         }
 
         int total = filtered.getNumberOfEntries();
-        double averageWait = (waitSamples == 0) ? 0.0 : (double) waitSumAllocated / waitSamples;
-
-        walkInCLI.displayDailyRegistrationSummary(total, allocatedCount, total - allocatedCount,
-                averageWait, longestWait, longestWaitGuest,
-                longestWaiting, longestWaitingGuest, longestWaitingType);
-        walkInCLI.displayRoomTypeBreakdown(standardCount, deluxeCount, suiteCount);
+        walkInCLI.displayDailyRegistrationSummary(total, allocatedCount, total - allocatedCount);
+        walkInCLI.displayDemandByRoomType(standardCount, standardAllocated,
+                deluxeCount, deluxeAllocated, suiteCount, suiteAllocated);
         walkInCLI.displayReportEnd();
     }
 
     // ========== 报表2:等待时长分析报表 ==========
 
     /**
-     * filter=最少等待分钟数+日期,按等待时长降序排序,另外按小时聚合平均等待时长——
-     * 给营运经理判断哪个时段该加开柜台用。
+     * filter=日期+房型,按等待时长降序排序。
+     *
+     * 刻意不做"最少等待分钟"筛选:那会让 Average wait 变成"等超过门槛的人的平均",
+     * 一份叫 Wait Time Analysis 的报表,平均值不该因为筛选条件而失真。
+     * 换成房型之后,统计不会被截断,而且多回答一个问题:哪一型房的客人等最久。
      */
     void doWaitTimeAnalysisReport() {
-        int minWaitMinutes = walkInCLI.promptMinWaitMinutes();
         String dateFilter = walkInCLI.promptReportDate();
+        String roomTypeFilter = walkInCLI.promptReportRoomType();
 
         ListInterface<Booking> filtered = new ArrayBasedList<>();
         ListInterface<Integer> waitMinutesList = new ArrayBasedList<>();
@@ -416,11 +415,19 @@ public class WalkInControl {
         int[] hourlyCount = new int[24];
         int[] hourlyTotalWait = new int[24];
 
-        ListInterface<Booking> allBookings = collectWalkInBookings("ALL");
+        // 按房型的等待时长:三种房型固定三组,索引 0=Standard 1=Deluxe 2=Suite
+        int[] typeAllocated = new int[3];
+        int[] typeTotalWait = new int[3];
+        int[] typeWaiting = new int[3];
+
+        // 房型不是ALL时,collectWalkInBookings()只会去对应那一条队伍拿,另外两条完全不碰
+        ListInterface<Booking> allBookings = collectWalkInBookings(roomTypeFilter);
         for (int i = 1; i <= allBookings.getNumberOfEntries(); i++) {
             Booking booking = allBookings.getEntry(i);
             boolean dateMatches = "ALL".equals(dateFilter) || booking.getRegisteredAt().startsWith(dateFilter);
-            if (!dateMatches) {
+            boolean typeMatches = "ALL".equalsIgnoreCase(roomTypeFilter)
+                    || booking.getRequestedRoomType().equalsIgnoreCase(roomTypeFilter);
+            if (!dateMatches || !typeMatches) {
                 continue;
             }
 
@@ -429,24 +436,30 @@ public class WalkInControl {
                     ? minutesBetween(booking.getRegisteredAt(), booking.getAllocatedAt())
                     : minutesBetween(booking.getRegisteredAt(), currentTimestamp());
 
-            if (waitMinutes >= minWaitMinutes) {
-                filtered.add(booking);
-                waitMinutesList.add(waitMinutes);
+            filtered.add(booking);
+            waitMinutesList.add(waitMinutes);
 
-                // 按小时聚合只收已分房的:还在等的等待时长是"算到此刻为止",会随着
-                // 报表什么时候跑而一直变大,混进平均值会把那个时段的数字整个拉爆
-                // (改之前 09:00 那格显示过 3934 分钟,就是被一笔还在等的记录污染的)
-                if (allocated) {
-                    int hour = Integer.parseInt(booking.getRegisteredAt().substring(11, 13));
-                    hourlyCount[hour]++;
-                    hourlyTotalWait[hour] += waitMinutes;
+            int typeIndex = roomTypeIndex(booking.getRequestedRoomType());
+
+            // 按小时/按房型聚合都只收已分房的:还在等的等待时长是"算到此刻为止",
+            // 会随着报表什么时候跑而一直变大,混进平均值会把数字整个拉爆
+            // (改之前 09:00 那格显示过 3934 分钟,就是被一笔还在等的记录污染的)
+            if (allocated) {
+                if (waitMinutes >= 0) {
+                    typeAllocated[typeIndex]++;
+                    typeTotalWait[typeIndex] += waitMinutes;
                 }
+                int hour = Integer.parseInt(booking.getRegisteredAt().substring(11, 13));
+                hourlyCount[hour]++;
+                hourlyTotalWait[hour] += waitMinutes;
+            } else {
+                typeWaiting[typeIndex]++;
             }
         }
 
         sortByWaitMinutesDescending(filtered, waitMinutesList);
 
-        walkInCLI.displayWaitTimeAnalysisHeader(minWaitMinutes, dateFilter);
+        walkInCLI.displayWaitTimeAnalysisHeader(dateFilter, roomTypeFilter);
 
         int allocatedCount = 0;
         int waitSumAllocated = 0;
@@ -488,6 +501,16 @@ public class WalkInControl {
             walkInCLI.displayWaitTimeAnalysisSummary(total, allocatedCount, total - allocatedCount,
                     averageWait, longestWait, longestWaitGuest, longestWaiting, longestWaitingGuest);
         }
+
+        // 按房型比较平均等待——回答"哪一型房的客人等最久",那是系统性问题;
+        // 小时分布回答"几点最忙",那是排班问题。两个角度不重叠。
+        walkInCLI.displayWaitByRoomTypeHeader();
+        walkInCLI.displayWaitByRoomTypeRow("Standard", typeAllocated[0], typeTotalWait[0], typeWaiting[0]);
+        walkInCLI.displayWaitByRoomTypeRow("Deluxe", typeAllocated[1], typeTotalWait[1], typeWaiting[1]);
+        walkInCLI.displayWaitByRoomTypeRow("Suite", typeAllocated[2], typeTotalWait[2], typeWaiting[2]);
+        walkInCLI.displaySlowestRoomType(
+                slowestRoomType(typeAllocated, typeTotalWait),
+                slowestAverageWait(typeAllocated, typeTotalWait));
 
         // 先找出笔数最多是多少:柱状图要拿它当满格基准
         int maxHourlyCount = 0;
@@ -566,6 +589,59 @@ public class WalkInControl {
         while (iterator.hasNext()) {
             result.add(iterator.next());
         }
+    }
+
+    /**
+     * 房型对到固定的阵列索引。三种房型是系统写死的,用阵列比用清单简单。
+     *
+     * @return 0=Standard(也含认不得的房型) 1=Deluxe 2=Suite
+     */
+    private int roomTypeIndex(String roomType) {
+        if ("Deluxe".equalsIgnoreCase(roomType)) {
+            return 1;
+        }
+        if ("Suite".equalsIgnoreCase(roomType)) {
+            return 2;
+        }
+        return 0;
+    }
+
+    /**
+     * 平均等待最久的那一型房。完全没有已分房的记录时回传 "-"。
+     */
+    private String slowestRoomType(int[] allocated, int[] totalWait) {
+        String[] names = {"Standard", "Deluxe", "Suite"};
+        int slowest = -1;
+        double slowestAverage = -1.0;
+
+        for (int i = 0; i < 3; i++) {
+            if (allocated[i] == 0) {
+                continue;
+            }
+            double average = (double) totalWait[i] / allocated[i];
+            if (average > slowestAverage) {
+                slowestAverage = average;
+                slowest = i;
+            }
+        }
+        return (slowest == -1) ? "-" : names[slowest];
+    }
+
+    /**
+     * 上面那一型房的平均等待分钟数,给报表印在结论行上。
+     */
+    private double slowestAverageWait(int[] allocated, int[] totalWait) {
+        double slowestAverage = 0.0;
+        for (int i = 0; i < 3; i++) {
+            if (allocated[i] == 0) {
+                continue;
+            }
+            double average = (double) totalWait[i] / allocated[i];
+            if (average > slowestAverage) {
+                slowestAverage = average;
+            }
+        }
+        return slowestAverage;
     }
 
     /**

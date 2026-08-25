@@ -271,99 +271,105 @@ public class WalkInCLI {
         System.out.println("Date Filter      : " + dateFilter);
         System.out.println("Room Type Filter : " + roomTypeFilter);
         System.out.println(DIVIDER);
-        System.out.println(String.format("%-20s %-20s %-11s %-10s %s",
-                "Guest", "Registered At", "Room Type", "Allocated", "Wait (min)"));
+        System.out.println(String.format("%-20s %-13s %-11s %-11s %s",
+                "Guest", "Reg. Date", "Requested", "Allocated", "Room"));
         System.out.println(REPORT_DIVIDER);
     }
 
     /**
-     * @param waitMinutes 已分房的实际等待分钟数;传负数代表"没有这个数字可印"
-     *                    (还在排队,或时间戳算不出来),该栏改印"-"
+     * 一行一笔登记。这份报表只讲"登记"这件事——谁来了、要什么、拿到没有、
+     * 拿到哪一间;"等了多久"归报表2管,这里一个时长数字都不印。
+     *
+     * @param registeredDate 只有日期(yyyy-MM-dd),时分秒是报表2按小时分析用的
+     * @param roomNumber     分到的房号;还在排队的传 "-"
      */
-    public void displayDailyRegistrationReportRow(String guestName, String registeredAt,
-                                                   String roomType, boolean allocated, int waitMinutes) {
-        String waitText = (waitMinutes < 0) ? "-" : String.valueOf(waitMinutes);
-        System.out.println(String.format("%-20s %-20s %-11s %-10s %s",
-                guestName, registeredAt, roomType, (allocated ? "Yes" : "No"), waitText));
+    public void displayDailyRegistrationReportRow(String guestName, String registeredDate,
+                                                   String requestedType, boolean allocated,
+                                                   String roomNumber) {
+        System.out.println(String.format("%-20s %-13s %-11s %-11s %s",
+                guestName, registeredDate, requestedType,
+                (allocated ? "Yes" : "No"), roomNumber));
     }
 
-    /**
-     * 明细表下方的汇总区:把"这份报表要给经理看的结论"集中印出来,
-     * 而不是只丢一张清单让人自己数。
-     */
-    public void displayDailyRegistrationSummary(int total, int allocatedCount, int waitingCount,
-                                                 double averageWait, int longestWait, String longestWaitGuest,
-                                                 int longestWaitingMinutes, String longestWaitingGuest,
-                                                 String longestWaitingType) {
-        double allocatedRate = (total == 0) ? 0.0 : (allocatedCount * 100.0 / total);
+    public void displayDailyRegistrationSummary(int total, int allocatedCount, int waitingCount) {
+        double successRate = (total == 0) ? 0.0 : (allocatedCount * 100.0 / total);
 
         System.out.println(REPORT_DIVIDER);
         System.out.println("SUMMARY");
-        System.out.printf("  Total registrations       : %d%n", total);
-        System.out.printf("  Allocated / Still waiting : %d / %d  (%.1f%% allocated)%n",
-                allocatedCount, waitingCount, allocatedRate);
-        System.out.printf("  Average wait              : %.1f min   (allocated only)%n", averageWait);
-        System.out.printf("  Longest wait              : %d min     (%s)%n", longestWait, longestWaitGuest);
-
-        // 还在等的人没有"等多久才分到房"这个数字,但"已经等了多久"才是真正要处理的营运问题,
-        // 所以单独列一行,而且用天/小时印,一眼看得出严重程度
-        if (waitingCount > 0) {
-            System.out.printf("  Longest still waiting     : %-10s (%s, %s)   <-- ACTION NEEDED%n",
-                    formatDuration(longestWaitingMinutes), longestWaitingGuest, longestWaitingType);
-        }
+        System.out.printf("  Total registrations : %d%n", total);
+        System.out.printf("  Allocated / Waiting : %d / %d   (%.1f%% success rate)%n",
+                allocatedCount, waitingCount, successRate);
     }
 
     /**
-     * 按房型分布 + 星号柱状图,让"哪种房型最抢手"不用自己数。
+     * 按房型看"要了几间 vs 拿到几间"。差额就是没被满足的需求——
+     * 有客人要这一型房但我们给不出来,那是要不要调整房型配比的决策资讯。
      */
-    public void displayRoomTypeBreakdown(int standardCount, int deluxeCount, int suiteCount) {
+    public void displayDemandByRoomType(int standardCount, int standardAllocated,
+                                         int deluxeCount, int deluxeAllocated,
+                                         int suiteCount, int suiteAllocated) {
         System.out.println();
-        System.out.println("REGISTRATIONS BY ROOM TYPE   (each * = 1 registration)");
-        System.out.printf("  %-10s %-22s %d%n", "Standard", bar(standardCount), standardCount);
-        System.out.printf("  %-10s %-22s %d%n", "Deluxe", bar(deluxeCount), deluxeCount);
-        System.out.printf("  %-10s %-22s %d%n", "Suite", bar(suiteCount), suiteCount);
+        System.out.println("DEMAND BY ROOM TYPE   (each * = 1 registration)");
+        printDemandLine("Standard", standardCount, standardAllocated);
+        printDemandLine("Deluxe", deluxeCount, deluxeAllocated);
+        printDemandLine("Suite", suiteCount, suiteAllocated);
+    }
+
+    private void printDemandLine(String roomType, int requested, int allocated) {
+        int waiting = requested - allocated;
+        String unmet = (waiting > 0) ? ("   <-- " + waiting + " UNMET") : "";
+        System.out.printf("  %-10s %-22s %d   (%d allocated, %d waiting)%s%n",
+                roomType, bar(requested), requested, allocated, waiting, unmet);
     }
 
     // ========== 报表2:等待时长分析报表 ==========
 
-    /**
-     * 跟另外两个报表输入一致:打错就当场重问,不要静默塞一个预设值进去,
-     * 否则使用者会拿到一份"筛选条件根本不是他打的"的报表还不知道。
-     *
-     * @return 门槛分钟数,留空当作0(不设门槛)
-     */
-    public int promptMinWaitMinutes() {
-        while (true) {
-            System.out.println();
-            System.out.print("Enter minimum wait time to include (minutes, blank = 0): ");
-            String input = scanner.nextLine().trim();
-            if (input.isEmpty()) {
-                return 0;
-            }
-            try {
-                int minutes = Integer.parseInt(input);
-                if (minutes >= 0) {
-                    return minutes;
-                }
-                System.out.println("Minimum wait cannot be negative, please try again.");
-            } catch (NumberFormatException e) {
-                System.out.println("Invalid input, please enter a whole number.");
-            }
-        }
-    }
-
-    public void displayWaitTimeAnalysisHeader(int minWaitMinutes, String dateFilter) {
+    public void displayWaitTimeAnalysisHeader(String dateFilter, String roomTypeFilter) {
         System.out.println();
         System.out.println(DIVIDER);
         System.out.println("             WAIT TIME ANALYSIS REPORT");
         System.out.println(DIVIDER);
-        System.out.println("Generated at  : " + generatedAt());
-        System.out.println("Minimum Wait  : " + minWaitMinutes + " min");
-        System.out.println("Date Filter   : " + dateFilter);
+        System.out.println("Generated at     : " + generatedAt());
+        System.out.println("Date Filter      : " + dateFilter);
+        System.out.println("Room Type Filter : " + roomTypeFilter);
         System.out.println(DIVIDER);
         System.out.println(String.format("%-12s %-20s %-11s %-12s %s",
                 "Booking ID", "Guest", "Room Type", "Wait (min)", "Status"));
         System.out.println(REPORT_DIVIDER);
+    }
+
+    public void displayWaitByRoomTypeHeader() {
+        System.out.println();
+        System.out.println("AVERAGE WAIT BY ROOM TYPE   (allocated only)");
+        System.out.println(String.format("%-11s %-13s %s", "Type", "Avg Wait", "Bookings"));
+        System.out.println(REPORT_DIVIDER);
+    }
+
+    /**
+     * 一型房一行。平均只算已分房的——还在等的那些等待时长会一直变大,
+     * 混进平均会失真,所以另外用括号标出来有几笔还在等。
+     *
+     * @param allocated 这一型已分到房的笔数,也是平均值的分母
+     * @param totalWait 那些已分房记录的等待时长总和
+     * @param waiting   还在排队、还没分到房的笔数
+     */
+    public void displayWaitByRoomTypeRow(String roomType, int allocated, int totalWait, int waiting) {
+        String average = (allocated == 0)
+                ? "-"
+                : String.format("%.1f min", (double) totalWait / allocated);
+
+        String stillWaiting = (waiting > 0) ? ("   <-- " + waiting + " still waiting") : "";
+
+        System.out.println(String.format("%-11s %-13s %d allocated%s",
+                roomType, average, allocated, stillWaiting));
+    }
+
+    public void displaySlowestRoomType(String roomType, double averageWait) {
+        if ("-".equals(roomType)) {
+            System.out.println("  No allocated booking to compare by room type.");
+            return;
+        }
+        System.out.printf("  Slowest type : %s (%.1f min average)%n", roomType, averageWait);
     }
 
     /**
