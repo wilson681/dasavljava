@@ -2,10 +2,10 @@ package utility;
 
 /**
  * ValidationUtility.java
- * 通用输入格式校验——同一种输入(会员ID、确认号、电话号码)不管在哪个模块出现,
- * 都靠这里同一套规则判断合不合法,避免各模块各自写一套导致标准不一致。
- *
- * @author 某某
+ * Shared input format validation. Whatever module a given kind of input
+ * (member ID, confirmation number, phone number) shows up in, this class is
+ * the single set of rules deciding whether it's valid, so modules don't
+ * each write their own inconsistent checks.
  */
 public class ValidationUtility {
 
@@ -13,30 +13,33 @@ public class ValidationUtility {
     }
 
     /**
-     * 判断字串是不是空的(null 或去掉头尾空白后变成空字串)。
+     * Checks whether a string is blank (null, or empty after trimming).
      */
     public static boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
     }
 
     /**
-     * 判断字串是不是刚好8位数字——确认号(confirmation number)的合法格式。
+     * Checks whether a string is exactly 8 digits — the valid format for a
+     * confirmation number.
      */
     public static boolean isEightDigitNumber(String value) {
         return value != null && value.trim().matches("\\d{8}");
     }
 
     /**
-     * 判断字串是不是只由数字组成(至少一位)——电话号码只要求这个程度的合法性,
-     * 不做区号/长度这类更严谨的格式检查。
+     * Checks whether a string is made up of digits only (at least one
+     * digit) — phone numbers only need this level of validity; no stricter
+     * checks like area code or length are done.
      */
     public static boolean isDigitsOnly(String value) {
         return value != null && value.trim().matches("\\d+");
     }
     /**
-     * 判断字串是不是合法的人名——只允许字母、空格,以及名字里常见的
-     * 撇号(O'Brien)、连字号(Anne-Marie)、句点(Jr.)和斜线(A/L、A/P)。
-     * 数字和其他符号一律拒绝。
+     * Checks whether a string is a valid person's name — only letters,
+     * spaces, and the punctuation common in names (apostrophe as in
+     * O'Brien, hyphen as in Anne-Marie, period as in Jr., slash as in A/L,
+     * A/P) are allowed. Digits and any other symbol are rejected.
      */
     public static boolean isValidName(String value) {
 
@@ -56,22 +59,27 @@ public class ValidationUtility {
         return true;
     }
     /**
-     * 比较两个识别码(比如会员ID)是不是视为同一个,不分大小写——使用者手动输入ID
-     * 查找资料时,大小写不该影响查得到查不到。null-safe:任一边是null就视为不相符。
+     * Compares two identifiers (e.g. member IDs) case-insensitively to see
+     * if they count as the same one — when a user types an ID to look
+     * something up, case shouldn't affect whether it's found. Null-safe:
+     * either side being null counts as not matching.
      */
     public static boolean idsMatch(String a, String b) {
         return a != null && b != null && a.equalsIgnoreCase(b);
     }
 
     /**
-     * 校验日期输入,统一只收 "yyyy-MM-dd" 这一种格式——资料档里存的就是这个格式,
-     * 报表画面上显示的也是这个格式,输入跟着一致,不另外支援别种写法。
+     * Validates a date input, only accepting the "yyyy-MM-dd" format — the
+     * data files and report screens both use this format, so input follows
+     * the same convention with no other formats supported.
      *
-     * 会真的检查这一天存不存在,不只是看长相:2026-02-30 长得像日期,但2月没有30号,
-     * 这种一样判定不合法。光用正则 \\d{4}-\\d{2}-\\d{2} 检查是挡不掉的。
+     * This actually checks whether the day exists, not just its shape:
+     * 2026-02-30 looks like a date, but February has no 30th, so it's still
+     * rejected — a plain regex \\d{4}-\\d{2}-\\d{2} check can't catch that.
      *
-     * @param value 使用者输入的字串
-     * @return 合法就回传去掉头尾空白的日期字串;格式不对或这一天不存在时回传 null
+     * @param value the string entered by the user
+     * @return the trimmed date string if valid; null if the format is wrong
+     *         or the day doesn't exist
      */
     public static String normalizeDate(String value) {
 
@@ -86,7 +94,8 @@ public class ValidationUtility {
         }
 
         try {
-            // parse 成功才代表这一天真的存在(会挡掉 2026-02-30、2026-13-01 这种)
+            // Only a successful parse confirms the day really exists
+            // (this rejects things like 2026-02-30 or 2026-13-01).
             java.time.LocalDate.parse(trimmed);
             return trimmed;
         } catch (java.time.format.DateTimeParseException e) {
@@ -95,8 +104,9 @@ public class ValidationUtility {
     }
 
     /**
-     * 判断使用者打的日期合不合法(格式对、而且这一天真的存在)。
-     * 只需要判断真假、不需要拿回日期字串时用这个。
+     * Checks whether a user-entered date is valid (correct format and the
+     * day actually exists). Use this when only a true/false answer is
+     * needed, not the date string itself.
      */
     public static boolean isValidDate(String value) {
         return normalizeDate(value) != null;

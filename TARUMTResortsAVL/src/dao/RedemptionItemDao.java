@@ -9,22 +9,24 @@ import java.io.IOException;
 import utility.DataFileLocator;
 
 /**
- * RedemptionItemDao.java - 负责把 data/redemption_items.txt 读进来,组成
- * RedemptionItem 物件,加进传进来的 redemptionItemList。
+ * RedemptionItemDao.java - reads data/redemption_items.txt, builds
+ * RedemptionItem objects, and adds them to the given redemptionItemList.
  *
- * @author 某某
- *
- * 说明:
- * - 只做"读文件、组物件、塞进容器"这件事,不做任何业务判断(不属于Entity/Boundary/Control)
- * - txt格式: itemName,pointsRequired(跟 RedemptionItem 构造函数的参数顺序一样)
+ * Notes:
+ * - Only reads the file, builds objects, and stores them in the container -
+ *   no business logic here (not part of Entity/Boundary/Control).
+ * - txt format: itemName,pointsRequired (same order as the RedemptionItem
+ *   constructor).
  */
 public class RedemptionItemDao {
 
     private static final String FILE_PATH = "data/redemption_items.txt";
 
     /**
-     * 读取 redemption_items.txt,把每一行组成一个 RedemptionItem,加进 redemptionItemList。
-     * @param redemptionItemList 要把读到的RedemptionItem塞进去的容器
+     * Reads redemption_items.txt, turns each line into a RedemptionItem,
+     * and adds it to redemptionItemList.
+     * @param redemptionItemList the container to add the loaded
+     * RedemptionItem objects into
      */
     public void loadRedemptionItems(ListInterface<RedemptionItem> redemptionItemList) {
         File file = DataFileLocator.locate(RedemptionItemDao.class, FILE_PATH);

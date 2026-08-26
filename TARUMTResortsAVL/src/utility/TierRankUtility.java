@@ -2,25 +2,27 @@ package utility;
 
 /**
  * TierRankUtility.java
- * Utility 类 —— 把会员等级(文字)换算成排名数字,给模块2的AVL Tree排序用。
+ * Utility class — converts a member tier (text) into a rank number, for
+ * Module 2's AVL Tree ordering to use.
  *
- * @author 某某
- *
- * 说明:
- * - 只含 static 方法,没有任何状态,符合 Utility 类规范
- * - 数字越大代表等级越高:Diamond=3 > Platinum=2 > Elite=1
- * - 非会员(Standard/未知等级)一律回传 0,排在所有VIP等级之后
+ * Notes:
+ * - Contains only static methods with no state, following the Utility class
+ *   convention
+ * - A bigger number means a higher tier: Diamond=3 > Platinum=2 > Elite=1
+ * - Non-VIP members (Standard/unknown tier) always return 0, ranked after
+ *   all VIP tiers
  */
 public class TierRankUtility {
 
     private TierRankUtility() {
-        // 不给外部 new 出来,纯 static 工具类
+        // Prevents external instantiation; a pure static utility class.
     }
 
     /**
-     * 把等级文字换算成排名数字。
-     * @param tier 等级文字(Elite/Platinum/Diamond,大小写不拘)
-     * @return 排名数字,越大代表等级越高;不认得的等级回传 0
+     * Converts a tier name into a rank number.
+     * @param tier tier name (Elite/Platinum/Diamond, case-insensitive)
+     * @return rank number, bigger means higher tier; unrecognized tiers
+     *         return 0
      */
     public static int tierToRank(String tier) {
         if (tier == null) {
@@ -39,11 +41,14 @@ public class TierRankUtility {
     }
 
     /**
-     * 把排名数字换算回等级文字,给报表要把 Booking.tierRankAtRequest(登记当下的等级排名)
-     * 显示成文字用——不能反查 Member 现在的 tier,因为会员可能之后又升降级了,
-     * 报表要呈现的是"登记当下"是什么等级,不是现在。
-     * @param rank 排名数字
-     * @return 对应的等级文字,认不得的数字回传"Standard"
+     * Converts a rank number back into a tier name, so reports can display
+     * Booking.tierRankAtRequest (the tier rank at the time of booking) as
+     * text — the current Member tier can't be used instead, because the
+     * member may have upgraded or downgraded since; the report needs to
+     * show the tier at the time of booking, not the tier now.
+     * @param rank the rank number
+     * @return the corresponding tier name; unrecognized numbers return
+     *         "Standard"
      */
     public static String rankToTier(int rank) {
         switch (rank) {
@@ -59,10 +64,13 @@ public class TierRankUtility {
     }
 
     /**
-     * 把会员历史累计总积分(totalPointsEarned)换算成该在的等级文字,给模块5升降级判断用。
-     * 门槛数字压低,配合"消费RM10=1分"的赚分速度,让等级在合理的入住次数内够得到。
-     * @param totalPointsEarned 历史累计总积分,只会越来越大,所以这个函数天生只会往上升级
-     * @return 对应的等级文字(Standard/Elite/Platinum/Diamond)
+     * Converts a member's lifetime total points (totalPointsEarned) into
+     * the tier they should be at, for Module 5's upgrade/downgrade check.
+     * The thresholds are kept low, matching the "RM10 spent = 1 point" earn
+     * rate, so tiers are reachable within a reasonable number of stays.
+     * @param totalPointsEarned lifetime total points earned, which only
+     *        ever increases, so this function naturally only ever upgrades
+     * @return the corresponding tier name (Standard/Elite/Platinum/Diamond)
      */
     public static String pointsToTier(int totalPointsEarned) {
         if (totalPointsEarned >= 5000) {
@@ -77,10 +85,13 @@ public class TierRankUtility {
     }
 
     /**
-     * 把等级文字换算成房费折扣百分比——模块5"个性化促销"的其中一种,固定写死,
-     * 只影响价格显示/计算,不碰房型/房间状态这类真正的业务逻辑。
-     * @param tier 等级文字,大小写不拘
-     * @return 折扣百分比(0~100 的整数);不认得的等级(包括Standard)回传0,没有折扣
+     * Converts a tier name into a room rate discount percentage — one of
+     * Module 5's "personalized promotions", hardcoded, affecting only price
+     * display/calculation and not real business logic like room type or
+     * room status.
+     * @param tier tier name, case-insensitive
+     * @return discount percentage (integer 0~100); unrecognized tiers
+     *         (including Standard) return 0, no discount
      */
     public static int tierToDiscountPercent(String tier) {
         if (tier == null) {

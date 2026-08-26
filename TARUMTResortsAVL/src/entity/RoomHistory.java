@@ -5,29 +5,28 @@ import adt.StackInterface;
 
 /**
  * RoomHistory.java
- * Entity 类 —— 代表一间房间自己的状态变更历史记录
+ * Entity class -- represents one room's own status-change history.
  *
- * @author 某某
- *
- * 说明:
- * - 这是纯数据类(POJO),内部包一个Stack,专门存这一间房的状态变更记录
- * - 不包含任何输入(Scanner)或输出(System.out)语句,符合Entity类规范
- * - 不包含"要不要撤销""撤销后怎么处理"这类业务逻辑,这些应写在Control层
- * - Control层做撤销(roll back)操作时,直接对 statusStack 进行 push/pop
- * - 根据业务需求,只保留最近20条记录(由Control层在push新记录前,
- *   检查数量并移除最旧的一条,Entity本身不做这个数量限制的判断)
+ * Notes:
+ * - This is a plain data class (POJO), wraps a Stack internally that stores this
+ *   room's status-change records.
+ * - Contains no input (Scanner) or output (System.out) statements, per Entity class rules.
+ * - Contains no business logic like whether to undo or what to do after undoing --
+ *   that belongs in the Control layer.
+ * - When the Control layer performs a rollback, it pushes/pops statusStack directly.
+ * - Per business requirements, only the most recent 20 records are kept (the Control
+ *   layer checks the count and removes the oldest before pushing a new one; the Entity
+ *   itself does not enforce this limit).
  */
 public class RoomHistory {
 
-    // ========== 数据字段 ==========
-    private String roomNumber;                    // 这份历史记录,属于哪一间房
-    private StackInterface<String> statusStack;    // 状态变更记录,栈顶是最近一次的状态
+    // ========== Data fields ==========
+    private String roomNumber;                    // which room this history belongs to
+    private StackInterface<String> statusStack;    // status-change records, the top of the stack is the most recent status
 
     /**
-     * 构造函数
-     * 新建时,这间房还没有任何历史记录,所以statusStack初始化成空的
-     *
-     * 注意: 这里的 Stack 实现类名称待team确定最终ADT实现方式后替换
+     * Constructor -- when newly created, this room has no history yet, so statusStack
+     * is initialized empty.
      */
     public RoomHistory(String roomNumber) {
         this.roomNumber = roomNumber;
@@ -43,10 +42,10 @@ public class RoomHistory {
         return statusStack;
     }
 
-    // ========== Override 方法 ==========
+    // ========== Overridden methods ==========
 
     /**
-     * toString: 方便在console显示这份历史记录的摘要信息
+     * toString: shows a summary of this history record on the console.
      */
     @Override
     public String toString() {
@@ -54,7 +53,7 @@ public class RoomHistory {
     }
 
     /**
-     * equals: 两份历史记录是否视为"同一份",以房号作为唯一依据
+     * equals: two history records are the same based on room number alone.
      */
     @Override
     public boolean equals(Object obj) {
@@ -69,7 +68,7 @@ public class RoomHistory {
     }
 
     /**
-     * hashCode: 依照Java规范,override了equals()就必须配套override hashCode()
+     * hashCode: per Java convention, overriding equals() requires overriding hashCode() too.
      */
     @Override
     public int hashCode() {

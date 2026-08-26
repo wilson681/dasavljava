@@ -9,14 +9,14 @@ import java.io.IOException;
 import utility.DataFileLocator;
 
 /**
- * RollbackLogDao.java - 负责把 data/rollback_log.txt 读进来,组成
- * RollbackLogEntry,加进 rollbackLog。
+ * RollbackLogDao.java - reads data/rollback_log.txt, builds
+ * RollbackLogEntry objects, and adds them to rollbackLog.
  *
- * @author 某某
- *
- * 说明:
- * - 只做"读文件、组物件、塞进容器"这件事,不做任何业务判断
- * - txt格式: roomNumber,fromStatus,toStatus,date(跟构造函数参数顺序一样)
+ * Notes:
+ * - Only reads the file, builds objects, and stores them in the container -
+ *   no business logic here.
+ * - txt format: roomNumber,fromStatus,toStatus,date (same order as the
+ *   constructor).
  */
 public class RollbackLogDao {
 

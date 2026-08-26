@@ -2,31 +2,31 @@ package entity;
 
 /**
  * BillingRecord.java
- * Entity 类 —— 代表一次入住,退房时结算的总账单
+ * Entity class -- represents the total bill settled at check-out for a stay.
  *
- * @author 某某
- *
- * 说明:
- * - 这是纯数据类(POJO),只负责存放一次入住结算后的账单资料
- * - 不包含任何输入(Scanner)或输出(System.out)语句,符合Entity类规范
- * - 一位客人一次入住,可能分好几次退房(比如两间房、不同天各自退),各自结出各自的
- *   账单,所以一个Guest对应的是一份BillingRecord清单,不是只有一张
- * - roomFee、totalAmount、pointsEarned 都是Control层算好之后传进来的结果,
- *   计算公式(房价x晚数、消费换算积分的比例)写死在Control层,Entity本身不负责计算
+ * Notes:
+ * - This is a plain data class (POJO), only holds data for one settled bill.
+ * - Contains no input (Scanner) or output (System.out) statements, per Entity class rules.
+ * - A guest's stay may be checked out in stages (e.g. two rooms checked out on
+ *   different days), each producing its own bill, so one Guest maps to a list of
+ *   BillingRecords, not just one.
+ * - roomFee, totalAmount, and pointsEarned are all results already computed by the
+ *   Control layer and passed in; the calculation formulas (rate x nights, spend-to-points
+ *   ratio) live in the Control layer -- the Entity itself does no calculation.
  */
 public class BillingRecord {
 
-    // ========== 数据字段 ==========
-    private String billingId;             // 这张账单自己专属的唯一编号,一人多张账单时用来互相区分
-    private String confirmationNumber;   // 这张账单,属于哪位客人(同一位客人的多张账单会共用同一个)
-    private double roomFee;               // 房费 = 房价 x 住的晚数
-    private double extraCharges;          // 额外消费,退房时前台手动输入的一个总数,不分类
-    private double totalAmount;           // 总额 = roomFee + extraCharges
-    private int pointsEarned;             // 这次消费赚了多少积分
-    private String date;                  // 结账日期
+    // ========== Data fields ==========
+    private String billingId;             // this bill's own unique ID, used to tell apart multiple bills for the same guest
+    private String confirmationNumber;    // which guest this bill belongs to (multiple bills for the same guest share this)
+    private double roomFee;               // room fee = rate x number of nights
+    private double extraCharges;          // extra charges, a single total manually entered by the front desk at checkout, uncategorized
+    private double totalAmount;           // total amount = roomFee + extraCharges
+    private int pointsEarned;             // points earned from this spend
+    private String date;                  // checkout date
 
     /**
-     * 构造函数
+     * Constructor.
      */
     public BillingRecord(String billingId, String confirmationNumber, double roomFee, double extraCharges,
                           double totalAmount, int pointsEarned, String date) {
@@ -40,7 +40,7 @@ public class BillingRecord {
     }
 
     // ========== Getters ==========
-    // 账单一旦结清,不应该被修改,所以只提供getter,不提供setter
+    // Once a bill is settled, it should not be modified, so only getters are provided, no setters.
 
     public String getBillingId() {
         return billingId;
@@ -70,10 +70,10 @@ public class BillingRecord {
         return date;
     }
 
-    // ========== Override 方法 ==========
+    // ========== Overridden methods ==========
 
     /**
-     * toString: 方便在console显示这张账单的摘要信息
+     * toString: shows a summary of this bill on the console.
      */
     @Override
     public String toString() {
@@ -82,8 +82,8 @@ public class BillingRecord {
     }
 
     /**
-     * equals: 两张账单是否视为"同一张",以billingId作为唯一依据
-     * (不能用confirmationNumber,因为同一位客人可能分好几次退房、各自有各自的账单)
+     * equals: two bills are the same based on billingId alone (not confirmationNumber,
+     * since a guest may check out in stages with separate bills each).
      */
     @Override
     public boolean equals(Object obj) {
@@ -98,7 +98,7 @@ public class BillingRecord {
     }
 
     /**
-     * hashCode: 依照Java规范,override了equals()就必须配套override hashCode()
+     * hashCode: per Java convention, overriding equals() requires overriding hashCode() too.
      */
     @Override
     public int hashCode() {

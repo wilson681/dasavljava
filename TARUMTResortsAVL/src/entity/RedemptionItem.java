@@ -2,24 +2,22 @@ package entity;
 
 /**
  * RedemptionItem.java
- * Entity 类 —— 代表兑换清单里的一个选项
+ * Entity class -- represents one option in the redemption catalog.
  *
- * @author 某某
- *
- * 说明:
- * - 这是纯数据类(POJO),只负责存放一个"可兑换项目"的资料
- * - 不包含任何输入(Scanner)或输出(System.out)语句,符合Entity类规范
- * - 兑换清单目前先从txt文件读取固定选项,
- *   若未来系统支持职员自行新增兑换项目,这个类的结构不需要改变
+ * Notes:
+ * - This is a plain data class (POJO), only holds data for one redeemable item.
+ * - Contains no input (Scanner) or output (System.out) statements, per Entity class rules.
+ * - The redemption catalog currently loads fixed options from a txt file; if staff
+ *   can add new items in the future, this class's structure does not need to change.
  */
 public class RedemptionItem {
 
-    // ========== 数据字段 ==========
-    private String itemName;         // 兑换项目名称,例如 "Free Breakfast"
-    private int pointsRequired;      // 兑换这个项目,需要多少积分
+    // ========== Data fields ==========
+    private String itemName;         // item name, e.g. "Free Breakfast"
+    private int pointsRequired;      // points required to redeem this item
 
     /**
-     * 构造函数
+     * Constructor.
      */
     public RedemptionItem(String itemName, int pointsRequired) {
         this.itemName = itemName;
@@ -35,10 +33,10 @@ public class RedemptionItem {
         return pointsRequired;
     }
 
-    // ========== Override 方法 ==========
+    // ========== Overridden methods ==========
 
     /**
-     * toString: 方便在console显示这个兑换项目的摘要信息
+     * toString: shows a summary of this item on the console.
      */
     @Override
     public String toString() {
@@ -46,7 +44,7 @@ public class RedemptionItem {
     }
 
     /**
-     * equals: 两个兑换项目是否视为"同一个",以项目名称作为唯一依据
+     * equals: two items are the same based on item name alone.
      */
     @Override
     public boolean equals(Object obj) {
@@ -61,7 +59,7 @@ public class RedemptionItem {
     }
 
     /**
-     * hashCode: 依照Java规范,override了equals()就必须配套override hashCode()
+     * hashCode: per Java convention, overriding equals() requires overriding hashCode() too.
      */
     @Override
     public int hashCode() {

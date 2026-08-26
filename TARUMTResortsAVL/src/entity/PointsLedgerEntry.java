@@ -2,28 +2,28 @@ package entity;
 
 /**
  * PointsLedgerEntry.java
- * Entity 类 —— 代表会员一批积分的明细记录
+ * Entity class -- represents one detail record of a member's points batch.
  *
- * @author 某某
- *
- * 说明:
- * - 这是纯数据类(POJO),只负责存放一批积分"哪天赚的、什么时候过期"的资料
- * - 不包含任何输入(Scanner)或输出(System.out)语句,符合Entity类规范
- * - 跟 Member.totalPointsEarned(历史累计总数)不一样:
- *   这个类记的是"单独一笔明细",一位会员会有很多笔,串起来才能看出
- *   哪些积分快过期、最近有没有在赚分(给"积分到期提醒"和"降级判断"用)
+ * Notes:
+ * - This is a plain data class (POJO), only holds data for when a points batch
+ *   was earned and when it expires.
+ * - Contains no input (Scanner) or output (System.out) statements, per Entity class rules.
+ * - Different from Member.totalPointsEarned (lifetime cumulative total): this class
+ *   records one individual entry, and a member can have many entries. Together they
+ *   show which points are about to expire and whether points were earned recently
+ *   (used for expiry reminders and tier downgrade checks).
  */
 public class PointsLedgerEntry {
 
-    // ========== 数据字段 ==========
-    private String ledgerId;      // 这一笔明细自己专属的编号,唯一识别
-    private String memberId;      // 属于哪位会员
-    private int pointsAmount;     // 这一批赚了多少分
-    private String earnedDate;    // 哪天赚的
-    private String expiryDate;    // 什么时候过期
+    // ========== Data fields ==========
+    private String ledgerId;      // this entry's own unique ID
+    private String memberId;      // which member this belongs to
+    private int pointsAmount;     // how many points this batch earned
+    private String earnedDate;    // date earned
+    private String expiryDate;    // expiry date
 
     /**
-     * 构造函数
+     * Constructor.
      */
     public PointsLedgerEntry(String ledgerId, String memberId, int pointsAmount,
                               String earnedDate, String expiryDate) {
@@ -35,7 +35,7 @@ public class PointsLedgerEntry {
     }
 
     // ========== Getters ==========
-    // 这笔明细一旦产生,不应该被修改,所以只提供getter,不提供setter
+    // Once created, an entry should not be modified, so only getters are provided, no setters.
 
     public String getLedgerId() {
         return ledgerId;
@@ -57,10 +57,10 @@ public class PointsLedgerEntry {
         return expiryDate;
     }
 
-    // ========== Override 方法 ==========
+    // ========== Overridden methods ==========
 
     /**
-     * toString: 方便在console显示这笔积分明细的摘要信息
+     * toString: shows a summary of this ledger entry on the console.
      */
     @Override
     public String toString() {
@@ -68,8 +68,8 @@ public class PointsLedgerEntry {
     }
 
     /**
-     * equals: 两笔积分明细是否视为"同一笔",以ledgerId作为唯一依据
-     * (不能用memberId,因为同一位会员会有很多笔明细)
+     * equals: two entries are the same based on ledgerId alone (not memberId,
+     * since one member has many entries).
      */
     @Override
     public boolean equals(Object obj) {
@@ -84,7 +84,7 @@ public class PointsLedgerEntry {
     }
 
     /**
-     * hashCode: 依照Java规范,override了equals()就必须配套override hashCode()
+     * hashCode: per Java convention, overriding equals() requires overriding hashCode() too.
      */
     @Override
     public int hashCode() {

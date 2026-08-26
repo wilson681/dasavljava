@@ -9,23 +9,26 @@ import java.io.IOException;
 import utility.DataFileLocator;
 
 /**
- * MemberDao.java - 负责把 data/members.txt 读进来,组成 Member 物件,加进传进来的 memberList。
+ * MemberDao.java - reads data/members.txt, builds Member objects, and adds
+ * them to the given memberList.
  *
- * @author 某某
- *
- * 说明:
- * - 只做"读文件、组物件、塞进容器"这件事,不做任何业务判断(不属于Entity/Boundary/Control)
- * - txt格式: memberId,name,phone,tier,currentPoints,totalPointsEarned(跟 Member 构造函数一样)
- * - 路径用DataFileLocator反推,不直接相对"程序执行时的工作目录",这样不管从哪个IDE、
- *   哪个工作目录启动程序,都找得到这个档案
+ * Notes:
+ * - Only reads the file, builds objects, and stores them in the container -
+ *   no business logic here (not part of Entity/Boundary/Control).
+ * - txt format: memberId,name,phone,tier,currentPoints,totalPointsEarned
+ *   (same order as the Member constructor).
+ * - The path is resolved via DataFileLocator instead of the runtime working
+ *   directory, so the file is found no matter which IDE or working
+ *   directory starts the program.
  */
 public class MemberDao {
 
     private static final String FILE_PATH = "data/members.txt";
 
     /**
-     * 读取 members.txt,把每一行组成一个 Member,加进 memberList。
-     * @param memberList 要把读到的Member塞进去的容器
+     * Reads members.txt, turns each line into a Member, and adds it to
+     * memberList.
+     * @param memberList the container to add the loaded Member objects into
      */
     public void loadMembers(ListInterface<Member> memberList) {
         File file = DataFileLocator.locate(MemberDao.class, FILE_PATH);

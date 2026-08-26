@@ -2,16 +2,14 @@ package entity;
 
 /**
  * BookingStatus.java
- * Entity 类 —— 一笔订房请求(Booking)的状态枚举
+ * Entity class -- status enum for a booking request.
  *
- * @author 某某
- *
- * 状态流程(由Control层驱动改变):
- *   PENDING     — 已登记/已排队,还没分到房
- *   CONFIRMED   — 已分配到房间,等待客人入住
- *   CHECKED_IN  — 客人已入住
- *   CHECKED_OUT — 客人已退房
- *   CANCELLED   — 这笔订房请求被取消
+ * Status flow, driven/changed by the Control layer:
+ *   PENDING     -- registered/queued, no room assigned yet
+ *   CONFIRMED   -- room assigned, waiting for guest check-in
+ *   CHECKED_IN  -- guest has checked in
+ *   CHECKED_OUT -- guest has checked out
+ *   CANCELLED   -- this booking request was cancelled
  */
 public enum BookingStatus {
     PENDING,

@@ -2,26 +2,25 @@ package entity;
 
 /**
  * RollbackLogEntry.java
- * Entity 类 —— 代表 Housekeeping 一次成功的状态回滚(undo)事件
+ * Entity class -- represents one successful Housekeeping status rollback (undo) event.
  *
- * @author 某某
- *
- * 说明:
- * - 这是纯数据类(POJO),只负责存放一次回滚事件的资料
- * - 不包含任何输入(Scanner)或输出(System.out)语句,符合Entity类规范
- * - RoomHistory 里的 Stack 一 pop 掉记录就消失,没办法事后统计"这间房到底被回滚了几次"
- *   ——这份记录就是补这个洞的:只增不减的流水,只有回滚成功那一刻才会新增一笔
+ * Notes:
+ * - This is a plain data class (POJO), only holds data for one rollback event.
+ * - Contains no input (Scanner) or output (System.out) statements, per Entity class rules.
+ * - Once a record is popped from the Stack in RoomHistory it's gone, so there's no way
+ *   to later count how many times a room was rolled back -- this record fills that gap:
+ *   an append-only log, with one new entry added only when a rollback succeeds.
  */
 public class RollbackLogEntry {
 
-    // ========== 数据字段 ==========
-    private String roomNumber;   // 哪一间房被回滚
-    private String fromStatus;   // 回滚前的状态(被移除的那个)
-    private String toStatus;     // 回滚后恢复到的状态
-    private String date;         // 回滚发生的日期
+    // ========== Data fields ==========
+    private String roomNumber;   // which room was rolled back
+    private String fromStatus;   // status before rollback (the one removed)
+    private String toStatus;     // status restored to after rollback
+    private String date;         // date the rollback occurred
 
     /**
-     * 构造函数
+     * Constructor.
      */
     public RollbackLogEntry(String roomNumber, String fromStatus, String toStatus, String date) {
         this.roomNumber = roomNumber;
@@ -31,7 +30,7 @@ public class RollbackLogEntry {
     }
 
     // ========== Getters ==========
-    // 记录一旦产生不应该被修改,所以只提供getter,不提供setter
+    // Once created, a record should not be modified, so only getters are provided, no setters.
 
     public String getRoomNumber() {
         return roomNumber;
@@ -49,10 +48,10 @@ public class RollbackLogEntry {
         return date;
     }
 
-    // ========== Override 方法 ==========
+    // ========== Overridden methods ==========
 
     /**
-     * toString: 方便在console显示这笔回滚记录的摘要信息
+     * toString: shows a summary of this rollback record on the console.
      */
     @Override
     public String toString() {
@@ -60,8 +59,9 @@ public class RollbackLogEntry {
     }
 
     /**
-     * equals: 两笔回滚记录是否视为"同一笔",用房号+日期+回滚前状态一起比对
-     * (同一间房同一天可能被回滚不只一次,单靠房号+日期不够精确)
+     * equals: two records are the same by comparing room number, date, and from-status
+     * together (the same room could be rolled back more than once on the same day, so
+     * room number + date alone isn't precise enough).
      */
     @Override
     public boolean equals(Object obj) {
@@ -78,7 +78,7 @@ public class RollbackLogEntry {
     }
 
     /**
-     * hashCode: 依照Java规范,override了equals()就必须配套override hashCode()
+     * hashCode: per Java convention, overriding equals() requires overriding hashCode() too.
      */
     @Override
     public int hashCode() {

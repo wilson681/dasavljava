@@ -9,14 +9,14 @@ import java.io.IOException;
 import utility.DataFileLocator;
 
 /**
- * RedemptionHistoryDao.java - 负责把 data/redemption_history.txt 读进来,
- * 组成 RedemptionTransaction,加进 redemptionHistory。
+ * RedemptionHistoryDao.java - reads data/redemption_history.txt, builds
+ * RedemptionTransaction objects, and adds them to redemptionHistory.
  *
- * @author 某某
- *
- * 说明:
- * - 只做"读文件、组物件、塞进容器"这件事,不做任何业务判断
- * - txt格式: memberId,itemRedeemed,pointsUsed,date(跟构造函数参数顺序一样)
+ * Notes:
+ * - Only reads the file, builds objects, and stores them in the container -
+ *   no business logic here.
+ * - txt format: memberId,itemRedeemed,pointsUsed,date (same order as the
+ *   constructor).
  */
 public class RedemptionHistoryDao {
 

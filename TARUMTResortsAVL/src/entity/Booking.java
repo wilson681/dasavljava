@@ -2,51 +2,57 @@ package entity;
 
 /**
  * Booking.java
- * Entity 类 —— 代表一笔订房请求
+ * Entity class -- represents one booking request.
  *
- * @author 某某
- *
- * 说明:
- * - 这是纯数据类(POJO),只负责存放一笔订房请求的资料
- * - 不包含任何输入(Scanner)或输出(System.out)语句,符合Entity类规范
- * - Booking 跟 Guest 是两回事:Guest 是客人身份档案,Booking 是"这一次订房请求"这个动作本身
- * - 一位客人(一个 confirmationNumber)可以同时开多笔 Booking(比如一次订多间房),
- *   所以 Booking 自己要有一个独立的 bookingId 当唯一识别,不能再借用 confirmationNumber
- * - arrivalSequence 给模块1(Walk-In FIFO排队)用,tierRankAtRequest 给模块2(VIP优先级分房)用
- * - registeredAt/allocatedAt 是给报表算"等待时长"用的真实时间戳(格式 yyyy-MM-dd HH:mm:ss),
- *   跟 arrivalSequence 不一样——arrivalSequence 只在同一条队伍/同一棵树内部比先后,
- *   算不出实际等了几分钟;这两个字段才是给报表用的真时间
- * - 分房成功后,由Control层负责把结果同步写回 Guest.bookedRooms 和 Room.status,
- *   这两件事不属于 Booking 自己的职责
- * - implements Comparable<Booking>:给模块2的 AVL Tree 排序用,规则是
- *   tierRank 越高越优先(反过来比,让compareTo值越小),同 tierRank 再比 arrivalSequence
- *   (越早到,compareTo值越小)——这样 in-order 遍历天生就是"优先级由高到低"
+ * Notes:
+ * - This is a plain data class (POJO), only holds data for one booking request.
+ * - Contains no input (Scanner) or output (System.out) statements, per Entity class rules.
+ * - Booking and Guest are different things: Guest is the guest's identity record,
+ *   Booking is the act of this one booking request itself.
+ * - One guest (one confirmationNumber) can open multiple Bookings at once (e.g.
+ *   booking several rooms in one go), so Booking needs its own independent bookingId
+ *   as a unique identifier -- it cannot reuse confirmationNumber.
+ * - arrivalSequence is used by Module 1 (Walk-In FIFO queue), tierRankAtRequest is
+ *   used by Module 2 (VIP priority room allocation).
+ * - registeredAt/allocatedAt are real timestamps (format yyyy-MM-dd HH:mm:ss) used by
+ *   reports to compute wait duration -- unlike arrivalSequence, which only orders items
+ *   within the same queue/tree and cannot tell how many minutes were actually waited;
+ *   these two fields are the real time source for reports.
+ * - After a room is successfully allocated, the Control layer is responsible for
+ *   syncing the result back into Guest.bookedRooms and Room.status -- neither is
+ *   Booking's own responsibility.
+ * - implements Comparable<Booking>: used for ordering in Module 2's AVL Tree. Rule:
+ *   the higher the tierRank, the higher the priority (compared in reverse, so
+ *   compareTo is smaller); for the same tierRank, compare arrivalSequence (earlier
+ *   arrival gives a smaller compareTo) -- this way an in-order traversal naturally
+ *   yields highest priority to lowest.
  */
 public class Booking implements Comparable<Booking> {
 
-    // ========== 数据字段 ==========
-    private String bookingId;            // Booking自己专属的唯一编号,一人多笔Booking时用来互相区分
-    private String confirmationNumber;   // 关联哪位客人(对应 Guest 的 key),同一位客人的多笔Booking会共用同一个
-    private String guestNameSnapshot;    // 客人姓名快照,方便直接打印,不用反查 Guest
-    private String phoneSnapshot;        // 客人电话快照,登记时收集(VIP从Member.phone抄过来),分到房建Guest时要用
-    private String memberId;             // 关联的会员ID,WALK_IN来源的Booking是null,分到房建Guest时要用
-    private String requestedRoomType;    // 要什么房型(Standard / Deluxe / Suite)
-    private BookingStatus status;        // 订房状态(见 BookingStatus 枚举)
-    private String source;               // 这单从哪来的(例如 WALK_IN / VIP)
-    private int arrivalSequence;         // 到达顺序,模块1 FIFO排队/模块2同等级比较用
-    private int tierRankAtRequest;       // 会员等级排名,模块2插队优先级用
-    private String assignedRoomNo;       // 分到的房号,还没分是 null
+    // ========== Data fields ==========
+    private String bookingId;            // Booking's own unique ID, used to tell apart multiple Bookings for the same guest
+    private String confirmationNumber;   // which guest this is linked to (matches Guest's key); multiple Bookings for the same guest share this
+    private String guestNameSnapshot;    // snapshot of the guest's name, for direct printing without looking up Guest
+    private String phoneSnapshot;        // snapshot of the guest's phone, collected at registration (copied from Member.phone for VIPs), needed when building Guest at allocation time
+    private String memberId;             // linked member ID; null for Bookings from WALK_IN source, needed when building Guest at allocation time
+    private String requestedRoomType;    // requested room type (Standard / Deluxe / Suite)
+    private BookingStatus status;        // booking status (see the BookingStatus enum)
+    private String source;               // where this booking came from (e.g. WALK_IN / VIP)
+    private int arrivalSequence;         // arrival order, used by Module 1's FIFO queue / Module 2's same-tier comparison
+    private int tierRankAtRequest;       // member tier rank, used by Module 2's priority ordering
+    private String assignedRoomNo;       // assigned room number, null until allocated
     // Stay period for THIS booking. One confirmation number may cover several
     // bookings with different stay periods, so the dates belong here rather
     // than on Guest.
     private String checkInDate;          // null until the room is allocated
     private String checkOutDate;         // null until the room is allocated
     private int numberOfNights;          // collected at registration time; dates are filled in once actually allocated
-    private String registeredAt;         // real timestamp(yyyy-MM-dd HH:mm:ss) at the moment this booking was created, for wait-time reports
+    private String registeredAt;         // real timestamp (yyyy-MM-dd HH:mm:ss) at the moment this booking was created, for wait-time reports
     private String allocatedAt;          // real timestamp at the moment a room was allocated; null until then
+
     /**
-     * 构造函数
-     * 新建的订房请求,预设还没有分配到房间,所以 assignedRoomNo 初始化为 null
+     * Constructor -- a newly created booking request has no room assigned yet, so
+     * assignedRoomNo is initialized to null.
      */
     public Booking(String bookingId, String confirmationNumber, String guestNameSnapshot,
                    String phoneSnapshot, String memberId, String requestedRoomType,
@@ -134,19 +140,21 @@ public class Booking implements Comparable<Booking> {
         return allocatedAt;
     }
     // ========== Setters ==========
-    // bookingId、confirmationNumber、guestNameSnapshot、requestedRoomType、source、
-    // arrivalSequence、tierRankAtRequest 登记后不会改变,所以不提供setter
+    // bookingId, confirmationNumber, guestNameSnapshot, requestedRoomType, source,
+    // arrivalSequence, and tierRankAtRequest don't change after registration, so no
+    // setters are provided.
 
     public void setStatus(BookingStatus status) {
-        // 由Control层驱动订房状态流转(PENDING -> CONFIRMED -> CHECKED_IN -> CHECKED_OUT / CANCELLED)
+        // Driven by the Control layer through the booking status flow
+        // (PENDING -> CONFIRMED -> CHECKED_IN -> CHECKED_OUT / CANCELLED).
         this.status = status;
     }
 
     public void setAssignedRoomNo(String assignedRoomNo) {
-        // 由Control层在分房成功后调用,写入分配到的房号
+        // Called by the Control layer after a room is successfully allocated, to record the assigned room number.
         this.assignedRoomNo = assignedRoomNo;
     }
-    
+
     /**
      * Records the stay period for this booking. Called by the Control layer at
      * allocation time, when the guest states how many nights they are staying.
@@ -183,10 +191,11 @@ public class Booking implements Comparable<Booking> {
     public void setAllocatedAt(String allocatedAt) {
         this.allocatedAt = allocatedAt;
     }
-    // ========== Override 方法 ==========
+
+    // ========== Overridden methods ==========
 
     /**
-     * toString: 方便在console显示这笔订房请求的摘要信息
+     * toString: shows a summary of this booking request on the console.
      */
     @Override
      public String toString() {
@@ -197,8 +206,8 @@ public class Booking implements Comparable<Booking> {
     }
 
     /**
-     * equals: 两笔订房请求是否视为"同一笔",以Booking自己的编号作为唯一依据
-     * (不能用confirmationNumber,因为同一位客人可能同时开好几笔Booking)
+     * equals: two booking requests are the same based on Booking's own ID alone (not
+     * confirmationNumber, since a guest may open several Bookings at once).
      */
     @Override
     public boolean equals(Object obj) {
@@ -213,7 +222,7 @@ public class Booking implements Comparable<Booking> {
     }
 
     /**
-     * hashCode: 依照Java规范,override了equals()就必须配套override hashCode()
+     * hashCode: per Java convention, overriding equals() requires overriding hashCode() too.
      */
     @Override
     public int hashCode() {
@@ -221,24 +230,32 @@ public class Booking implements Comparable<Booking> {
     }
 
     /**
-     * compareTo: 给模块2的 AVL Tree 排优先级用。
-     * 规则:tierRank 越高,compareTo 值越小(反过来比);tierRank 相同,arrivalSequence 越小
-     * (越早到)compareTo 值也越小——两条规则都让"优先级越高"排在树的越左边,
-     * in-order 遍历天生就是"优先级由高到低"
+     * compareTo: used for priority ordering in Module 2's AVL Tree.
      *
-     * 最后那条 bookingId 比较不是排序需求,是正确性需求:
+     * Rule: the higher the tierRank, the smaller the compareTo value (compared in
+     * reverse); for the same tierRank, the smaller the arrivalSequence (earlier
+     * arrival) also gives a smaller compareTo value -- both rules place higher
+     * priority further to the left in the tree, so an in-order traversal naturally
+     * yields highest priority to lowest.
      *
-     * AVL 树全程只靠 compareTo 导航(getEntry() 和 remove() 都是),equals() 一次都不会
-     * 被呼叫到。所以对树来说,"compareTo 回传 0"就等于"同一个 key"。要是两笔不同的
-     * Booking 会算出 0,树就分不出它们,remove() 会导航到先撞上的那一个、把不该删的
-     * 那笔删掉——而且不会报错。
+     * The final bookingId comparison is not a sorting requirement, it is a
+     * correctness requirement.
      *
-     * 前两个字段挡不住这件事:tierRank 本来就会重复(同一等级的会员),arrivalSequence
-     * 也可能重复(种子资料和真人登记各有各的计数器)。bookingId 每笔唯一,补在最后就
-     * 保证了 compareTo == 0 只在"真的是同一笔"时成立——也就是跟 equals(比 bookingId)
-     * 对上,符合 Java 对 Comparable 的建议:compareTo 应当与 equals 保持一致。
+     * The AVL tree navigates purely via compareTo throughout (both getEntry() and
+     * remove()) -- equals() is never called. So for the tree, "compareTo returns 0"
+     * is equivalent to "same key". If two different Bookings compute to 0, the tree
+     * cannot tell them apart, and remove() will navigate to whichever one it hits
+     * first and delete the wrong one, with no error raised.
      *
-     * 这一条只在前两个字段完全并列时才会被用到,原本就分得出先后的排序结果完全不变。
+     * The first two fields alone don't prevent this: tierRank naturally repeats
+     * (members of the same tier), and arrivalSequence can also repeat (seed data and
+     * real registrations each have their own counters). bookingId is unique per
+     * booking, so adding it last guarantees compareTo == 0 holds only when it really
+     * is the same booking -- which lines up with equals() (which compares bookingId),
+     * matching Java's recommendation that compareTo should be consistent with equals.
+     *
+     * This last comparison is only used when the first two fields tie completely; the
+     * sort order for cases that already have a clear ordering is unchanged.
      */
     @Override
     public int compareTo(Booking other) {

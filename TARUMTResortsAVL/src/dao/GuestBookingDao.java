@@ -15,20 +15,24 @@ import utility.DataFileLocator;
 import utility.TierRankUtility;
 
 /**
- * GuestBookingDao.java - 负责把 data/guest_bookings.txt 读进来,组成已经分到房的
- * Booking,挂到 guestTable 里对应的 Guest 身上(不是进 Queue/AVL Tree,那是还在等的)。
+ * GuestBookingDao.java - reads data/guest_bookings.txt and builds Bookings
+ * that already have a room assigned, attaching each to its Guest in
+ * guestTable (not into a Queue/AVL Tree - those are still waiting).
  *
- * @author 某某
- *
- * 说明:
- * - 只做"读文件、组物件、塞进容器"这件事,不做任何业务判断
- * - 必须在 GuestDao 之后跑,靠 guestTable.getEntry(new Guest(confirmationNumber))
- *   找到该确认号已经存在的 Guest 物件
- * - txt格式: confirmationNumber,requestedRoomType,source,memberId,roomNumber,status,
- *   checkInDate,checkOutDate,numberOfNights,registeredAt,allocatedAt
- * - 分房成功后要同步 Guest.bookedRooms(addRoom)跟 Guest.bookings(addBooking),
- *   照抄真实分房流程(doAllocate())分房成功那一刻做的两件事
- * - bookingId 用自己的计数器,前缀 SGB,不会跟真人操作的 WB/VB 撞号
+ * Notes:
+ * - Only reads the file, builds objects, and stores them in the container -
+ *   no business logic here.
+ * - Must run after GuestDao, relying on
+ *   guestTable.getEntry(new Guest(confirmationNumber)) to find the existing
+ *   Guest object for that confirmation number.
+ * - txt format: confirmationNumber,requestedRoomType,source,memberId,
+ *   roomNumber,status,checkInDate,checkOutDate,numberOfNights,registeredAt,
+ *   allocatedAt.
+ * - After a successful room assignment, must also update
+ *   Guest.bookedRooms(addRoom) and Guest.bookings(addBooking), mirroring
+ *   the two things the real allocation flow (doAllocate()) does on success.
+ * - bookingId uses its own counter with prefix SGB, so it won't collide
+ *   with manual operations' WB/VB IDs.
  */
 public class GuestBookingDao {
 

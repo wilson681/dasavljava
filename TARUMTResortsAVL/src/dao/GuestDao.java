@@ -9,16 +9,18 @@ import java.io.IOException;
 import utility.DataFileLocator;
 
 /**
- * GuestDao.java - 负责把 data/guests.txt 读进来,组成 Guest 物件,加进 guestTable。
+ * GuestDao.java - reads data/guests.txt, builds Guest objects, and adds
+ * them to guestTable.
  *
- * @author 某某
- *
- * 说明:
- * - 只做"读文件、组物件、塞进容器"这件事,不做任何业务判断
- * - txt格式: confirmationNumber,name,phone,memberId,tier,registrationTime,checkInDate,checkOutDate,numberOfNights
- *   (跟 Guest 完整构造函数参数顺序一样);memberId 空白代表非会员
- * - 必须在 GuestBookingDao/BillingRecordDao 之前跑,那两个都要靠 guestTable.getEntry()
- *   找到这里已经塞进去的 Guest 物件才能往上加 Booking/BillingRecord
+ * Notes:
+ * - Only reads the file, builds objects, and stores them in the container -
+ *   no business logic here.
+ * - txt format: confirmationNumber,name,phone,memberId,tier,
+ *   registrationTime,checkInDate,checkOutDate,numberOfNights (same order as
+ *   the full Guest constructor); an empty memberId means a non-member.
+ * - Must run before GuestBookingDao/BillingRecordDao, since both rely on
+ *   guestTable.getEntry() to find the Guest objects added here before they
+ *   can attach a Booking/BillingRecord to them.
  */
 public class GuestDao {
 

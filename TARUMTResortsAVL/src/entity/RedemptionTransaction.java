@@ -2,26 +2,24 @@ package entity;
 
 /**
  * RedemptionTransaction.java
- * Entity 类 —— 代表一笔积分兑换记录
+ * Entity class -- represents one points-redemption transaction record.
  *
- * @author 某某
- *
- * 说明:
- * - 这是纯数据类(POJO),只负责存放一笔兑换记录的资料
- * - 不包含任何输入(Scanner)或输出(System.out)语句,符合Entity类规范
- * - 这份记录,是"兑换"这个操作发生时,由Control层产生的结果,
- *   不需要预先从txt文件初始化
+ * Notes:
+ * - This is a plain data class (POJO), only holds data for one redemption record.
+ * - Contains no input (Scanner) or output (System.out) statements, per Entity class rules.
+ * - This record is produced by the Control layer when a "redeem" action happens;
+ *   it does not need to be pre-loaded from a txt file.
  */
 public class RedemptionTransaction {
 
-    // ========== 数据字段 ==========
-    private String memberId;        // 哪位会员进行的兑换
-    private String itemRedeemed;    // 兑换了什么东西(对应 RedemptionItem 的名称)
-    private int pointsUsed;         // 这次兑换,花了多少积分
-    private String date;            // 兑换日期
+    // ========== Data fields ==========
+    private String memberId;        // which member made the redemption
+    private String itemRedeemed;    // what was redeemed, matches RedemptionItem's name
+    private int pointsUsed;         // how many points were spent on this redemption
+    private String date;            // redemption date
 
     /**
-     * 构造函数
+     * Constructor.
      */
     public RedemptionTransaction(String memberId, String itemRedeemed, int pointsUsed, String date) {
         this.memberId = memberId;
@@ -31,7 +29,7 @@ public class RedemptionTransaction {
     }
 
     // ========== Getters ==========
-    // 兑换记录一旦产生,不应该被修改,所以只提供getter,不提供setter
+    // Once created, a redemption record should not be modified, so only getters are provided, no setters.
 
     public String getMemberId() {
         return memberId;
@@ -49,10 +47,10 @@ public class RedemptionTransaction {
         return date;
     }
 
-    // ========== Override 方法 ==========
+    // ========== Overridden methods ==========
 
     /**
-     * toString: 方便在console显示这笔兑换记录的摘要信息
+     * toString: shows a summary of this redemption record on the console.
      */
     @Override
     public String toString() {
@@ -60,8 +58,8 @@ public class RedemptionTransaction {
     }
 
     /**
-     * equals: 两笔兑换记录,视为同一笔的判断依据
-     * 用会员ID+日期+兑换项目一起比对
+     * equals: two records are considered the same by comparing member ID, date,
+     * and redeemed item together.
      */
     @Override
     public boolean equals(Object obj) {
@@ -78,7 +76,7 @@ public class RedemptionTransaction {
     }
 
     /**
-     * hashCode: 依照Java规范,override了equals()就必须配套override hashCode()
+     * hashCode: per Java convention, overriding equals() requires overriding hashCode() too.
      */
     @Override
     public int hashCode() {

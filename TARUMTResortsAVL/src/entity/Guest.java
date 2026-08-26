@@ -5,37 +5,35 @@ import adt.ListInterface;
 
 /**
  * Guest.java
- * Entity 类 —— 代表一位登记入住的客人
- *
- * @author 某某
- *
-
+ * Entity class -- represents one checked-in/registered guest.
  */
 public class Guest {
 
-    // ========== 数据字段 ==========
-    private String confirmationNumber;   // 8位确认号码,唯一识别这位客人
-    private String name;                  // 客人姓名
-    private String phone;                 // 联系电话
-    private String memberId;              // 关联的会员ID(如果不是会员,则为null)
-    private String tier;                  // 客人当前等级(Standard/Elite/Platinum/Diamond)
-    private String registrationTime;      // 登记时间,格式如 "2026-08-01 09:00",用于VIP同等级时的排序依据
-    private String checkInDate;           // 入住日期,给报表统计入住率用
-    private String checkOutDate;          // 预计退房日期,给报表统计入住率用
-    private int numberOfNights;           // 这次入住预计住几晚,算房费用
-    private ListInterface<String> bookedRooms;   // 这次入住,预订的所有房号
-    // 一位客人可能分好几次退房(比如两间房、不同天各自退),每次都各自结一张账单,
-    // 所以这里是清单,不是单一一张——不能假设"一位客人这辈子只有一张账单"
+    // ========== Data fields ==========
+    private String confirmationNumber;   // 8-digit confirmation number, uniquely identifies this guest
+    private String name;                 // guest name
+    private String phone;                // contact phone
+    private String memberId;             // linked member ID (null if not a member)
+    private String tier;                 // guest's current tier (Standard/Elite/Platinum/Diamond)
+    private String registrationTime;     // registration time, e.g. "2026-08-01 09:00", used as a tiebreaker sort key for VIPs of the same tier
+    private String checkInDate;          // check-in date, used for occupancy-rate reports
+    private String checkOutDate;         // expected check-out date, used for occupancy-rate reports
+    private int numberOfNights;          // expected number of nights for this stay, used to calculate room charges
+    private ListInterface<String> bookedRooms;   // all room numbers booked for this stay
+    // A guest may check out in several stages (e.g. two rooms checked out on different
+    // days), each producing its own bill, so this is a list, not a single record -- do
+    // not assume a guest has only one bill ever.
     private ListInterface<BillingRecord> billingRecords;
     private ListInterface<Booking> bookings;
+
     /**
-     * 构造函数
-     * 新登记的客人,预设还没有任何预订的房间,也还没有任何账单,
-     * 所以 bookedRooms、billingRecords 在这里都初始化成空的 List
+     * Constructor -- a newly registered guest starts with no booked rooms and no
+     * bills, so bookedRooms and billingRecords are initialized as empty Lists here.
      *
-     * 注意: 这里的 List 实现类名称待team确定最终ADT实现方式后替换
-     * (不可使用 ArrayList 这个名字,因为会与 java.util.ArrayList 撞名,
-     *  容易被误判为直接使用了 Java Collections Framework)
+     * Note: the List implementation class name is a placeholder until the team
+     * finalizes the ADT implementation (must not be named "ArrayList" -- that would
+     * clash with java.util.ArrayList and look like direct use of the Java Collections
+     * Framework).
      */
     public Guest(String confirmationNumber, String name, String phone,
                  String memberId, String tier, String registrationTime,
@@ -111,24 +109,25 @@ public Guest(String confirmationNumber) {
     }
 
     // ========== Setters ==========
-    // 姓名、电话、确认号码在登记后不会变,所以不提供setter,只提供会变动的字段的setter
+    // Name, phone, and confirmation number don't change after registration, so no
+    // setters are provided for them -- only for fields that can change.
 
     public void setTier(String tier) {
-        // 客人升级/降级时,由Control层调用,更新这个字段
+        // Called by the Control layer to update this field when the guest is upgraded/downgraded.
         this.tier = tier;
     }
 
     /**
-     * 把一个房号加进这位客人的预订列表
-     * (单纯的数据操作,不涉及房间状态改变等业务逻辑)
+     * Adds a room number to this guest's booked-rooms list (a plain data operation,
+     * no business logic like changing room status).
      */
     public void addRoom(String roomNumber) {
         bookedRooms.add(roomNumber);
     }
 
     /**
-     * 把一个房号从这位客人的预订列表移除
-     * (单纯的数据操作,不涉及房间状态改变等业务逻辑)
+     * Removes a room number from this guest's booked-rooms list (a plain data
+     * operation, no business logic like changing room status).
      */
     public void removeRoom(String roomNumber) {
         int position = bookedRooms.indexOf(roomNumber);
@@ -138,9 +137,10 @@ public Guest(String confirmationNumber) {
     }
 
     /**
-     * 退房结账时,把这一次结算的账单加进这位客人的记录——一位客人可能分好几次退房,
-     * 各自结出各自的账单,所以是往清单里加一笔,不是覆盖掉之前那笔
-     * (单纯的数据操作,房费/额外消费/积分怎么算是Control层的事)
+     * At checkout, adds this settled bill to the guest's record. A guest may check
+     * out in stages, each producing its own bill, so this appends to the list rather
+     * than overwriting the previous one (a plain data operation; how room charges,
+     * extras, and points are calculated is the Control layer's job).
      */
     public void addBillingRecord(BillingRecord billingRecord) {
         billingRecords.add(billingRecord);
@@ -161,10 +161,11 @@ public Guest(String confirmationNumber) {
     public ListInterface<Booking> getBookings() {
         return bookings;
     }
-    // ========== Override 方法 ==========
+
+    // ========== Overridden methods ==========
 
     /**
-     * toString: 方便在console显示这位客人的摘要信息
+     * toString: shows a summary of this guest on the console.
      */
     @Override
     public String toString() {
@@ -172,8 +173,8 @@ public Guest(String confirmationNumber) {
     }
 
     /**
-     * equals: 两位客人是否视为"同一个人",以确认号码作为唯一依据
-     * (这个方法在ADT的contains()、remove()等操作中会被用到)
+     * equals: two guests are the same person based on confirmation number alone
+     * (this method is used by ADT operations like contains() and remove()).
      */
     @Override
     public boolean equals(Object obj) {
@@ -186,9 +187,9 @@ public Guest(String confirmationNumber) {
         Guest other = (Guest) obj;
         return this.confirmationNumber.equals(other.confirmationNumber);
     }
-    
+
     /**
-     * 两者都以confirmationNumber作为唯一依据,保持一致
+     * hashCode: kept consistent with equals(), both keyed on confirmationNumber.
      */
     @Override
     public int hashCode() {

@@ -2,29 +2,27 @@ package entity;
 
 /**
  * Room.java
- * Entity 类 —— 代表酒店里的一间房间
+ * Entity class -- represents one room in the hotel.
  *
- * @author 某某
- *
- * status 可能的值(状态流程,由Control层驱动改变):
- *   AVAILABLE              — 空房,可分配给客人
- *   OCCUPIED                — 已有客人入住
- *   NEEDS_CLEANING          — 客人已退房,待清洁
- *   CLEANING_IN_PROGRESS    — 清洁中
- *   INSPECTED               — 已检查,即将转为可用
+ * Possible values of status (status flow, driven/changed by the Control layer):
+ *   AVAILABLE            -- vacant, can be assigned to a guest
+ *   OCCUPIED             -- currently has a guest checked in
+ *   NEEDS_CLEANING       -- guest has checked out, awaiting cleaning
+ *   CLEANING_IN_PROGRESS -- currently being cleaned
+ *   INSPECTED            -- inspected, about to become available
  */
 public class Room {
 
-    // ========== 数据字段 ==========
-    private String roomNumber;   // 房号,唯一识别这间房
-    private String roomType;      // 房型: Standard / Deluxe / Suite
-    private double nightlyRate;   // 固定房价,每晚多少钱
-    private String status;        // 当前状态(见类注释列出的状态值)
-    private RoomHistory roomHistory;   // 这间房自己的状态变更历史(Entity间引用,模块3用)
+    // ========== Data fields ==========
+    private String roomNumber;         // room number, uniquely identifies this room
+    private String roomType;           // room type: Standard / Deluxe / Suite
+    private double nightlyRate;        // fixed room rate, price per night
+    private String status;             // current status (see the values listed in the class comment)
+    private RoomHistory roomHistory;   // this room's own status-change history (Entity-to-Entity reference, used by Module 3)
 
     /**
-     * 构造函数
-     * 房间一建出来,就自带一份空的 RoomHistory,不用额外的对照表去找
+     * Constructor -- a room comes with its own empty RoomHistory as soon as it's
+     * created, no need for a separate lookup table.
      */
     public Room(String roomNumber, String roomType, double nightlyRate, String status) {
         this.roomNumber = roomNumber;
@@ -56,17 +54,18 @@ public class Room {
     }
 
     // ========== Setters ==========
-    // roomNumber、roomType、nightlyRate 在创建后不会改变,所以不提供setter
-    // status 会随着入住/退房/清洁流程不断改变,由Control层调用来更新
+    // roomNumber, roomType, and nightlyRate don't change after creation, so no setters
+    // are provided; status keeps changing through the check-in/check-out/cleaning flow,
+    // updated via calls from the Control layer.
 
     public void setStatus(String status) {
         this.status = status;
     }
 
-    // ========== Override 方法 ==========
+    // ========== Overridden methods ==========
 
     /**
-     * toString: 方便在console显示这间房的摘要信息
+     * toString: shows a summary of this room on the console.
      */
     @Override
     public String toString() {
@@ -74,7 +73,7 @@ public class Room {
     }
 
     /**
-     * equals: 两间房是否视为"同一间",以房号作为唯一依据
+     * equals: two rooms are the same based on room number alone.
      */
     @Override
     public boolean equals(Object obj) {
@@ -89,7 +88,7 @@ public class Room {
     }
 
     /**
-     * hashCode: 依照Java规范,override了equals()就必须配套override hashCode()
+     * hashCode: per Java convention, overriding equals() requires overriding hashCode() too.
      */
     @Override
     public int hashCode() {
