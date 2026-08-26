@@ -74,7 +74,7 @@ public class MainMenuCLI {
         System.out.println("   1) Daily Registration Report");
         System.out.println("   2) Wait Time Analysis Report");
         System.out.println("VIP & Loyalty Tier Priority Allocation");
-        System.out.println("   3) VIP Waiting List Report");
+        System.out.println("   3) Live VIP Waiting Queue & SLA Report");
         System.out.println("   4) Tier Allocation SLA Report");
         System.out.println("Housekeeping and Task Log");
         System.out.println("   5) Housekeeping Status Report");

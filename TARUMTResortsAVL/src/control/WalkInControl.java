@@ -128,9 +128,11 @@ public class WalkInControl {
         }
 
         // 一位客人可能一次要订好几间房(不一定同房型),所以姓名/电话只问一次,
-        // 底下用同一个confirmationNumber循环开多笔Booking,直到客人说不用再加了
-        confirmationCounter++;
-        String confirmationNumber = String.valueOf(confirmationCounter);
+        // 底下用同一个confirmationNumber循环开多笔Booking,直到客人说不用再加了。
+        // confirmationNumber 延后到确定第一笔Booking真的要建立时才发号(见下方),
+        // 不能一进循环就先发——不然客人在房型/晚数这一步按空白取消,号码已经被
+        // ++掉、却从头到尾没建过任何Booking,永远烧掉一个不会再出现的确认号。
+        String confirmationNumber = null;
 
         boolean continueBooking = true;
         while (continueBooking) {
@@ -148,6 +150,13 @@ public class WalkInControl {
             int numberOfNights = promptValidNumberOfNights();
             if (numberOfNights == Integer.MIN_VALUE) {
                 break;
+            }
+
+            // 走到这里代表这一笔真的要建立了,第一次进来才发号,同一位客人
+            // 之后再加订的房间沿用同一个confirmationNumber
+            if (confirmationNumber == null) {
+                confirmationCounter++;
+                confirmationNumber = String.valueOf(confirmationCounter);
             }
 
             arrivalCounter++;

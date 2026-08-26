@@ -32,6 +32,14 @@ import utility.ValidationUtility;
  */
 public class VipAllocationControl {
 
+    // Reporting-only service targets. They measure how quickly each tier was
+    // served, but they never change AVL priority or trigger room allocation.
+    private static final int STANDARD_SLA_MINUTES = 30;
+    private static final int ELITE_SLA_MINUTES = 20;
+    private static final int PLATINUM_SLA_MINUTES = 15;
+    private static final int DIAMOND_SLA_MINUTES = 10;
+    private static final double SLA_COMPLIANCE_GOAL_PERCENT = 90.0;
+
     private final VipAllocationCLI vipAllocationCLI;
     private final SearchTreeInterface<Booking> standardTree;
     private final SearchTreeInterface<Booking> deluxeTree;
@@ -114,9 +122,11 @@ public class VipAllocationControl {
         int tierRank = TierRankUtility.tierToRank(member.getTier());
 
         // 这位VIP可能一次要订好几间房(不一定同房型),所以会员资料只查一次,
-        // 底下用同一个confirmationNumber循环开多笔Booking,直到不用再加了
-        confirmationCounter++;
-        String confirmationNumber = String.valueOf(confirmationCounter);
+        // 底下用同一个confirmationNumber循环开多笔Booking,直到不用再加了。
+        // confirmationNumber 延后到确定第一笔Booking真的要建立时才发号(见下方),
+        // 不能一进循环就先发——不然客人在房型/晚数这一步按空白取消,号码已经被
+        // ++掉、却从头到尾没建过任何Booking,永远烧掉一个不会再出现的确认号。
+        String confirmationNumber = null;
 
         boolean continueBooking = true;
         while (continueBooking) {
@@ -135,6 +145,13 @@ public class VipAllocationControl {
             int numberOfNights = promptValidNumberOfNights();
             if (numberOfNights == Integer.MIN_VALUE) {
                 break;
+            }
+
+            // 走到这里代表这一笔真的要建立了,第一次进来才发号,同一位会员
+            // 之后再加订的房间沿用同一个confirmationNumber
+            if (confirmationNumber == null) {
+                confirmationCounter++;
+                confirmationNumber = String.valueOf(confirmationCounter);
             }
 
             arrivalCounter++;
@@ -291,9 +308,9 @@ public class VipAllocationControl {
     // ========== 报表1:VIP等待名单实时报表 ==========
 
     /**
-     * filter=等级,资料只取"现在还在树里"的(真正的实时等待名单)。排序刻意不用
-     * 树本身的中序顺序(那是tierRank+arrivalSequence),改成按"已经等了多久"降序——
-     * 这样报表层才是自己在做排序,不是单纯把树的既有顺序吐出来。
+     * Real-time waiting report. Requests are globally sorted by the same
+     * business priority used by the AVL trees: higher tier first, then earlier
+     * arrival within the same tier. SLA targets are reporting indicators only.
      */
     void doVipWaitingListReport() {
         int tierRankFilter = vipAllocationCLI.promptReportTierRank();
@@ -305,18 +322,46 @@ public class VipAllocationControl {
         collectTierFiltered(deluxeTree, tierRankFilter, filtered, waitMinutesList);
         collectTierFiltered(suiteTree, tierRankFilter, filtered, waitMinutesList);
 
-        sortByWaitMinutesDescending(filtered, waitMinutesList);
+        sortByVipPriority(filtered, waitMinutesList);
 
-        vipAllocationCLI.displayVipWaitingListReportHeader(tierRankFilter);
+        vipAllocationCLI.displayVipWaitingListReportHeader(
+                tierRankFilter, currentTimestamp());
         if (filtered.isEmpty()) {
             vipAllocationCLI.displayNoReportRecords();
         } else {
+            int breachedCount = 0;
+            int longestPosition = 1;
+
             for (int i = 1; i <= filtered.getNumberOfEntries(); i++) {
                 Booking booking = filtered.getEntry(i);
-                vipAllocationCLI.displayVipWaitingListReportRow(booking.getGuestNameSnapshot(),
+                int waitMinutes = waitMinutesList.getEntry(i);
+                int targetMinutes = slaTargetMinutes(booking.getTierRankAtRequest());
+                boolean breached = waitMinutes > targetMinutes;
+
+                if (breached) {
+                    breachedCount++;
+                }
+                if (waitMinutes > waitMinutesList.getEntry(longestPosition)) {
+                    longestPosition = i;
+                }
+
+                vipAllocationCLI.displayVipWaitingListReportRow(i,
+                        booking.getBookingId(), booking.getGuestNameSnapshot(),
                         TierRankUtility.rankToTier(booking.getTierRankAtRequest()),
-                        booking.getRegisteredAt(), waitMinutesList.getEntry(i));
+                        booking.getRequestedRoomType(), waitMinutes,
+                        targetMinutes, breached);
             }
+
+            Booking nextPriority = filtered.getEntry(1);
+            Booking longestWaiting = filtered.getEntry(longestPosition);
+            vipAllocationCLI.displayVipWaitingListReportSummary(
+                    filtered.getNumberOfEntries(),
+                    filtered.getNumberOfEntries() - breachedCount,
+                    breachedCount,
+                    nextPriority.getGuestNameSnapshot(),
+                    nextPriority.getRequestedRoomType(),
+                    longestWaiting.getGuestNameSnapshot(),
+                    waitMinutesList.getEntry(longestPosition));
         }
         vipAllocationCLI.displayReportEnd();
     }
@@ -330,7 +375,8 @@ public class VipAllocationControl {
             // 登记这条路,0是Standard真正的排名,不是"没有filter"的意思
             if (tierRankFilter == -1 || booking.getTierRankAtRequest() == tierRankFilter) {
                 filtered.add(booking);
-                waitMinutesList.add(minutesBetween(booking.getRegisteredAt(), currentTimestamp()));
+                int waitMinutes = minutesBetween(booking.getRegisteredAt(), currentTimestamp());
+                waitMinutesList.add(Math.max(0, waitMinutes));
             }
         }
     }
@@ -338,8 +384,8 @@ public class VipAllocationControl {
     // ========== 报表2:等级分房达标率报表 ==========
 
     /**
-     * filter=等级+日期区间(按分房那天算),把"登记到分房"的平均耗时按等级分组比较,
-     * 用来验证"VIP优先"这个承诺是不是真的兑现——如果高等级反而等更久,代表流程有问题。
+     * Measures allocation performance against the reporting-only SLA target
+     * for each tier. The date filter uses the allocation date.
      */
     void doTierSlaReport() {
         int tierRankFilter = vipAllocationCLI.promptReportTierRank();
@@ -350,6 +396,9 @@ public class VipAllocationControl {
         // 也能走VIP登记这条路(排名垫底但仍插进树里),所以0档也要统计,不能排除
         int[] count = new int[4];
         int[] totalWaitMinutes = new int[4];
+        int[] metCount = new int[4];
+        int[] breachedCount = new int[4];
+        int[] worstWaitMinutes = new int[4];
 
         Iterator<Guest> guestIterator = guestTable.getIterator();
         while (guestIterator.hasNext()) {
@@ -373,61 +422,116 @@ public class VipAllocationControl {
                 if (allocatedDate.compareTo(fromDate) < 0 || allocatedDate.compareTo(toDate) > 0) {
                     continue;
                 }
+                int waitMinutes = minutesBetween(
+                        booking.getRegisteredAt(), booking.getAllocatedAt());
+                if (waitMinutes < 0) {
+                    continue;
+                }
+
                 count[rank]++;
-                totalWaitMinutes[rank] += minutesBetween(booking.getRegisteredAt(), booking.getAllocatedAt());
+                totalWaitMinutes[rank] += waitMinutes;
+                if (waitMinutes <= slaTargetMinutes(rank)) {
+                    metCount[rank]++;
+                } else {
+                    breachedCount[rank]++;
+                }
+                if (waitMinutes > worstWaitMinutes[rank]) {
+                    worstWaitMinutes[rank] = waitMinutes;
+                }
             }
         }
 
-        // 组成最多4行(有资料的等级才列,含Standard),再按平均等待时长降序排(selection sort)
-        ListInterface<String> tierNames = new ArrayBasedList<>();
-        ListInterface<Integer> tierCounts = new ArrayBasedList<>();
-        ListInterface<Double> tierAverages = new ArrayBasedList<>();
+        // Store only ranks that have data, then use a self-written selection
+        // sort to put the weakest SLA performance first.
+        ListInterface<Integer> reportRanks = new ArrayBasedList<>();
         for (int rank = 3; rank >= 0; rank--) {
             if (count[rank] > 0) {
-                tierNames.add(TierRankUtility.rankToTier(rank));
-                tierCounts.add(count[rank]);
-                tierAverages.add(totalWaitMinutes[rank] / (double) count[rank]);
+                reportRanks.add(rank);
             }
         }
-        sortTierSummaryByAverageDescending(tierNames, tierCounts, tierAverages);
+        sortSlaRanksByRisk(reportRanks, count, metCount, totalWaitMinutes);
 
-        vipAllocationCLI.displayTierSlaReportHeader(tierRankFilter, fromDate, toDate);
-        if (tierNames.isEmpty()) {
+        vipAllocationCLI.displayTierSlaReportHeader(tierRankFilter,
+                fromDate, toDate, currentTimestamp(),
+                SLA_COMPLIANCE_GOAL_PERCENT,
+                DIAMOND_SLA_MINUTES, PLATINUM_SLA_MINUTES,
+                ELITE_SLA_MINUTES, STANDARD_SLA_MINUTES);
+        if (reportRanks.isEmpty()) {
             vipAllocationCLI.displayNoReportRecords();
         } else {
-            for (int i = 1; i <= tierNames.getNumberOfEntries(); i++) {
-                vipAllocationCLI.displayTierSlaReportRow(tierNames.getEntry(i),
-                        tierCounts.getEntry(i), tierAverages.getEntry(i));
+            int totalAllocations = 0;
+            int totalMet = 0;
+            int totalBreached = 0;
+
+            for (int i = 1; i <= reportRanks.getNumberOfEntries(); i++) {
+                int rank = reportRanks.getEntry(i);
+                double averageWait = totalWaitMinutes[rank] / (double) count[rank];
+                double compliance = percentage(metCount[rank], count[rank]);
+
+                vipAllocationCLI.displayTierSlaReportRow(
+                        TierRankUtility.rankToTier(rank),
+                        slaTargetMinutes(rank), count[rank], metCount[rank],
+                        breachedCount[rank], compliance, averageWait,
+                        worstWaitMinutes[rank], slaPerformanceStatus(compliance));
+
+                totalAllocations += count[rank];
+                totalMet += metCount[rank];
+                totalBreached += breachedCount[rank];
             }
+
+            int weakestRank = reportRanks.getEntry(1);
+            double overallCompliance = percentage(totalMet, totalAllocations);
+            double weakestCompliance = percentage(
+                    metCount[weakestRank], count[weakestRank]);
+            vipAllocationCLI.displayTierSlaReportSummary(
+                    totalAllocations, totalMet, totalBreached,
+                    overallCompliance, slaPerformanceStatus(overallCompliance),
+                    TierRankUtility.rankToTier(weakestRank), weakestCompliance,
+                    SLA_COMPLIANCE_GOAL_PERCENT);
         }
         vipAllocationCLI.displayReportEnd();
     }
 
-    private void sortTierSummaryByAverageDescending(ListInterface<String> tierNames,
-                                                      ListInterface<Integer> tierCounts,
-                                                      ListInterface<Double> tierAverages) {
-        int n = tierNames.getNumberOfEntries();
+    /**
+     * Selection sort: lowest compliance first; when compliance ties, the tier
+     * with the longer average wait comes first; final tie-break is higher tier.
+     */
+    private void sortSlaRanksByRisk(ListInterface<Integer> ranks,
+                                    int[] count, int[] metCount,
+                                    int[] totalWaitMinutes) {
+        int n = ranks.getNumberOfEntries();
         for (int i = 1; i <= n - 1; i++) {
-            int largestPosition = i;
+            int riskiestPosition = i;
             for (int j = i + 1; j <= n; j++) {
-                if (tierAverages.getEntry(j) > tierAverages.getEntry(largestPosition)) {
-                    largestPosition = j;
+                if (comesBeforeInSlaReport(
+                        ranks.getEntry(j), ranks.getEntry(riskiestPosition),
+                        count, metCount, totalWaitMinutes)) {
+                    riskiestPosition = j;
                 }
             }
-            if (largestPosition != i) {
-                String tempName = tierNames.getEntry(i);
-                tierNames.replace(i, tierNames.getEntry(largestPosition));
-                tierNames.replace(largestPosition, tempName);
-
-                Integer tempCount = tierCounts.getEntry(i);
-                tierCounts.replace(i, tierCounts.getEntry(largestPosition));
-                tierCounts.replace(largestPosition, tempCount);
-
-                Double tempAverage = tierAverages.getEntry(i);
-                tierAverages.replace(i, tierAverages.getEntry(largestPosition));
-                tierAverages.replace(largestPosition, tempAverage);
+            if (riskiestPosition != i) {
+                Integer tempRank = ranks.getEntry(i);
+                ranks.replace(i, ranks.getEntry(riskiestPosition));
+                ranks.replace(riskiestPosition, tempRank);
             }
         }
+    }
+
+    private boolean comesBeforeInSlaReport(int rankA, int rankB,
+                                            int[] count, int[] metCount,
+                                            int[] totalWaitMinutes) {
+        double complianceA = percentage(metCount[rankA], count[rankA]);
+        double complianceB = percentage(metCount[rankB], count[rankB]);
+        if (Double.compare(complianceA, complianceB) != 0) {
+            return complianceA < complianceB;
+        }
+
+        double averageA = totalWaitMinutes[rankA] / (double) count[rankA];
+        double averageB = totalWaitMinutes[rankB] / (double) count[rankB];
+        if (Double.compare(averageA, averageB) != 0) {
+            return averageA > averageB;
+        }
+        return rankA > rankB;
     }
 
     // ========== 报表共用辅助方法 ==========
@@ -438,25 +542,58 @@ public class VipAllocationControl {
         return (int) java.time.Duration.between(startTime, endTime).toMinutes();
     }
 
-    private void sortByWaitMinutesDescending(ListInterface<Booking> bookings, ListInterface<Integer> waitMinutes) {
+    /**
+     * Selection sort using Booking.compareTo(): higher tier first, then earlier
+     * arrival. The wait-time list is swapped in parallel with the bookings.
+     */
+    private void sortByVipPriority(ListInterface<Booking> bookings,
+                                   ListInterface<Integer> waitMinutes) {
         int n = bookings.getNumberOfEntries();
         for (int i = 1; i <= n - 1; i++) {
-            int largestPosition = i;
+            int highestPriorityPosition = i;
             for (int j = i + 1; j <= n; j++) {
-                if (waitMinutes.getEntry(j) > waitMinutes.getEntry(largestPosition)) {
-                    largestPosition = j;
+                if (bookings.getEntry(j)
+                        .compareTo(bookings.getEntry(highestPriorityPosition)) < 0) {
+                    highestPriorityPosition = j;
                 }
             }
-            if (largestPosition != i) {
+            if (highestPriorityPosition != i) {
                 Booking tempBooking = bookings.getEntry(i);
-                bookings.replace(i, bookings.getEntry(largestPosition));
-                bookings.replace(largestPosition, tempBooking);
+                bookings.replace(i, bookings.getEntry(highestPriorityPosition));
+                bookings.replace(highestPriorityPosition, tempBooking);
 
                 Integer tempMinutes = waitMinutes.getEntry(i);
-                waitMinutes.replace(i, waitMinutes.getEntry(largestPosition));
-                waitMinutes.replace(largestPosition, tempMinutes);
+                waitMinutes.replace(i, waitMinutes.getEntry(highestPriorityPosition));
+                waitMinutes.replace(highestPriorityPosition, tempMinutes);
             }
         }
+    }
+
+    private int slaTargetMinutes(int tierRank) {
+        switch (tierRank) {
+            case 3:
+                return DIAMOND_SLA_MINUTES;
+            case 2:
+                return PLATINUM_SLA_MINUTES;
+            case 1:
+                return ELITE_SLA_MINUTES;
+            default:
+                return STANDARD_SLA_MINUTES;
+        }
+    }
+
+    private double percentage(int numerator, int denominator) {
+        return denominator == 0 ? 0.0 : numerator * 100.0 / denominator;
+    }
+
+    private String slaPerformanceStatus(double compliancePercent) {
+        if (compliancePercent >= SLA_COMPLIANCE_GOAL_PERCENT) {
+            return "PASS";
+        }
+        if (compliancePercent >= 75.0) {
+            return "WATCH";
+        }
+        return "FAIL";
     }
 
     // ========== 内部辅助方法 ==========

@@ -21,6 +21,8 @@ public class VipAllocationCLI {
     private static final String DIVIDER = "--------------------------------------------------------";
     private static final String TABLE_DIVIDER =
             "---- ------------ ------------------ -------------------- ----------- ------------ ------";
+    private static final String REPORT_DIVIDER =
+            "----------------------------------------------------------------------------";
 
     private Scanner scanner;
 
@@ -264,7 +266,7 @@ public class VipAllocationCLI {
     }
 
     public void displayReportEnd() {
-        System.out.println(DIVIDER);
+        System.out.println(REPORT_DIVIDER);
     }
 
     private String tierFilterLabel(int tierRankFilter) {
@@ -284,39 +286,182 @@ public class VipAllocationCLI {
 
     // ========== 报表1:VIP等待名单实时报表 ==========
 
-    public void displayVipWaitingListReportHeader(int tierRankFilter) {
+    public void displayVipWaitingListReportHeader(int tierRankFilter,
+                                                   String generatedAt) {
         System.out.println();
-        System.out.println(DIVIDER);
-        System.out.println("             VIP WAITING LIST REPORT");
-        System.out.println(DIVIDER);
-        System.out.println("Tier Filter : " + tierFilterLabel(tierRankFilter));
-        System.out.println(DIVIDER);
-        System.out.println(String.format("%-20s %-10s %-20s %s",
-                "Guest", "Tier", "Arrival Time", "Wait (min)"));
-        System.out.println("-------------------------------------------------------");
+        System.out.println(REPORT_DIVIDER);
+        System.out.println("                    LIVE VIP WAITING QUEUE & SLA REPORT");
+        System.out.println(REPORT_DIVIDER);
+        System.out.println("Generated At  : " + generatedAt);
+        System.out.println("Tier Filter   : " + tierFilterLabel(tierRankFilter));
+        System.out.println("Priority Rule : Higher tier first; same tier follows arrival order");
+        System.out.println(REPORT_DIVIDER);
+        System.out.println(String.format("%-2s %-9s %-16s %-9s %-10s %-7s %-6s %s",
+                "#", "Booking", "Guest", "Tier", "Room Type",
+                "Waiting", "Target", "SLA Status"));
+        System.out.println(REPORT_DIVIDER);
     }
 
-    public void displayVipWaitingListReportRow(String guestName, String tier,
-                                                String arrivalTime, int waitMinutes) {
-        System.out.println(String.format("%-20s %-10s %-20s %d",
-                guestName, tier, arrivalTime, waitMinutes));
+    public void displayVipWaitingListReportRow(int priority, String bookingId,
+                                                String guestName, String tier,
+                                                String roomType, int waitMinutes,
+                                                int targetMinutes, boolean breached) {
+        System.out.println(String.format("%-2d %-9s %-16s %-9s %-10s %-7s %-6s %s",
+                priority, bookingId, truncate(guestName, 16), tier, roomType,
+                formatDuration(waitMinutes), "<=" + targetMinutes + "m",
+                breached ? "BREACHED" : "WITHIN SLA"));
+    }
+
+    public void displayVipWaitingListReportSummary(int totalWaiting,
+                                                    int withinSla,
+                                                    int breached,
+                                                    String nextGuest,
+                                                    String nextRoomType,
+                                                    String longestGuest,
+                                                    int longestWaitMinutes) {
+        System.out.println(REPORT_DIVIDER);
+        System.out.println("SUMMARY");
+        System.out.printf("  Total waiting    : %d%n", totalWaiting);
+        System.out.printf("  Within SLA       : %d%n", withinSla);
+        System.out.printf("  SLA breached     : %d%n", breached);
+        System.out.printf("  Highest priority : %s (%s)%n", nextGuest, nextRoomType);
+        System.out.printf("  Longest waiting  : %s (%s)%n",
+                longestGuest, formatDuration(longestWaitMinutes));
+        System.out.println();
+        if (breached > 0) {
+            System.out.printf("ACTION REQUIRED: %d request(s) exceeded the tier SLA target.%n",
+                    breached);
+        } else {
+            System.out.println("STATUS: All current VIP requests remain within their SLA targets.");
+        }
     }
 
     // ========== 报表2:等级分房达标率报表 ==========
 
-    public void displayTierSlaReportHeader(int tierRankFilter, String fromDate, String toDate) {
+    public void displayTierSlaReportHeader(int tierRankFilter,
+                                           String fromDate, String toDate,
+                                           String generatedAt,
+                                           double complianceGoal,
+                                           int diamondTarget,
+                                           int platinumTarget,
+                                           int eliteTarget,
+                                           int standardTarget) {
         System.out.println();
-        System.out.println(DIVIDER);
-        System.out.println("             TIER ALLOCATION SLA REPORT");
-        System.out.println(DIVIDER);
-        System.out.println("Tier Filter : " + tierFilterLabel(tierRankFilter));
-        System.out.println("Date Range  : " + fromDate + " to " + toDate);
-        System.out.println(DIVIDER);
-        System.out.println(String.format("%-10s %-8s %s", "Tier", "Count", "Avg Wait (min)"));
-        System.out.println("-------------------------------------------------------");
+        System.out.println(REPORT_DIVIDER);
+        System.out.println("                     TIER ALLOCATION SLA PERFORMANCE REPORT");
+        System.out.println(REPORT_DIVIDER);
+        System.out.println("Generated At    : " + generatedAt);
+        System.out.println("Tier Filter     : " + tierFilterLabel(tierRankFilter));
+        System.out.println("Date Range      : " + dateRangeLabel(fromDate, toDate));
+        System.out.printf("Compliance Goal : %.1f%%%n", complianceGoal);
+        System.out.printf("SLA Targets     : Diamond<=%dm | Platinum<=%dm | Elite<=%dm | Standard<=%dm%n",
+                diamondTarget, platinumTarget, eliteTarget, standardTarget);
+        System.out.println("Status Rule     : PASS >= 90% | WATCH >= 75% | FAIL < 75%");
+        System.out.println("Sort Order      : Lowest compliance first, then longest average wait");
+        System.out.println(REPORT_DIVIDER);
+        System.out.println(String.format(
+                "%-9s  %-6s  %5s  %3s  %6s  %7s  %-8s  %-8s  %s",
+                "Tier", "Target", "Total", "Met", "Breach",
+                "Rate", "Avg", "Worst", "Status"));
+        System.out.println(REPORT_DIVIDER);
     }
 
-    public void displayTierSlaReportRow(String tier, int count, double averageWaitMinutes) {
-        System.out.println(String.format("%-10s %-8d %.1f", tier, count, averageWaitMinutes));
+    public void displayTierSlaReportRow(String tier, int targetMinutes,
+                                        int count, int metCount,
+                                        int breachedCount,
+                                        double compliancePercent,
+                                        double averageWaitMinutes,
+                                        int worstWaitMinutes,
+                                        String status) {
+        // Avg/Worst 用跟 Wait Time 报表同一套 formatDuration(),不是裸分钟数+m——
+        // 等待时间一旦跨天(比如1440分钟),裸数字会撑爆原本预留的栏宽,
+        // 换成"Xd Yh"这种有上限的格式就不会再被大数字挤歪。
+        System.out.println(String.format(
+                "%-9s  %-6s  %5d  %3d  %6d  %6.1f%%  %-8s  %-8s  %s",
+                tier, "<=" + targetMinutes + "m", count, metCount, breachedCount,
+                compliancePercent, formatDuration((int) Math.round(averageWaitMinutes)),
+                formatDuration(worstWaitMinutes), status));
+    }
+
+    public void displayTierSlaReportSummary(int totalAllocations,
+                                            int totalMet,
+                                            int totalBreached,
+                                            double overallCompliance,
+                                            String overallStatus,
+                                            String weakestTier,
+                                            double weakestCompliance,
+                                            double complianceGoal) {
+        System.out.println(REPORT_DIVIDER);
+        System.out.println("SUMMARY");
+        System.out.printf("  Total allocations  : %d%n", totalAllocations);
+        System.out.printf("  Within SLA         : %d%n", totalMet);
+        System.out.printf("  SLA breaches       : %d%n", totalBreached);
+        System.out.printf("  Overall compliance : %.1f%% (%s)%n",
+                overallCompliance, overallStatus);
+        if (totalBreached == 0) {
+            System.out.println("  Weakest tier       : None (all recorded allocations met SLA)");
+        } else {
+            System.out.printf("  Weakest tier       : %s (%.1f%% compliance)%n",
+                    weakestTier, weakestCompliance);
+        }
+        System.out.println();
+        if (totalBreached == 0) {
+            System.out.printf("KEY FINDING: All allocations met their targets (goal: %.1f%%).%n",
+                    complianceGoal);
+        } else if (overallCompliance >= complianceGoal) {
+            System.out.printf("KEY FINDING: The %.1f%% goal was achieved, but %d breach(es) still require review.%n",
+                    complianceGoal, totalBreached);
+        } else {
+            System.out.printf("ACTION REQUIRED: %s is the weakest tier and overall compliance is below %.1f%%.%n",
+                    weakestTier, complianceGoal);
+        }
+    }
+
+    private String dateRangeLabel(String fromDate, String toDate) {
+        boolean noLowerBound = "0000-00-00".equals(fromDate);
+        boolean noUpperBound = "9999-99-99".equals(toDate);
+        if (noLowerBound && noUpperBound) {
+            return "ALL DATES";
+        }
+        if (noLowerBound) {
+            return "Up to " + toDate;
+        }
+        if (noUpperBound) {
+            return "From " + fromDate;
+        }
+        return fromDate + " to " + toDate;
+    }
+
+    /**
+     * 把变长文字(比如客人姓名)硬性封顶在 maxLength 以内,超过就截断加"..."。
+     * 固定宽度的 %-Ns 格式碰到超长字串不会自动截断,只会把那一列跟后面所有栏位
+     * 一起往右推,导致整份报表看起来歪一边——这个方法保证不管资料多长,
+     * 印出来的宽度永远不会超过表头预留的栏宽。
+     * 用ASCII的三个句点,不用Unicode省略号"…"——那个字元在某些console的编码下
+     * (比如Windows默认的非UTF-8 codepage)会印成乱码。
+     */
+    private String truncate(String value, int maxLength) {
+        if (value == null) {
+            return "";
+        }
+        if (value.length() <= maxLength) {
+            return value;
+        }
+        if (maxLength <= 3) {
+            return value.substring(0, maxLength);
+        }
+        return value.substring(0, maxLength - 3) + "...";
+    }
+
+    private String formatDuration(int minutes) {
+        if (minutes < 60) {
+            return minutes + "m";
+        }
+        if (minutes < 24 * 60) {
+            return (minutes / 60) + "h " + (minutes % 60) + "m";
+        }
+        int days = minutes / (24 * 60);
+        int remainingHours = (minutes % (24 * 60)) / 60;
+        return days + "d " + remainingHours + "h";
     }
 }
