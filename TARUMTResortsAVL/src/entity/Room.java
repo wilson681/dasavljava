@@ -1,29 +1,21 @@
 package entity;
 
-/**
- * Room.java
- * Entity class -- represents one room in the hotel.
+/*
+ * Represents a hotel room and its current status.
+ * Each room keeps its own status history.
  *
- * Possible values of status (status flow, driven/changed by the Control layer):
- *   AVAILABLE            -- vacant, can be assigned to a guest
- *   OCCUPIED             -- currently has a guest checked in
- *   NEEDS_CLEANING       -- guest has checked out, awaiting cleaning
- *   CLEANING_IN_PROGRESS -- currently being cleaned
- *   INSPECTED            -- inspected, about to become available
+ * Status flow:
+ * AVAILABLE -> OCCUPIED -> NEEDS_CLEANING
+ * -> CLEANING_IN_PROGRESS -> INSPECTED -> AVAILABLE
  */
 public class Room {
 
-    // ========== Data fields ==========
-    private String roomNumber;         // room number, uniquely identifies this room
-    private String roomType;           // room type: Standard / Deluxe / Suite
-    private double nightlyRate;        // fixed room rate, price per night
-    private String status;             // current status (see the values listed in the class comment)
-    private RoomHistory roomHistory;   // this room's own status-change history (Entity-to-Entity reference, used by Module 3)
+    private String roomNumber;
+    private String roomType;           
+    private double nightlyRate;
+    private String status;             
+    private RoomHistory roomHistory;   
 
-    /**
-     * Constructor -- a room comes with its own empty RoomHistory as soon as it's
-     * created, no need for a separate lookup table.
-     */
     public Room(String roomNumber, String roomType, double nightlyRate, String status) {
         this.roomNumber = roomNumber;
         this.roomType = roomType;
@@ -32,7 +24,6 @@ public class Room {
         this.roomHistory = new RoomHistory(roomNumber);
     }
 
-    // ========== Getters ==========
     public String getRoomNumber() {
         return roomNumber;
     }
@@ -53,28 +44,16 @@ public class Room {
         return roomHistory;
     }
 
-    // ========== Setters ==========
-    // roomNumber, roomType, and nightlyRate don't change after creation, so no setters
-    // are provided; status keeps changing through the check-in/check-out/cleaning flow,
-    // updated via calls from the Control layer.
-
     public void setStatus(String status) {
         this.status = status;
     }
 
-    // ========== Overridden methods ==========
-
-    /**
-     * toString: shows a summary of this room on the console.
-     */
     @Override
     public String toString() {
         return roomNumber + " | " + roomType + " | RM" + nightlyRate + " | " + status;
     }
 
-    /**
-     * equals: two rooms are the same based on room number alone.
-     */
+    // Same room number means the same room. （for hashcode can get same value)
     @Override
     public boolean equals(Object obj) {
         if (this == obj) {
@@ -86,10 +65,7 @@ public class Room {
         Room other = (Room) obj;
         return this.roomNumber.equals(other.roomNumber);
     }
-
-    /**
-     * hashCode: per Java convention, overriding equals() requires overriding hashCode() too.
-     */
+// Uses room number to generate the hash code.
     @Override
     public int hashCode() {
         return roomNumber.hashCode();

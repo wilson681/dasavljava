@@ -1,30 +1,17 @@
 package entity;
 
-/**
- * PointsLedgerEntry.java
- * Entity class -- represents one detail record of a member's points batch.
- *
- * Notes:
- * - This is a plain data class (POJO), only holds data for when a points batch
- *   was earned and when it expires.
- * - Contains no input (Scanner) or output (System.out) statements, per Entity class rules.
- * - Different from Member.totalPointsEarned (lifetime cumulative total): this class
- *   records one individual entry, and a member can have many entries. Together they
- *   show which points are about to expire and whether points were earned recently
- *   (used for expiry reminders and tier downgrade checks).
+/*
+ * Represents one batch of points earned by a member.
+ * Each entry stores when the points were earned and when they expire.
  */
 public class PointsLedgerEntry {
 
-    // ========== Data fields ==========
-    private String ledgerId;      // this entry's own unique ID
-    private String memberId;      // which member this belongs to
-    private int pointsAmount;     // how many points this batch earned
-    private String earnedDate;    // date earned
-    private String expiryDate;    // expiry date
+    private String ledgerId;   
+    private String memberId;   
+    private int pointsAmount;  
+    private String earnedDate; 
+    private String expiryDate;   
 
-    /**
-     * Constructor.
-     */
     public PointsLedgerEntry(String ledgerId, String memberId, int pointsAmount,
                               String earnedDate, String expiryDate) {
         this.ledgerId = ledgerId;
@@ -33,9 +20,6 @@ public class PointsLedgerEntry {
         this.earnedDate = earnedDate;
         this.expiryDate = expiryDate;
     }
-
-    // ========== Getters ==========
-    // Once created, an entry should not be modified, so only getters are provided, no setters.
 
     public String getLedgerId() {
         return ledgerId;
@@ -57,20 +41,12 @@ public class PointsLedgerEntry {
         return expiryDate;
     }
 
-    // ========== Overridden methods ==========
-
-    /**
-     * toString: shows a summary of this ledger entry on the console.
-     */
+  
     @Override
     public String toString() {
         return earnedDate + " | +" + pointsAmount + " pts | Expires: " + expiryDate;
     }
-
-    /**
-     * equals: two entries are the same based on ledgerId alone (not memberId,
-     * since one member has many entries).
-     */
+    // Ledger ID is used to identify each points entry.
     @Override
     public boolean equals(Object obj) {
         if (this == obj) {
@@ -83,9 +59,7 @@ public class PointsLedgerEntry {
         return this.ledgerId.equals(other.ledgerId);
     }
 
-    /**
-     * hashCode: per Java convention, overriding equals() requires overriding hashCode() too.
-     */
+    // Uses ledger ID to generate the hash code.
     @Override
     public int hashCode() {
         return ledgerId.hashCode();

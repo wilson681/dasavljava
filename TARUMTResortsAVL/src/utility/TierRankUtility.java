@@ -1,28 +1,17 @@
 package utility;
 
-/**
- * TierRankUtility.java
- * Utility class — converts a member tier (text) into a rank number, for
- * Module 2's AVL Tree ordering to use.
- *
- * Notes:
- * - Contains only static methods with no state, following the Utility class
- *   convention
- * - A bigger number means a higher tier: Diamond=3 > Platinum=2 > Elite=1
- * - Non-VIP members (Standard/unknown tier) always return 0, ranked after
- *   all VIP tiers
+/*
+ * Converts member tiers into values used for priority, points and discounts.
  */
 public class TierRankUtility {
-
+ // Utility class should not be instantiated.
     private TierRankUtility() {
-        // Prevents external instantiation; a pure static utility class.
+        
     }
 
-    /**
-     * Converts a tier name into a rank number.
-     * @param tier tier name (Elite/Platinum/Diamond, case-insensitive)
-     * @return rank number, bigger means higher tier; unrecognized tiers
-     *         return 0
+    /*
+     * Converts a tier into a rank for AVL priority ordering.
+     * Diamond = 3, Platinum = 2, Elite = 1, Standard = 0.
      */
     public static int tierToRank(String tier) {
         if (tier == null) {
@@ -40,16 +29,7 @@ public class TierRankUtility {
         }
     }
 
-    /**
-     * Converts a rank number back into a tier name, so reports can display
-     * Booking.tierRankAtRequest (the tier rank at the time of booking) as
-     * text — the current Member tier can't be used instead, because the
-     * member may have upgraded or downgraded since; the report needs to
-     * show the tier at the time of booking, not the tier now.
-     * @param rank the rank number
-     * @return the corresponding tier name; unrecognized numbers return
-     *         "Standard"
-     */
+      // Converts a stored rank back into its tier name.
     public static String rankToTier(int rank) {
         switch (rank) {
             case 3:
@@ -63,14 +43,9 @@ public class TierRankUtility {
         }
     }
 
-    /**
-     * Converts a member's lifetime total points (totalPointsEarned) into
-     * the tier they should be at, for Module 5's upgrade/downgrade check.
-     * The thresholds are kept low, matching the "RM10 spent = 1 point" earn
-     * rate, so tiers are reachable within a reasonable number of stays.
-     * @param totalPointsEarned lifetime total points earned, which only
-     *        ever increases, so this function naturally only ever upgrades
-     * @return the corresponding tier name (Standard/Elite/Platinum/Diamond)
+    /*
+     * Determines member tier from total points earned.
+     * Elite = 300, Platinum = 1500, Diamond = 5000.
      */
     public static String pointsToTier(int totalPointsEarned) {
         if (totalPointsEarned >= 5000) {
@@ -84,14 +59,9 @@ public class TierRankUtility {
         }
     }
 
-    /**
-     * Converts a tier name into a room rate discount percentage — one of
-     * Module 5's "personalized promotions", hardcoded, affecting only price
-     * display/calculation and not real business logic like room type or
-     * room status.
-     * @param tier tier name, case-insensitive
-     * @return discount percentage (integer 0~100); unrecognized tiers
-     *         (including Standard) return 0, no discount
+    /*
+     * Returns the room discount based on member tier.
+     * Elite = 5%, Platinum = 10%, Diamond = 15%.
      */
     public static int tierToDiscountPercent(String tier) {
         if (tier == null) {

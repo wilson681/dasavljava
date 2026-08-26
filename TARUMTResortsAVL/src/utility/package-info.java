@@ -1,6 +1,4 @@
 /**
- * Stateless helpers shared across modules, for example self-written sorting
- * algorithms. Utility classes may contain only static methods and static
- * variables.
+ * Shared utility classes for common tasks such as sorting and file handling.
  */
 package utility;

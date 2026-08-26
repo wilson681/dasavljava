@@ -1,30 +1,18 @@
 package entity;
 
-/**
- * RedemptionItem.java
- * Entity class -- represents one option in the redemption catalog.
- *
- * Notes:
- * - This is a plain data class (POJO), only holds data for one redeemable item.
- * - Contains no input (Scanner) or output (System.out) statements, per Entity class rules.
- * - The redemption catalog currently loads fixed options from a txt file; if staff
- *   can add new items in the future, this class's structure does not need to change.
+/*
+ * Represents one item in the redemption catalog.
  */
 public class RedemptionItem {
 
-    // ========== Data fields ==========
-    private String itemName;         // item name, e.g. "Free Breakfast"
-    private int pointsRequired;      // points required to redeem this item
+    private String itemName;         
+    private int pointsRequired;     
 
-    /**
-     * Constructor.
-     */
     public RedemptionItem(String itemName, int pointsRequired) {
         this.itemName = itemName;
         this.pointsRequired = pointsRequired;
     }
 
-    // ========== Getters ==========
     public String getItemName() {
         return itemName;
     }
@@ -33,19 +21,11 @@ public class RedemptionItem {
         return pointsRequired;
     }
 
-    // ========== Overridden methods ==========
-
-    /**
-     * toString: shows a summary of this item on the console.
-     */
     @Override
     public String toString() {
         return itemName + " | " + pointsRequired + " pts";
     }
-
-    /**
-     * equals: two items are the same based on item name alone.
-     */
+// Item name is used to identify a redemption item.
     @Override
     public boolean equals(Object obj) {
         if (this == obj) {
@@ -58,9 +38,7 @@ public class RedemptionItem {
         return this.itemName.equals(other.itemName);
     }
 
-    /**
-     * hashCode: per Java convention, overriding equals() requires overriding hashCode() too.
-     */
+    // Uses item name to generate the hash code.
     @Override
     public int hashCode() {
         return itemName.hashCode();
