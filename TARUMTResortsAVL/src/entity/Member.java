@@ -8,6 +8,8 @@ import adt.ListInterface;
  *
  * currentPoints     - points currently available for redemption
  * totalPointsEarned - total points earned over time, used for member tier
+ *
+ * @author All
  */
 public class Member {
 

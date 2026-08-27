@@ -3,6 +3,8 @@ package entity;
 /*
  * Represents one booking request.
  * One guest may have multiple bookings, so each booking has its own bookingId.
+ *
+ * @author All
  */
 public class Booking implements Comparable<Booking> {
 

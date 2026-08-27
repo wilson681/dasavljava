@@ -20,6 +20,8 @@ import utility.DataFileLocator;
  * - The path is resolved via DataFileLocator instead of the runtime working
  *   directory, so the file is found no matter which IDE or working
  *   directory starts the program.
+ *
+ * @author All
  */
 public class RoomDao {
 

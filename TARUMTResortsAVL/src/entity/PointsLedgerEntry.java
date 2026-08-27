@@ -3,6 +3,8 @@ package entity;
 /*
  * Represents one batch of points earned by a member.
  * Each entry stores when the points were earned and when they expire.
+ *
+ * @author All
  */
 public class PointsLedgerEntry {
 

@@ -6,6 +6,8 @@ import adt.ListInterface;
 /*
  * Represents a registered hotel guest and their stay details.
  * One guest may have multiple rooms, bookings and billing records.
+ *
+ * @author All
  */
 public class Guest {
 

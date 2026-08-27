@@ -21,6 +21,8 @@ import utility.DataFileLocator;
  * - Must run before GuestBookingDao/BillingRecordDao, since both rely on
  *   guestTable.getEntry() to find the Guest objects added here before they
  *   can attach a Booking/BillingRecord to them.
+ *
+ * @author All
  */
 public class GuestDao {
 

@@ -5,6 +5,8 @@ import java.net.URISyntaxException;
 /*
  * Locates data files regardless of where the program is started.
  * It searches upward from the compiled class location until the file is found.
+ *
+ * @author All
  */
 public final class DataFileLocator {
 

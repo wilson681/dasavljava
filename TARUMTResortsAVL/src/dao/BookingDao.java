@@ -31,6 +31,8 @@ import utility.TierRankUtility;
  * - For VIP entries, tierRankAtRequest is looked up from memberList via
  *   memberId to get the tier, then converted with TierRankUtility, matching
  *   what VipAllocationControl.doRegister() does.
+ *
+ * @author All
  */
 public class BookingDao {
 

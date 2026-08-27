@@ -17,6 +17,8 @@ import utility.DataFileLocator;
  *   no business logic here (not part of Entity/Boundary/Control).
  * - txt format: itemName,pointsRequired (same order as the RedemptionItem
  *   constructor).
+ *
+ * @author All
  */
 public class RedemptionItemDao {
 

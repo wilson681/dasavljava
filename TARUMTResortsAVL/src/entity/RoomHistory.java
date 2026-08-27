@@ -7,6 +7,8 @@ import adt.StackInterface;
 /*
  * Stores the status history of a room.
  * The latest status is kept at the top of the stack.
+ *
+ * @author All
  */
 public class RoomHistory {
 

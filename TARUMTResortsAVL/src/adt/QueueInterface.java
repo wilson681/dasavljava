@@ -4,69 +4,71 @@ import java.util.Iterator;
 
 /**
  * QueueInterface.java
- * ADT Queue — A queue is a linear collection where entries are added at the
- * back and removed from the front, following FIFO(First-In-First-Out)。
+ * ADT Queue - a linear collection where entries go in at the back and come out from the
+ * front, FIFO (First-In-First-Out)
  *
- * @author 某某
+ * @author jagathis
  *
- * 来源: [若这份规格是参考课程 sample code / 教材而来,请在此注明出处;
- *        若是自己独立设计的,可以删除这行]
+ * Source: [if this spec is based on course sample code / textbook, note it here;
+ *          if self-designed, delete this line]
  *
- * @param <T> 存放的元素类型
+ * @param <T> element type stored
  */
 public interface QueueInterface<T> {
 
     /**
-     * 把一个新条目加到队伍的最后面。
-     * @param newEntry 要加入的条目
+     * adds a new entry to the back of the queue.
+     * @param newEntry entry to add
      */
     public void enqueue(T newEntry);
 
     /**
-     * 移除并回传队伍最前面的条目。
-     * @return 原本排在最前面的条目,若队伍是空的则返回 null
+     * removes and returns the entry at the front.
+     * @return the front entry, null if the queue is empty
      */
     public T dequeue();
 
     /**
-     * 只看队伍最前面的条目,不移除它。
-     * @return 排在最前面的条目,若队伍是空的则返回 null
+     * looks at the front entry without removing it.
+     * @return the front entry, null if the queue is empty
      */
     public T getFront();
 
     /**
-     * 移除队伍中间跟给定条目相等的那一笔(不一定是队头),用在"中途取消排队"这种场景。
-     * @param anEntry 要移除的条目(用equals()比对)
-     * @return 找到并移除了就回传true,找不到回传false
+     * removes the entry equal to the given one from anywhere in the queue (not just the
+     * front) - used for something like cancelling mid-queue.
+     * @param anEntry entry to remove (matched with equals())
+     * @return true if found and removed, false otherwise
      */
     public boolean remove(T anEntry);
 
     /**
-     * 检查这个队伍是否为空。
-     * @return 是空的则返回 true
+     * checks if this queue is empty.
+     * @return true if empty
      */
     public boolean isEmpty();
 
     /**
-     * 检查这个队伍是否已满(固定容量的实现才有意义,动态扩充的实现永远是 false)。
-     * @return 已满则返回 true
+     * checks if this queue is full (only means something for a fixed-capacity
+     * implementation, a dynamically growing one is always false).
+     * @return true if full
      */
     public boolean isFull();
 
     /**
-     * 清空这个队伍,移除所有条目。
+     * clears this queue, removes all entries.
      */
     public void clear();
 
     /**
-     * 取得这个队伍目前的条目总数。
-     * @return 条目总数
+     * gets the current number of entries in this queue.
+     * @return entry count
      */
     public int size();
 
     /**
-     * 取得一个从队头到队尾遍历所有条目的 iterator。
-     * @return 这个队伍的 iterator
+     * gets an iterator that walks front to back.
+     * @return iterator for this queue
      */
     public Iterator<T> getIterator();
 }

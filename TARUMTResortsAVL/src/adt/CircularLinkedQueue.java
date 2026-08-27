@@ -3,22 +3,17 @@ package adt;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 
-/**
- * CircularLinkedQueue.java
- * QueueInterface 的实现 —— 用首尾相连成环的单向链表当底层结构。
- *
- * @author 某某
- *
- * 说明:
- * - 给模块1(Walk-In Registrations,排队处理散客/临时订房)用
- * - 只记一个 backNode(队尾),它的 next 指向队头,enqueue/dequeue 都是 O(1)
- *
- * @param <T> 存放的元素类型
- */
+// CircularLinkedQueue.java - QueueInterface implementation, singly linked list joined
+// head to tail into a loop
+//
+// @author jagathis
+//
+// used for module 1 (Walk-In Registrations, queues up walk-in/standard bookings)
+// only keeps a backNode (tail), its next points to the front, enqueue/dequeue both O(1)
 public class CircularLinkedQueue<T> implements QueueInterface<T> {
 
-    private Node<T> backNode;     // 队尾节点(它的 next 就是队头),空队列时是 null
-    private int numberOfEntries;  // 目前有几个条目,remove()要用到,不然不好判断走了几圈
+    private Node<T> backNode;     // tail node (its next IS the front), null when empty
+    private int numberOfEntries;  // current entry count, remove() needs this else its hard to tell how many laps it made
 
     public CircularLinkedQueue() {
         backNode = null;
@@ -29,14 +24,14 @@ public class CircularLinkedQueue<T> implements QueueInterface<T> {
     public void enqueue(T newEntry) {
         Node<T> newNode = new Node<>(newEntry);
         if (isEmpty()) {
-            // 只有一个节点时,自己指向自己,形成一个环
+            // only node so far, points to itself, thats the loop
             newNode.next = newNode;
         } else {
-            // 新节点插在backNode后面,并接手指向原本的队头(backNode.next)
+            // new node goes right after backNode, takes over pointing to the old front
             newNode.next = backNode.next;
             backNode.next = newNode;
         }
-        // 新节点永远变成新的backNode(队尾)
+        // new node always becomes the new backNode (tail)
         backNode = newNode;
         numberOfEntries++;
     }
@@ -48,10 +43,10 @@ public class CircularLinkedQueue<T> implements QueueInterface<T> {
         }
         Node<T> frontNode = backNode.next;
         if (frontNode == backNode) {
-            // 只剩这一个节点,拿掉之后队伍变空
+            // only node left, queue goes empty after this
             backNode = null;
         } else {
-            // backNode继续指向"新的队头"(原本队头的下一个)
+            // backNode now points to the new front (whatever came after the old one)
             backNode.next = frontNode.next;
         }
         numberOfEntries--;
@@ -71,20 +66,20 @@ public class CircularLinkedQueue<T> implements QueueInterface<T> {
         if (isEmpty()) {
             return false;
         }
-        // 环状链表没有天然的"头"，只能靠numberOfEntries限制最多绕一圈,
-        // 不然如果anEntry真的不存在,会无限绕圈绕不出来
+        // circular list has no natural "start", so numberOfEntries caps this at 1 full
+        // lap - otherwise if anEntry really isnt in there this loops forever
         Node<T> previous = backNode;
         Node<T> current = backNode.next;
         for (int i = 0; i < numberOfEntries; i++) {
             if (current.data.equals(anEntry)) {
                 if (current == backNode && current.next == current) {
-                    // 队伍里只有这一个节点,拿掉之后队伍变空
+                    // only node in the queue, empty after removing it
                     backNode = null;
                 } else {
-                    // 让current前后的节点直接接起来,把current跳过去
+                    // link the nodes around current directly, skip it
                     previous.next = current.next;
                     if (current == backNode) {
-                        // 被移除的刚好是队尾,队尾要换成它前面那个
+                        // removed node was the tail, tail moves to whatever was before it
                         backNode = previous;
                     }
                 }
@@ -104,7 +99,7 @@ public class CircularLinkedQueue<T> implements QueueInterface<T> {
 
     @Override
     public boolean isFull() {
-        // 链表动态扩充,不会满
+        // linked list grows dynamically, never full
         return false;
     }
 
@@ -121,7 +116,8 @@ public class CircularLinkedQueue<T> implements QueueInterface<T> {
 
     @Override
     public Iterator<T> getIterator() {
-        // 做法跟AVLTree的getInorderIterator()一样:先填进一个普通阵列,再包成Iterator
+        // same trick as AVLTree's getInorderIterator(): dump into a plain array first,
+        // then wrap it as an Iterator
         @SuppressWarnings("unchecked")
         T[] entries = (T[]) new Object[numberOfEntries];
         if (!isEmpty()) {
@@ -134,9 +130,7 @@ public class CircularLinkedQueue<T> implements QueueInterface<T> {
         return new ArrayIterator(entries);
     }
 
-    /**
-     * Node —— 环状链表的节点,存资料 + 指向下一个节点的引用
-     */
+    // node for the circular list, holds data + pointer to next
     private class Node<E> {
         private E data;
         private Node<E> next;
@@ -146,9 +140,7 @@ public class CircularLinkedQueue<T> implements QueueInterface<T> {
         }
     }
 
-    /**
-     * ArrayIterator —— 把遍历结果先存进一个普通阵列,再包成 Iterator 吐出去
-     */
+    // dumps the traversal result into a plain array, wraps it as an Iterator
     private class ArrayIterator implements Iterator<T> {
         private T[] items;
         private int currentIndex;

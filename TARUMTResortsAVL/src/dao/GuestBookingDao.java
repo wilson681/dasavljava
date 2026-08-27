@@ -31,8 +31,10 @@ import utility.TierRankUtility;
  * - After a successful room assignment, must also update
  *   Guest.bookedRooms(addRoom) and Guest.bookings(addBooking), mirroring
  *   the two things the real allocation flow (doAllocate()) does on success.
- * - bookingId uses its own counter with prefix SGB, so it won't collide
+ * - bookingId uses its own counter with prefix SGB, so it wont collide
  *   with manual operations' WB/VB IDs.
+ *
+ * @author All
  */
 public class GuestBookingDao {
 

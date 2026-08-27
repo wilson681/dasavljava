@@ -6,24 +6,19 @@ import java.util.Iterator;
 import java.util.Scanner;
 import utility.ValidationUtility;
 
-/**
- * WalkInCLI.java - 模块1(Walk-In Registrations & Standard Booking)的 console 界面。
- *
- * @author 某某
- *
- * 说明:
- * - 只负责跟使用者对话(Scanner输入、println输出),不做任何业务判断
- * - 所有 console 印出来的文字都用英文,代码注释才用中文
- */
+// WalkInCLI.java - console for module 1 (Walk-In Registrations & Standard Booking)
+// just talks to the user (Scanner in, println out), no business logic in here
+//
+// @author jagathis
 public class WalkInCLI {
 
     private static final String DIVIDER = "--------------------------------------------------------";
     private static final String TABLE_DIVIDER =
             "---- ------------ ------------------ -------------------- ----------- ------------ ------";
-    // 报表明细表格比DIVIDER宽,自己一条,免得表格右边凸出去
+    // report tables are wider than DIVIDER, needs its own line so it doesnt overflow
     private static final String REPORT_DIVIDER =
             "-------------------------------------------------------------------";
-    private static final int MAX_BAR_WIDTH = 20;   // 星号柱状图满格几颗星
+    private static final int MAX_BAR_WIDTH = 20;   // max stars in the bar chart
 
     private Scanner scanner;
 
@@ -58,7 +53,7 @@ public class WalkInCLI {
         System.out.println("Cancelled. Returning to menu.");
     }
 
-    // ========== 功能1:登记新客人 ==========
+    // Feature 1: Register New Guest
 
     public String promptName() {
         System.out.print("Enter guest name (blank to cancel): ");
@@ -109,10 +104,8 @@ public class WalkInCLI {
         System.out.println(DIVIDER);
     }
 
-    /**
-     * 同一位客人登记完一间房后,问要不要在同一个确认号下继续加订下一间房
-     * (一次订多间房时用,让多笔 Booking 共用同一个 confirmationNumber)
-     */
+    // after registering one room, ask if they want another room under the same
+    // confirmation number (multi room booking)
     public boolean promptAddAnotherRoom() {
         System.out.println();
         while (true) {
@@ -128,7 +121,7 @@ public class WalkInCLI {
         }
     }
 
-    // ========== 分房结果(登记后自动触发,不再是独立菜单动作) ==========
+    // allocation result stuff (auto triggered right after register, not its own menu item)
 
     public int promptNumberOfNights() {
         System.out.print("Enter number of nights (blank to cancel): ");
@@ -162,7 +155,7 @@ public class WalkInCLI {
         System.out.println(DIVIDER);
     }
 
-    // ========== 功能2:取消排队 ==========
+    // Feature 2: Cancel Waiting
 
     public String promptBookingIdToCancel() {
         System.out.print("Enter the booking ID to cancel (blank to cancel): ");
@@ -178,7 +171,7 @@ public class WalkInCLI {
         }
     }
 
-    // ========== 功能3:查看排队名单 ==========
+    // Feature 3: View Waiting List
 
     public void displayWaitingList(String roomType, Iterator<Booking> waitingList) {
         System.out.println();
@@ -206,15 +199,13 @@ public class WalkInCLI {
         }
     }
 
-    // ========== 报表共用输入 ==========
+    // shared report input stuff
 
-    /**
-     * 日期打错格式(例如少补0的 2026-8-8)如果直接放行,报表会筛不到任何东西、
-     * 显示"No records match",使用者会以为是没资料,其实只是格式打错——所以格式
-     * 不合法就当场重问,不让它带着错的筛选条件往下跑。
-     *
-     * @return "yyyy-MM-dd"格式的日期,留空回传"ALL"代表不限日期
-     */
+    // if a badly formatted date (like 2026-8-8 missing the leading 0) gets through, the
+    // report just filters out everything and shows "No records match" - looks like theres
+    // no data when really its just a typo. so reject bad format here and ask again instead
+    //
+    // returns yyyy-MM-dd, blank = "ALL" meaning no date filter
     public String promptReportDate() {
         while (true) {
             System.out.println();
@@ -260,7 +251,7 @@ public class WalkInCLI {
         System.out.println(DIVIDER);
     }
 
-    // ========== 报表1:每日入住登记明细表 ==========
+    // Report 1: Daily Registration Report
 
     public void displayDailyRegistrationReportHeader(String dateFilter, String roomTypeFilter) {
         System.out.println();
@@ -276,13 +267,12 @@ public class WalkInCLI {
         System.out.println(REPORT_DIVIDER);
     }
 
-    /**
-     * 一行一笔登记。这份报表只讲"登记"这件事——谁来了、要什么、拿到没有、
-     * 拿到哪一间;"等了多久"归报表2管,这里一个时长数字都不印。
-     *
-     * @param registeredDate 只有日期(yyyy-MM-dd),时分秒是报表2按小时分析用的
-     * @param roomNumber     分到的房号;还在排队的传 "-"
-     */
+    // one row per registration. this report is only about registration - who came, what
+    // they wanted, did they get it, which room. wait time stuff belongs to report 2, no
+    // duration numbers printed here
+    //
+    // registeredDate is date only (yyyy-MM-dd), the time part is for report 2s hourly
+    // breakdown. roomNumber is "-" if still waiting
     public void displayDailyRegistrationReportRow(String guestName, String registeredDate,
                                                    String requestedType, boolean allocated,
                                                    String roomNumber) {
@@ -301,10 +291,8 @@ public class WalkInCLI {
                 allocatedCount, waitingCount, successRate);
     }
 
-    /**
-     * 按房型看"要了几间 vs 拿到几间"。差额就是没被满足的需求——
-     * 有客人要这一型房但我们给不出来,那是要不要调整房型配比的决策资讯。
-     */
+    // requested vs allocated per room type. the gap is unmet demand - if guests keep
+    // asking for a type we cant give them, thats useful for deciding room mix
     public void displayDemandByRoomType(int standardCount, int standardAllocated,
                                          int deluxeCount, int deluxeAllocated,
                                          int suiteCount, int suiteAllocated) {
@@ -322,7 +310,7 @@ public class WalkInCLI {
                 roomType, bar(requested), requested, allocated, waiting, unmet);
     }
 
-    // ========== 报表2:等待时长分析报表 ==========
+    // Report 2: Wait Time Analysis Report
 
     public void displayWaitTimeAnalysisHeader(String dateFilter, String roomTypeFilter) {
         System.out.println();
@@ -345,14 +333,9 @@ public class WalkInCLI {
         System.out.println(REPORT_DIVIDER);
     }
 
-    /**
-     * 一型房一行。平均只算已分房的——还在等的那些等待时长会一直变大,
-     * 混进平均会失真,所以另外用括号标出来有几笔还在等。
-     *
-     * @param allocated 这一型已分到房的笔数,也是平均值的分母
-     * @param totalWait 那些已分房记录的等待时长总和
-     * @param waiting   还在排队、还没分到房的笔数
-     */
+    // one row per room type. average only counts allocated ones - still-waiting durations
+    // keep growing so mixing them in would skew the number, shown separately in brackets
+    // instead
     public void displayWaitByRoomTypeRow(String roomType, int allocated, int totalWait, int waiting) {
         String average = (allocated == 0)
                 ? "-"
@@ -372,10 +355,9 @@ public class WalkInCLI {
         System.out.printf("  Slowest type : %s (%.1f min average)%n", roomType, averageWait);
     }
 
-    /**
-     * @param allocated false代表这笔还在排队,那个等待分钟数是"算到此刻为止"、
-     *                  之后还会继续变大,所以要在Status栏标清楚,不能跟已分房的混着看
-     */
+    // allocated=false means still waiting, that wait number is "as of right now" and
+    // keeps growing - Status column needs to make that clear, dont read it the same way
+    // as an allocated one
     public void displayWaitTimeAnalysisRow(String bookingId, String guestName, String roomType,
                                             int waitMinutes, boolean allocated) {
         String waitText = (waitMinutes < 0) ? "-" : String.valueOf(waitMinutes);
@@ -411,11 +393,9 @@ public class WalkInCLI {
                 hour, count, String.format("%.1f min", averageWaitMinutes), bar(count)));
     }
 
-    /**
-     * @param busiestHours 笔数并列最多的时段(可能不只一个),空的代表根本没有资料可以聚合
-     * @param hourCount    并列的时段有几个;超过一个才要写"each"
-     * @param count        那些时段各自的笔数
-     */
+    // busiestHours can have more than one hour tied for most bookings, empty means no
+    // data at all to aggregate. hourCount = how many are tied, only say "each" if more
+    // than one
     public void displayBusiestHour(Iterator<Integer> busiestHours, int hourCount, int count) {
         if (hourCount == 0) {
             System.out.println("  No allocated registration to analyse by hour.");
@@ -433,21 +413,18 @@ public class WalkInCLI {
                 hours, count, (hourCount > 1 ? " each" : ""));
     }
 
-    // ========== 报表共用的显示工具 ==========
+    // shared display helpers for reports
 
-    /**
-     * 报表产生的时间戳。报表是给管理层看的文件,一定要标明"这份数字是什么时候的快照",
-     * 尤其是那些"还在等的等待时长"——那种数字换个时间跑就不一样。
-     */
+    // timestamp for when the report was generated. reports go to management so it needs
+    // to show "this is a snapshot as of when", especially for the still-waiting numbers
+    // that change every time you rerun it
     private String generatedAt() {
         return java.time.LocalDateTime.now().withNano(0)
                 .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
     }
 
-    /**
-     * 把分钟数印成人看得懂的长度。等了7天多的时候,"11085 min"没有感觉,
-     * "7d 16h"一眼就知道事情不对。
-     */
+    // turns minutes into something readable. "11085 min" means nothing but "7d 16h"
+    // makes it obvious somethings wrong
     private String formatDuration(int minutes) {
         if (minutes < 0) {
             return "-";
@@ -464,18 +441,13 @@ public class WalkInCLI {
         return mins + " min";
     }
 
-    /**
-     * 星号柱状图:一颗星 = 一笔,直接数得出来。
-     *
-     * 以前是按比例缩放(最多的那格固定给满20颗星),看起来好看,但2笔也印20颗星,
-     * 读的人根本不知道一颗星代表多少,还要回头看旁边的数字——那柱状图就白画了。
-     * 改成一笔一颗之后,星号本身就是数量,标题再加一行图例说明就完全不用猜。
-     *
-     * 笔数超过 MAX_BAR_WIDTH 时截断并在结尾加"+",避免一行印几百颗星把表格撑爆;
-     * 真正的数字本来就印在旁边那一栏,不会因为截断而看不到。
-     *
-     * 星号最多20颗,用字串直接一颗一颗串起来就够了。
-     */
+    // star bar chart, 1 star = 1 booking, literally countable
+    // used to scale it before (biggest bar always fixed at 20 stars) but then 2 bookings
+    // also printed 20 stars and nobody could tell what a star meant without checking the
+    // number next to it anyway - kind of pointless
+    // now its 1:1 so the stars ARE the count, header just explains that once
+    // caps at MAX_BAR_WIDTH with a + after so it doesnt print hundreds of stars and blow
+    // up the table, real number is right there in the next column regardless
     private String bar(int value) {
         if (value <= 0) {
             return "";

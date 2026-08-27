@@ -2,6 +2,8 @@ package entity;
 
 /*
  * Represents one item in the redemption catalog.
+ *
+ * @author All
  */
 public class RedemptionItem {
 

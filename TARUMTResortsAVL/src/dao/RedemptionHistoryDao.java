@@ -17,6 +17,8 @@ import utility.DataFileLocator;
  *   no business logic here.
  * - txt format: memberId,itemRedeemed,pointsUsed,date (same order as the
  *   constructor).
+ *
+ * @author All
  */
 public class RedemptionHistoryDao {
 

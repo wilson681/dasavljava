@@ -18,20 +18,19 @@ import java.util.Iterator;
 import utility.TierRankUtility;
 import utility.ValidationUtility;
 
-/**
- * WalkInControl.java - 模块1(Walk-In Registrations & Standard Booking)的业务逻辑。
- *
- * @author 某某
- *
- * 说明:
- * - 三条 Circular Linked Queue,按房型分开(Standard/Deluxe/Suite 各一条),互相独立
- * - 分房时一定要先看VIP那边的树,VIP树只要有人在等,这个房型的Walk-In一律不能分房——
- *   这是两个模块共用的关键规则:VIP永远优先
- * - 只对"会调用collection ADT方法"的操作(登记、取消)做输入校验,查看名单这种不用
- * - 分房不再是一个手动菜单动作,改成 tryAllocate() 这个检查:登记完当下会自动跑一次,
- *   之后房间从不可用变可用时(退房/清洁完成)也该跑一次——那个触发点现在还没有人会调用它
- *   (housekeeping/checkout都还没做),先把方法留成public,等那边接进来直接调用即可
- */
+// WalkInControl.java - business logic for module 1 (Walk-In Registrations & Standard Booking)
+//
+// @author jagathis
+//
+// note to self:
+// - 3 separate Circular Linked Queues, one per room type (Standard/Deluxe/Suite), independent
+// - always check the vip tree before allocating to walk-in - if anyone is waiting in vip
+//   for this room type, walk-in gets nothing no matter how long theyve been queuing. vip
+//   always wins, same rule module 2 has
+// - only validate input for stuff that actually touches the ADT (register, cancel),
+//   viewing the list doesnt need it
+// - allocation isnt a menu action anymore, its tryAllocate() - runs right after
+//   register(), and HousekeepingControl also calls it once a room turns AVAILABLE again
 public class WalkInControl {
 
     private final WalkInCLI walkInCLI;
@@ -75,19 +74,19 @@ public class WalkInControl {
         this.roomList = roomList;
         this.guestTable = guestTable;
         this.memberList = memberList;
-        // 用20000000起跳当VIP的确认号,Walk-In从10000000起跳,避免两边号码重复
+        // vip confirmation numbers start at 20000000, walk-in starts at 10000000, keeps
+        // the 2 ranges from ever clashing
         this.arrivalCounter = 0;
         this.bookingCounter = 0;
         this.confirmationCounter = 10000000;
-        // 扫一次种子会员资料(MemberDao已经在这之前把它们读进memberList了),
-        // 接着种子资料的编号继续往下用,格式才会跟M1001这些一致——这个计数器从此只有
-        // WalkInControl自己在用,不会再重新扫描,所以不会有两边各自算出同一个号码的风险
+        // scan seed member data once (MemberDao already loaded them into memberList by
+        // now), continue numbering from there so new ids stay consistent with the M1001
+        // etc format - only WalkInControl touches this counter after this point, never
+        // rescans, so theres no risk of 2 places generating the same id
         this.memberCounter = computeNextMemberNumber();
     }
 
-    /**
-     * 跑这个模块自己的选单循环,直到使用者选择返回。
-     */
+    // menu loop, runs til user picks 0
     public void run() {
         boolean running = true;
         while (running) {
@@ -111,11 +110,12 @@ public class WalkInControl {
         }
     }
 
-    // ========== 功能1:登记新客人 ==========
+    // Feature 1: Register New Guest
 
     private void doRegister() {
-        // 散客不是会员,直接问姓名、电话,不用像VIP那样先查会员资料——
-        // 格式错误(电话非数字)原地重问到对为止;空白代表使用者要取消,直接放弃整个登记
+        // walk-in isnt a member, just ask name + phone directly, dont need to look up
+        // member data like vip does. bad format (phone not numeric) just re-asks. blank
+        // means cancel the whole thing
         String name = promptValidName();
         if (name == null) {
             walkInCLI.displayCancelled();
@@ -127,33 +127,33 @@ public class WalkInControl {
             return;
         }
 
-        // 一位客人可能一次要订好几间房(不一定同房型),所以姓名/电话只问一次,
-        // 底下用同一个confirmationNumber循环开多笔Booking,直到客人说不用再加了。
-        // confirmationNumber 延后到确定第一笔Booking真的要建立时才发号(见下方),
-        // 不能一进循环就先发——不然客人在房型/晚数这一步按空白取消,号码已经被
-        // ++掉、却从头到尾没建过任何Booking,永远烧掉一个不会再出现的确认号。
+        // guest might book multiple rooms (different types even), so name/phone only
+        // asked once, loop below reuses the same confirmationNumber til they say no more
+        // rooms
+        // confirmationNumber only generated once the first booking actually confirms
+        // (see below), not at the start of the loop - else cancelling at the roomType or
+        // nights step burns a number for nothing
         String confirmationNumber = null;
 
         boolean continueBooking = true;
         while (continueBooking) {
             String roomType = promptValidRoomType();
             if (roomType == null) {
-                // 房型这里留空白,等同"不用再加房间了",直接结束这一轮登记,
-                // 不用额外印取消讯息——跟平常按"add another room? n"退出是一样的效果
+                // blank roomType = done adding rooms, same effect as answering n to add
+                // another room, no separate cancel message needed
                 break;
             }
             QueueInterface<Booking> queue = getQueueForRoomType(roomType);
 
-            // 住几晚要在客人还在面前的登记当下先问好,存进Booking——
-            // 分房不再保证是当场发生的,之后可能是房间空出来才自动触发,
-            // 到时候客人不一定还在,没办法临时问
+            // ask nights now while the guest is still here, cant ask later since
+            // allocation might happen way after registration once a room frees up
             int numberOfNights = promptValidNumberOfNights();
             if (numberOfNights == Integer.MIN_VALUE) {
                 break;
             }
 
-            // 走到这里代表这一笔真的要建立了,第一次进来才发号,同一位客人
-            // 之后再加订的房间沿用同一个confirmationNumber
+            // reaching here means this booking is really happening, number only
+            // generated first time, same guest adding more rooms reuses it
             if (confirmationNumber == null) {
                 confirmationCounter++;
                 confirmationNumber = String.valueOf(confirmationCounter);
@@ -163,7 +163,8 @@ public class WalkInControl {
             bookingCounter++;
             String bookingId = "WB" + String.format("%06d", bookingCounter);
 
-            // memberId是null、tierRank是0——散客没有等级,这两个字段跟VIP那边刻意留空/最低
+            // memberId null, tierRank 0 - walk-in has no tier, deliberately left
+            // empty/lowest to match the vip side
             Booking booking = new Booking(bookingId, confirmationNumber, name, phone, null,
                     roomType, BookingStatus.PENDING, "WALK_IN", arrivalCounter, 0, currentTimestamp());
             booking.setNumberOfNights(numberOfNights);
@@ -171,22 +172,21 @@ public class WalkInControl {
             queue.enqueue(booking);
             walkInCLI.displayRegistrationResult(booking);
 
-            // 登记完立刻检查一次这个房型能不能马上分房(VIP没人等、队伍轮到他、有空房)
+            // check right after registering if this can be allocated now (no vip
+            // waiting, their turn, room free)
             tryAllocate(roomType);
 
             continueBooking = walkInCLI.promptAddAnotherRoom();
         }
     }
 
-    // ========== 分房检查(不再是手动菜单动作) ==========
+    // Allocation check (not a manual menu action)
 
-    /**
-     * 检查指定房型现在能不能分房,能就把队头那笔Booking分掉。
-     * 两个触发时机:1) doRegister() 登记完当下跑一次;2) 之后房间从不可用变可用时
-     * (退房/清洁完成,housekeeping/checkout模块接上后)也该跑一次——目前还没有人调用
-     * 第2种情况,方法先留成public,等那边接进来直接调用。
-     * 什么都不满足就静静地什么都不做(客人留在队伍里继续等),不当错误处理。
-     */
+    // checks if this room type can allocate right now, if so gives the room to whoever
+    // is at the front of the queue
+    // called after doRegister(), and HousekeepingControl also calls it once a room goes
+    // back to AVAILABLE
+    // does nothing quietly if conditions arent met, guest just stays in the queue
     public void tryAllocate(String roomType) {
         QueueInterface<Booking> queue = getQueueForRoomType(roomType);
         SearchTreeInterface<Booking> vipTree = getVipTreeForRoomType(roomType);
@@ -194,8 +194,8 @@ public class WalkInControl {
             return;
         }
 
-        // 关键规则:VIP永远优先——只要这个房型的VIP树还有人在等,
-        // Walk-In这边完全不动,不管Walk-In已经排了多久
+        // the golden rule: vip always first. if theres anyone waiting in this room
+        // types vip tree, walk-in doesnt move, doesnt matter how long theyve queued
         if (!vipTree.isEmpty()) {
             return;
         }
@@ -209,7 +209,8 @@ public class WalkInControl {
             return;
         }
 
-        // 先peek队头,不要马上dequeue——要等确定真的有空房可以分,才正式把它从队伍拿掉
+        // peek the front first, dont dequeue yet - only actually remove once we know
+        // theres a room to give
         Booking frontBooking = queue.getFront();
 
         LocalDate checkIn = LocalDate.now();
@@ -219,21 +220,23 @@ public class WalkInControl {
         frontBooking.setAssignedRoomNo(availableRoom.getRoomNumber());
         frontBooking.setAllocatedAt(currentTimestamp());
         availableRoom.setStatus("OCCUPIED");
-        // 现在才真正把它从队伍拿掉,因为确定分房成功了
+        // now actually remove it, allocation confirmed
         queue.dequeue();
 
-        // 同一位客人(同一个confirmationNumber)可能早就因为前一间房分房成功,
-        // 已经在guestTable里有Guest记录了——这时候不能再new一个塞进去(那样guestTable
-        // 里会出现两个confirmationNumber相同的Guest,查找时后者会盖住前者),
-        // 而是要把这间新房加进原本那个Guest的bookedRooms
+        // same guest (same confirmationNumber) mightve already got a Guest record from
+        // an earlier room being allocated - cant just new another one (would end up with
+        // 2 Guests sharing a key in guestTable, lookup gets confused), add the room to
+        // the existing Guest instead
         Guest guest = findGuestByConfirmationNumber(frontBooking.getConfirmationNumber());
         if (guest == null) {
-            // Walk-In一走进这个分支,就代表他是"这辈子第一次被系统看到"的人(还没有
-            // memberId)——一旦真的入住(不是还在排队),就自动帮他开一个最低等级的
-            // Member。tier用"Standard",TierRankUtility.tierToRank()对认不得的tier
-            // 一律回传0,所以不会因为多了memberId就意外插进VIP优先级队伍。
-            // 下次这个人再来,理论上会自称会员、直接走VIP模块用memberId登记,
-            // 不会再经过这里,所以这里不用查重。
+            // reaching this branch means the system has never seen this person before
+            // (no memberId yet) - once they actually check in (not just queued), auto
+            // enroll them as a Standard member. tierToRank() returns 0 for anything it
+            // doesnt recognize including Standard, so having a memberId now doesnt
+            // accidentally bump them into vip priority
+            // next time this person comes back they should know theyre a member and go
+            // through the vip module with their memberId, wont hit this path again so
+            // no dedup check needed here
             Member newMember = enrollAsStandardMember(frontBooking.getGuestNameSnapshot(),
                     frontBooking.getPhoneSnapshot());
 
@@ -245,15 +248,16 @@ public class WalkInControl {
         }
         guest.addRoom(availableRoom.getRoomNumber());
 
-        // Record the stay period on the booking itself and link it to the guest,
-        // so the Front-Desk module can list every booking under one
-        // confirmation number with its own dates.
+        // record the stay period on the booking itself and link it to the guest, so the
+        // front-desk module can list every booking under one confirmation number with
+        // its own dates
         frontBooking.setStayPeriod(checkIn.toString(), checkOut.toString(), frontBooking.getNumberOfNights());
         guest.addBooking(frontBooking);
 
-        // 分房那一刻就先给客人看一下预估房费(等级折扣是"个性化促销"的一种,只影响
-        // 价格显示,不碰房型/房间状态)——Walk-In新客人tier固定是Standard(0%折扣),
-        // 正式结算金额还是要等退房才真正定案
+        // show estimated price right at allocation (tier discount is a promo thing, only
+        // affects displayed price, doesnt touch room type/status) - new walk-in guest is
+        // always Standard tier so 0% discount here, real amount still gets settled at
+        // checkout
         double originalPrice = availableRoom.getNightlyRate() * frontBooking.getNumberOfNights();
         int discountPercent = TierRankUtility.tierToDiscountPercent(guest.getTier());
         double finalPrice = originalPrice - (originalPrice * discountPercent / 100.0);
@@ -261,12 +265,13 @@ public class WalkInControl {
         walkInCLI.displayAllocationResult(frontBooking, availableRoom, originalPrice, discountPercent, finalPrice);
     }
 
-    // ========== 功能3:取消排队 ==========
+    // Feature 3: Cancel Waiting
 
     private void doCancel() {
-        // 先选房型、把这个房型的等待名单印出来,让使用者看清楚队伍里到底有什么
-        // (含bookingId)再决定要取消哪一笔,不用盲打——队伍是空的话,印完"没人在等"
-        // 的提示后直接回头重问房型,不会继续往下问一个注定查不到的bookingId
+        // show the room types waiting list first (with bookingId) so user can actually
+        // see whats there before picking one to cancel, no blind typing. empty queue
+        // just loops back to ask roomType again instead of asking for a bookingId that
+        // cant possibly exist
         QueueInterface<Booking> queue;
         String roomType;
         while (true) {
@@ -282,10 +287,11 @@ public class WalkInControl {
             }
         }
 
-        // 用bookingId取消,不是confirmationNumber——同一个confirmationNumber可能同时
-        // 有好几笔Booking在同一个房型的队伍里(一次订多间房),用confirmationNumber去找
-        // 只会抓到排最前面那一笔,没办法让客人指定要取消的到底是哪一间;bookingId每笔
-        // 都是唯一的,不会有这个歧义
+        // cancel by bookingId not confirmationNumber - same confirmationNumber can have
+        // several bookings in the same room type queue (multi room booking), searching
+        // by confirmationNumber would only ever hit the first one and cant let the guest
+        // pick which specific room to cancel. bookingId is unique per booking so no
+        // ambiguity there
         String bookingId = promptValidBookingId();
         if (bookingId == null) {
             walkInCLI.displayCancelled();
@@ -298,13 +304,13 @@ public class WalkInControl {
         }
 
         target.setStatus(BookingStatus.CANCELLED);
-        // 普通enqueue/dequeue只能动队头/队尾,取消要用QueueInterface额外写的remove()
-        // 才能真正把队伍中间那一笔完全移除,不是只改状态
+        // normal enqueue/dequeue only touch front/back, cancel needs the extra remove()
+        // method on QueueInterface to actually pull one out from the middle
         queue.remove(target);
         walkInCLI.displayCancelResult(true);
     }
 
-    // ========== 功能4:查看排队名单 ==========
+    // Feature 4: View Waiting List
 
     private void doViewWaitingList() {
         String roomType = promptValidRoomType();
@@ -316,24 +322,24 @@ public class WalkInControl {
         walkInCLI.displayWaitingList(roomType, queue.getIterator());
     }
 
-    // ========== 报表1:每日入住登记明细表 ==========
+    // Report 1: Daily Registration Report
 
-    /**
-     * filter=日期+房型,按登记时间由早到晚(selection sort)。
-     *
-     * 这份报表只讲"登记"这件事:谁来了、要什么房型、拿到没有、拿到哪一间。
-     * 所有跟"等多久"有关的统计都归报表2(Wait Time Analysis)——两份用的是同一批
-     * 资料,分工不划清楚就会变成两份讲同一件事。
-     *
-     * 资料来源是"现在还在排队的" + "已经分房、挂在guestTable底下客人身上的"两边
-     * 合起来,这样不管有没有分到房都看得到。
-     */
+    // filter = date + room type, sorted by registration time earliest first (selection sort)
+    //
+    // this report is only about registration itself: who came, what type, did they get
+    // it, which room. anything about how long they waited belongs to report 2 - same
+    // underlying data, but if the split isnt clear the 2 reports just end up saying the
+    // same thing twice
+    //
+    // pulls from both still-queued bookings and already-allocated ones under guestTable,
+    // so you see everyone regardless of outcome
     void doDailyRegistrationReport() {
         String dateFilter = walkInCLI.promptReportDate();
         String roomTypeFilter = walkInCLI.promptReportRoomType();
 
         ListInterface<Booking> filtered = new ArrayBasedList<>();
-        // 房型不是ALL时,collectWalkInBookings()只会去对应那一条队伍拿,另外两条完全不碰
+        // when roomType isnt ALL, collectWalkInBookings() only touches that one queue,
+        // leaves the other 2 alone
         ListInterface<Booking> allBookings = collectWalkInBookings(roomTypeFilter);
         for (int i = 1; i <= allBookings.getNumberOfEntries(); i++) {
             Booking booking = allBookings.getEntry(i);
@@ -353,8 +359,8 @@ public class WalkInControl {
             return;
         }
 
-        // 一边印明细一边累加,不用为了统计再多扫一遍。
-        // 每一型房要分开数"要了几间"和"拿到几间",差额就是没被满足的需求。
+        // tally while printing each row, no need for a second pass just for the stats
+        // count requested vs allocated separately per room type, gap = unmet demand
         int allocatedCount = 0;
         int standardCount = 0;
         int deluxeCount = 0;
@@ -388,8 +394,8 @@ public class WalkInControl {
                 }
             }
 
-            // registeredAt 是 "yyyy-MM-dd HH:mm:ss",这里只取日期——
-            // 时分秒是报表2按小时分析用的,这份报表显示到分秒等于踩过去
+            // registeredAt is "yyyy-MM-dd HH:mm:ss", only need the date part here - the
+            // time is for report 2s hourly breakdown, showing it here would be scope creep
             walkInCLI.displayDailyRegistrationReportRow(
                     booking.getGuestNameSnapshot(),
                     booking.getRegisteredAt().substring(0, 10),
@@ -405,15 +411,14 @@ public class WalkInControl {
         walkInCLI.displayReportEnd();
     }
 
-    // ========== 报表2:等待时长分析报表 ==========
+    // Report 2: Wait Time Analysis Report
 
-    /**
-     * filter=日期+房型,按等待时长降序排序。
-     *
-     * 刻意不做"最少等待分钟"筛选:那会让 Average wait 变成"等超过门槛的人的平均",
-     * 一份叫 Wait Time Analysis 的报表,平均值不该因为筛选条件而失真。
-     * 换成房型之后,统计不会被截断,而且多回答一个问题:哪一型房的客人等最久。
-     */
+    // filter = date + room type, sorted longest wait first
+    //
+    // deliberately no "minimum wait" filter - that would turn Average wait into "average
+    // of people who waited past some threshold", and a report called Wait Time Analysis
+    // shouldnt let its own filter distort the average
+    // filtering by room type instead answers an extra question: which type waits longest
     void doWaitTimeAnalysisReport() {
         String dateFilter = walkInCLI.promptReportDate();
         String roomTypeFilter = walkInCLI.promptReportRoomType();
@@ -424,12 +429,13 @@ public class WalkInControl {
         int[] hourlyCount = new int[24];
         int[] hourlyTotalWait = new int[24];
 
-        // 按房型的等待时长:三种房型固定三组,索引 0=Standard 1=Deluxe 2=Suite
+        // wait time per room type: fixed 3 slots, index 0=Standard 1=Deluxe 2=Suite
         int[] typeAllocated = new int[3];
         int[] typeTotalWait = new int[3];
         int[] typeWaiting = new int[3];
 
-        // 房型不是ALL时,collectWalkInBookings()只会去对应那一条队伍拿,另外两条完全不碰
+        // when roomType isnt ALL, collectWalkInBookings() only touches that one queue,
+        // leaves the other 2 alone
         ListInterface<Booking> allBookings = collectWalkInBookings(roomTypeFilter);
         for (int i = 1; i <= allBookings.getNumberOfEntries(); i++) {
             Booking booking = allBookings.getEntry(i);
@@ -450,9 +456,11 @@ public class WalkInControl {
 
             int typeIndex = roomTypeIndex(booking.getRequestedRoomType());
 
-            // 按小时/按房型聚合都只收已分房的:还在等的等待时长是"算到此刻为止",
-            // 会随着报表什么时候跑而一直变大,混进平均值会把数字整个拉爆
-            // (改之前 09:00 那格显示过 3934 分钟,就是被一笔还在等的记录污染的)
+            // hourly/by-type aggregation only counts allocated ones - still-waiting
+            // durations are "as of right now" and keep growing depending on when the
+            // report runs, mixing them into the average would blow the number up
+            // (before this fix the 09:00 slot once showed 3934 min, that was a
+            // still-waiting record polluting it)
             if (allocated) {
                 if (waitMinutes >= 0) {
                     typeAllocated[typeIndex]++;
@@ -511,8 +519,9 @@ public class WalkInControl {
                     averageWait, longestWait, longestWaitGuest, longestWaiting, longestWaitingGuest);
         }
 
-        // 按房型比较平均等待——回答"哪一型房的客人等最久",那是系统性问题;
-        // 小时分布回答"几点最忙",那是排班问题。两个角度不重叠。
+        // comparing average wait by room type answers "which type waits longest" - a
+        // systemic issue. hourly distribution answers "whats the busiest hour" - a
+        // staffing issue. 2 different angles, dont overlap
         walkInCLI.displayWaitByRoomTypeHeader();
         walkInCLI.displayWaitByRoomTypeRow("Standard", typeAllocated[0], typeTotalWait[0], typeWaiting[0]);
         walkInCLI.displayWaitByRoomTypeRow("Deluxe", typeAllocated[1], typeTotalWait[1], typeWaiting[1]);
@@ -521,7 +530,7 @@ public class WalkInControl {
                 slowestRoomType(typeAllocated, typeTotalWait),
                 slowestAverageWait(typeAllocated, typeTotalWait));
 
-        // 先找出笔数最多是多少:柱状图要拿它当满格基准
+        // find the max count first, the bar chart uses it as the full-bar reference
         int maxHourlyCount = 0;
         for (int hour = 0; hour < 24; hour++) {
             if (hourlyCount[hour] > maxHourlyCount) {
@@ -529,8 +538,9 @@ public class WalkInControl {
             }
         }
 
-        // 再把"笔数刚好等于最大值"的时段全部收起来。资料少的时候很容易出现好几个
-        // 时段并列最忙,只报第一个会误导——跟报表1的 Busiest room type 同一个处理方式
+        // collect every hour that ties the max. small datasets easily get several hours
+        // tied for busiest, reporting just the first one would be misleading - same
+        // handling as report 1s busiest room type
         ListInterface<Integer> busiestHours = new ArrayBasedList<>();
         if (maxHourlyCount > 0) {
             for (int hour = 0; hour < 24; hour++) {
@@ -552,22 +562,22 @@ public class WalkInControl {
         walkInCLI.displayReportEnd();
     }
 
-    // ========== 报表共用辅助方法 ==========
+    // shared report helper methods
 
-    /**
-     * 把"现在还在三条队伍里排队的" + "已经分房、串在guestTable底下客人身上的
-     * WALK_IN来源Booking"合起来,给两份报表共用。已取消的Booking在doCancel()
-     * 被queue.remove()拿掉后就没有其他地方存着了,报表看不到——这是刻意的取舍,
-     * 不是遗漏。
-     *
-     * @param roomTypeFilter "ALL"就三条队伍都收;指定房型就只走对应那一条队伍
-     *                       (已分房的那部分不在队伍里,只能照旧扫guestTable)
-     */
+    // combines everyone still queued in the 3 queues with WALK_IN bookings already
+    // allocated and sitting under guestTable, shared by both reports
+    //
+    // cancelled bookings get pulled out by queue.remove() in doCancel() and arent stored
+    // anywhere else after that - reports just wont see them, thats intentional, not a bug
+    //
+    // roomTypeFilter "ALL" pulls all 3 queues, otherwise just the matching one (allocated
+    // ones still need scanning guestTable regardless since theyre not in a queue anymore)
     private ListInterface<Booking> collectWalkInBookings(String roomTypeFilter) {
         ListInterface<Booking> result = new ArrayBasedList<>();
 
-        // 三条队伍本来就按房型分开存,筛某个房型时直接选中那一条,另外两条根本不用碰——
-        // 分区本身就是索引,不必先全部倒出来再逐笔比对房型
+        // the 3 queues are already split by type, filtering just picks the right one, no
+        // need to dump everything and compare type field by field - the split itself is
+        // the index
         if ("ALL".equalsIgnoreCase(roomTypeFilter)) {
             appendQueueBookings(standardQueue, result);
             appendQueueBookings(deluxeQueue, result);
@@ -600,11 +610,8 @@ public class WalkInControl {
         }
     }
 
-    /**
-     * 房型对到固定的阵列索引。三种房型是系统写死的,用阵列比用清单简单。
-     *
-     * @return 0=Standard(也含认不得的房型) 1=Deluxe 2=Suite
-     */
+    // maps room type to a fixed array index, 3 types are hardcoded so array beats a list
+    // here. returns 0=Standard (also the fallback for anything unrecognized) 1=Deluxe 2=Suite
     private int roomTypeIndex(String roomType) {
         if ("Deluxe".equalsIgnoreCase(roomType)) {
             return 1;
@@ -615,9 +622,7 @@ public class WalkInControl {
         return 0;
     }
 
-    /**
-     * 平均等待最久的那一型房。完全没有已分房的记录时回传 "-"。
-     */
+    // room type with the longest average wait, returns "-" if nothing allocated at all
     private String slowestRoomType(int[] allocated, int[] totalWait) {
         String[] names = {"Standard", "Deluxe", "Suite"};
         int slowest = -1;
@@ -636,9 +641,7 @@ public class WalkInControl {
         return (slowest == -1) ? "-" : names[slowest];
     }
 
-    /**
-     * 上面那一型房的平均等待分钟数,给报表印在结论行上。
-     */
+    // average wait minutes for that slowest type, for the summary line
     private double slowestAverageWait(int[] allocated, int[] totalWait) {
         double slowestAverage = 0.0;
         for (int i = 0; i < 3; i++) {
@@ -653,14 +656,12 @@ public class WalkInControl {
         return slowestAverage;
     }
 
-    /**
-     * 算两个"yyyy-MM-dd HH:mm:ss"时间字串相差几分钟。
-     *
-     * 资料档里只要有一行时间戳格式写坏,LocalDateTime.parse()就会抛
-     * DateTimeParseException(unchecked),不接的话整个程序会直接退出、连主菜单
-     * 都回不去。报表宁可那一格显示不出数字,也不该因为一行坏资料而整个挂掉,
-     * 所以这里接住,回传-1让呼叫方当"算不出来"处理。
-     */
+    // minutes between 2 "yyyy-MM-dd HH:mm:ss" timestamps
+    //
+    // if one line in the data file has a broken timestamp, LocalDateTime.parse() throws
+    // DateTimeParseException (unchecked) and the whole program dies, cant even get back
+    // to the main menu. rather have one report cell show blank than crash over a single
+    // bad row, so catch it here and return -1 for "couldnt calculate"
     private int minutesBetween(String start, String end) {
         try {
             LocalDateTime startTime = LocalDateTime.parse(start, TIMESTAMP_FORMAT);
@@ -671,12 +672,9 @@ public class WalkInControl {
         }
     }
 
-    /**
-     * 按registeredAt由小到大原地排序(selection sort),不能用Collections.sort()。
-     *
-     * registeredAt 是固定宽度的 "yyyy-MM-dd HH:mm:ss",所以字串的字典序刚好
-     * 等于时间的先后顺序,不用先 parse 成 LocalDateTime 再比。
-     */
+    // sorts in place by registeredAt ascending (selection sort, cant use Collections.sort)
+    // registeredAt is fixed-width "yyyy-MM-dd HH:mm:ss" so plain string comparison
+    // already matches chronological order, no need to parse into LocalDateTime first
     private void sortBookingsByRegisteredAt(ListInterface<Booking> bookings) {
         int n = bookings.getNumberOfEntries();
         for (int i = 1; i <= n - 1; i++) {
@@ -695,9 +693,7 @@ public class WalkInControl {
         }
     }
 
-    /**
-     * 把bookings跟对应的waitMinutes两份清单,按等待分钟数由大到小同步排序(selection sort)。
-     */
+    // sorts bookings and their waitMinutes together, longest wait first (selection sort)
     private void sortByWaitMinutesDescending(ListInterface<Booking> bookings, ListInterface<Integer> waitMinutes) {
         int n = bookings.getNumberOfEntries();
         for (int i = 1; i <= n - 1; i++) {
@@ -719,28 +715,24 @@ public class WalkInControl {
         }
     }
 
-    // ========== 内部辅助方法 ==========
+    // internal helper methods
 
-    // 报表要严格照这个格式 parse 时间字串算等待分钟数,所以固定长度格式,
-    // 不能用 LocalTime.toString()(秒数刚好整数时会省略,长度不固定)
+    // reports parse this exact format to calculate wait minutes, so fixed length matters
+    // here - LocalTime.toString() drops trailing zero seconds which breaks that
     private static final DateTimeFormatter TIMESTAMP_FORMAT =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-    /**
-     * 组一个"yyyy-MM-dd HH:mm:ss"格式的当下时间字串,给 Booking 的 registeredAt/
-     * allocatedAt 用,也给报表算等待分钟数用。
-     */
+    // current time as "yyyy-MM-dd HH:mm:ss", used for registeredAt/allocatedAt and for
+    // report wait time math
     private String currentTimestamp() {
         return LocalDateTime.now().withNano(0).format(TIMESTAMP_FORMAT);
     }
 
-    // ========== 输入重试(格式类校验失败就原地重问,不中止整个操作) ==========
+    // Input retry (bad format just asks again, doesnt abort the whole thing)
 
-    /**
-     * 姓名唯一的校验就是"不能是空白",所以空白本身就直接当成"使用者要取消",
-     * 不用另外留一个专属的取消信号——回传null代表取消。
-     * 打了东西但含数字或符号才是真的格式错误,原地重问。
-     */
+    // only validation for name is "not blank", so blank itself just means cancel, no
+    // need for a separate cancel signal - null return means cancel
+    // typing something with numbers/symbols in it is the real format error, ask again
     private String promptValidName() {
         String name;
         while (true) {
@@ -755,9 +747,7 @@ public class WalkInControl {
         }
     }
 
-    /**
-     * 空白代表取消(回传null);打了东西但不是纯数字才是真的格式错误,原地重问。
-     */
+    // blank = cancel (null), non-digit input is the real error, ask again
     private String promptValidPhone() {
         String phone;
         while (true) {
@@ -786,10 +776,9 @@ public class WalkInControl {
         }
     }
 
-    /**
-     * 空白由WalkInCLI转成Integer.MIN_VALUE(不会跟任何真实晚数或既有的-1无效值撞),
-     * 用来代表"使用者要取消",跟"打了但格式不对/不是正数"这种要重问的情况分开。
-     */
+    // WalkInCLI turns blank into Integer.MIN_VALUE (wont clash with a real night count
+    // or the existing -1 invalid marker), used as the cancel signal separate from
+    // "typed something but its not a valid positive number" which just re-asks
     private int promptValidNumberOfNights() {
         int numberOfNights;
         while (true) {
@@ -841,12 +830,10 @@ public class WalkInControl {
         }
     }
 
-    /**
-     * 在roomList里找第一间"房型对得上、状态严格等于AVAILABLE"的房间。
-     * 一定要用 equals("AVAILABLE"),不能只判断"不是OCCUPIED"——
-     * 因为NEEDS_CLEANING/CLEANING_IN_PROGRESS/INSPECTED这些房间也"不是OCCUPIED",
-     * 但清洁流程还没走完,不该被分配出去。
-     */
+    // first room in roomList with matching type and status exactly AVAILABLE
+    // must use equals("AVAILABLE"), not just "not OCCUPIED" - NEEDS_CLEANING /
+    // CLEANING_IN_PROGRESS / INSPECTED are all "not OCCUPIED" too but cleaning isnt
+    // done yet, cant hand those out
     private Room findAvailableRoom(String roomType) {
         Iterator<Room> iterator = roomList.getIterator();
         while (iterator.hasNext()) {
@@ -858,12 +845,11 @@ public class WalkInControl {
         return null;
     }
 
-    /**
-     * 帮一位第一次入住、还不是会员的Walk-In客人,开一个最低等级(Standard)的会员档案,
-     * 存进memberList,再回传这个新Member给呼叫方拿memberId/tier去建Guest用。
-     * currentPoints/totalPointsEarned都从0开始——实际赚多少分是模块5的事,这里只负责
-     * "这个人现在是有memberId的会员了"这个身份的建立。
-     */
+    // enrolls a first-time walk-in (not a member yet) as a Standard member, saves to
+    // memberList, returns the new Member so the caller can grab memberId/tier for
+    // building Guest
+    // currentPoints/totalPointsEarned both start at 0, actually earning points is module
+    // 5s job, this just handles "this person now has a memberId"
     private Member enrollAsStandardMember(String name, String phone) {
         String memberId = "M" + memberCounter;
         memberCounter++;
@@ -872,13 +858,13 @@ public class WalkInControl {
         return member;
     }
 
-    /**
-     * 扫一次memberList,把"M"开头、后面接数字的会员编号(比如种子资料的M1001~M1005)
-     * 都解析出数字部分,取最大值+1,当作WalkInControl自己接下来要用的编号起点——
-     * 之后终生只有这个计数器在用这个号码段,不会再重新扫描,新会员编号才会跟种子资料
-     * 格式一致,同时不会有"两个地方各自算出同一个号码"这种撞号风险。
-     * memberList万一是空的(理论上不会,MemberDao已经先读过种子资料),给一个保底起点。
-     */
+    // scans memberList once, parses the number part out of any "M"+digits id (like seed
+    // data M1001~M1005), takes max+1 as the starting point for WalkInControls own
+    // counter - only this counter uses this number range from here on, never rescans
+    // again, keeps new ids consistent with the seed data format and avoids 2 places
+    // generating the same id
+    // falls back to a safe starting point if memberList is somehow empty (shouldnt
+    // happen, MemberDao loads seed data first)
     private int computeNextMemberNumber() {
         int maxNumber = 1000;
         Iterator<Member> iterator = memberList.getIterator();
@@ -892,28 +878,25 @@ public class WalkInControl {
                         maxNumber = number;
                     }
                 } catch (NumberFormatException e) {
-                    // ID不是"M"+纯数字这个格式,跳过,不影响其他笔的计算
+                    // id isnt M+digits format, skip it, doesnt affect the rest
                 }
             }
         }
         return maxNumber + 1;
     }
 
-    /**
-     * 用confirmationNumber去guestTable里查这位客人是否已经有Guest记录
-     * (比如已经因为另一间房分房成功而建过了)。
-     * Guest的equals()/hashCode()只看confirmationNumber,所以拿一个
-     * 只填了confirmationNumber、其他栏位留null的样板去查,一样能正确命中。
-     */
+    // checks guestTable by confirmationNumber for an existing Guest record (eg already
+    // created from another room being allocated)
+    // Guest equals/hashCode only look at confirmationNumber so a template with just that
+    // field set and everything else null still works as the lookup key
     private Guest findGuestByConfirmationNumber(String confirmationNumber) {
         Guest template = new Guest(confirmationNumber, null, null, null, null, null, null, null, 0);
         return guestTable.getEntry(template);
     }
 
-    /**
-     * 在指定的队伍里,用bookingId线性找出对应的Booking物件。
-     * 找到的是"真正存在队伍里的那个物件",这样才能拿去交给 queue.remove() 正确比对、移除。
-     */
+    // linear search the given queue for the Booking matching bookingId
+    // returns the actual object thats really in the queue, needed for queue.remove() to
+    // compare and remove it correctly
     private Booking findBookingInQueue(QueueInterface<Booking> queue, String bookingId) {
         Iterator<Booking> iterator = queue.getIterator();
         while (iterator.hasNext()) {

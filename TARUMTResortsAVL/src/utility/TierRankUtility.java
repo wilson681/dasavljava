@@ -2,6 +2,8 @@ package utility;
 
 /*
  * Converts member tiers into values used for priority, points and discounts.
+ *
+ * @author All
  */
 public class TierRankUtility {
  // Utility class should not be instantiated.

@@ -4,6 +4,9 @@ import java.util.Iterator;
 import java.util.NoSuchElementException;
 
 // AVLTree - self balancing BST, implements SearchTreeInterface
+//
+// @author Chong Kim Seng
+//
 // used for module 2 (vip allocation)
 // tree itself doesnt decide order, thats all compareTo() on whatever data is stored (eg Booking)
 // so higher priority = smaller compareTo value, means first item from getInorderIterator()

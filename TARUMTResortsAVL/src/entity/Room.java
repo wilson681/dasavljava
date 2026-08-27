@@ -7,6 +7,8 @@ package entity;
  * Status flow:
  * AVAILABLE -> OCCUPIED -> NEEDS_CLEANING
  * -> CLEANING_IN_PROGRESS -> INSPECTED -> AVAILABLE
+ *
+ * @author All
  */
 public class Room {
 

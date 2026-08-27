@@ -5,6 +5,8 @@ package entity;
  * Status flow:
  * PENDING -> CONFIRMED -> CHECKED_IN -> CHECKED_OUT
  * A booking can also be CANCELLED.
+ *
+ * @author All
  */
 public enum BookingStatus {
     PENDING,
