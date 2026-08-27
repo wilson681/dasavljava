@@ -7,14 +7,9 @@ import java.util.Scanner;
 import utility.ValidationUtility;
 
 /**
- * VipAllocationCLI.java - 模块2(VIP & Loyalty Tier Priority Room Allocation)的 console 界面。
+ * VipAllocationCLI.java - console for module 2 (VIP & Loyalty Tier Priority Room Allocation)
  *
- * @author 某某
- *
- * 说明:
- * - 只负责跟使用者对话(Scanner输入、println输出),不做任何业务判断
- * - 参数/回传值里出现的 Booking、Room 只是拿来显示用,不会在这里被建立或修改
- * - 所有 console 印出来的文字都用英文,代码注释才用中文
+ * @author Chong Kim Seng
  */
 public class VipAllocationCLI {
 
@@ -31,8 +26,7 @@ public class VipAllocationCLI {
     }
 
     /**
-     * 印出这个模块的选单,读使用者的选择。
-     * @return 使用者输入的数字,不是数字则回传 -1
+     * @return number enter by user, not number return -1
      */
     public int displayMenuAndGetChoice() {
         System.out.println();
@@ -61,7 +55,7 @@ public class VipAllocationCLI {
         System.out.println("Cancelled. Returning to menu.");
     }
 
-    // ========== 功能1:VIP登记 ==========
+    // ========== module 1 :vip register ==========
 
     public String promptMemberId() {
         System.out.print("Enter member ID (blank to cancel): ");
@@ -72,7 +66,6 @@ public class VipAllocationCLI {
         System.out.println();
         System.out.println("Room Type: 1) Standard  2) Deluxe  3) Suite");
         System.out.print("Select room type (blank to cancel): ");
-        // 把数字选项换成实际房型文字,打错或直接打文字都原样传出去,交给Control判断合不合法
         String choice = scanner.nextLine().trim();
         switch (choice) {
             case "1":
@@ -107,8 +100,8 @@ public class VipAllocationCLI {
     }
 
     /**
-     * 同一位VIP登记完一间房后,问要不要在同一个确认号下继续加订下一间房
-     * (一次订多间房时用,让多笔 Booking 共用同一个 confirmationNumber)
+     * After register one room for the same VIP, ask if they want to add another room under the same con num
+     * (booking multiple room use same confirmationNumber)
      */
     public boolean promptAddAnotherRoom() {
         System.out.println();
@@ -125,8 +118,7 @@ public class VipAllocationCLI {
         }
     }
 
-    // ========== 分房结果(登记后自动触发,不再是独立菜单动作) ==========
-
+   
     public int promptNumberOfNights() {
         System.out.print("Enter number of nights (blank to cancel): ");
         String input = scanner.nextLine().trim();
@@ -159,7 +151,7 @@ public class VipAllocationCLI {
         System.out.println(DIVIDER);
     }
 
-    // ========== 功能2:取消排队 ==========
+    // ========== module 2 : cancel Q ==========
 
     public String promptBookingIdToCancel() {
         System.out.print("Enter the booking ID to cancel (blank to cancel): ");
@@ -175,7 +167,7 @@ public class VipAllocationCLI {
         }
     }
 
-    // ========== 功能3:查看VIP等待名单 ==========
+    // ======module 3 view the vip waiting list ==========
 
     public void displayWaitingList(String roomType, Iterator<Booking> waitingList) {
         System.out.println();
@@ -203,12 +195,11 @@ public class VipAllocationCLI {
         }
     }
 
-    // ========== 报表共用输入/输出 ==========
+    // ====report ==========
 
     /**
-     * @return 等级排名数字(0=Standard,1=Elite,2=Platinum,3=Diamond),选"All"回传-1
-     *         代表不限等级——不能用0当"All"的哨兵值,因为0现在是Standard真正的排名
-     *         (业务规则改了之后,Standard会员也能走VIP登记这条路,只是排名垫底)
+     * @return (0=Standard,1=Elite,2=Platinum,3=Diamond),"All" return -1
+     *        
      */
     public int promptReportTierRank() {
         System.out.println();
@@ -284,7 +275,7 @@ public class VipAllocationCLI {
         }
     }
 
-    // ========== 报表1:VIP等待名单实时报表 ==========
+    // ====== report 1 ,vip wait list ==========
 
     public void displayVipWaitingListReportHeader(int tierRankFilter,
                                                    String generatedAt) {
@@ -336,7 +327,7 @@ public class VipAllocationCLI {
         }
     }
 
-    // ========== 报表2:等级分房达标率报表 ==========
+    // ========== Report 2:Room Assignment Target Rate  ==========
 
     public void displayTierSlaReportHeader(int tierRankFilter,
                                            String fromDate, String toDate,
@@ -373,9 +364,7 @@ public class VipAllocationCLI {
                                         double averageWaitMinutes,
                                         int worstWaitMinutes,
                                         String status) {
-        // Avg/Worst 用跟 Wait Time 报表同一套 formatDuration(),不是裸分钟数+m——
-        // 等待时间一旦跨天(比如1440分钟),裸数字会撑爆原本预留的栏宽,
-        // 换成"Xd Yh"这种有上限的格式就不会再被大数字挤歪。
+       // Using a limited format like "Xd Yh" prevents the column from being stretched.
         System.out.println(String.format(
                 "%-9s  %-6s  %5d  %3d  %6d  %6.1f%%  %-8s  %-8s  %s",
                 tier, "<=" + targetMinutes + "m", count, metCount, breachedCount,
@@ -432,14 +421,7 @@ public class VipAllocationCLI {
         return fromDate + " to " + toDate;
     }
 
-    /**
-     * 把变长文字(比如客人姓名)硬性封顶在 maxLength 以内,超过就截断加"..."。
-     * 固定宽度的 %-Ns 格式碰到超长字串不会自动截断,只会把那一列跟后面所有栏位
-     * 一起往右推,导致整份报表看起来歪一边——这个方法保证不管资料多长,
-     * 印出来的宽度永远不会超过表头预留的栏宽。
-     * 用ASCII的三个句点,不用Unicode省略号"…"——那个字元在某些console的编码下
-     * (比如Windows默认的非UTF-8 codepage)会印成乱码。
-     */
+   
     private String truncate(String value, int maxLength) {
         if (value == null) {
             return "";

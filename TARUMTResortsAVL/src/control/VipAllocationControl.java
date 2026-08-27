@@ -18,22 +18,15 @@ import utility.TierRankUtility;
 import utility.ValidationUtility;
 
 /**
- * VipAllocationControl.java - 模块2(VIP & Loyalty Tier Priority Room Allocation)的业务逻辑。
- *
- * @author 某某
- *
- * 说明:
- * - 三棵 AVL Tree,按房型分开(Standard/Deluxe/Suite 各一棵),互相独立
- * - 分房时只处理VIP树,不会去管Walk-In队伍(VIP树非空时,WalkInControl自己会挡住不分)
- * - 只对"会调用collection ADT方法"的操作(登记、取消)做输入校验,查看名单这种不用
- * - 分房不再是一个手动菜单动作,改成 tryAllocate() 这个检查:登记完当下会自动跑一次,
- *   之后房间从不可用变可用时(退房/清洁完成)也该跑一次——那个触发点现在还没有人会调用它
- *   (housekeeping/checkout都还没做),先把方法留成public,等那边接进来直接调用即可
+ *business logic for Module 2 (VIP & Loyalty Tier Priority Room Allocation).
+ * @author Chong Kim Seng
+ * Three AVL trees split by room type (Standard/Deluxe/Suite)
+ *  when a room becomes available again ltr (checkout/cleaning done), it should also run,
+ * housekeeping/checkout not done yet
  */
 public class VipAllocationControl {
 
-    // Reporting-only service targets. They measure how quickly each tier was
-    // served, but they never change AVL priority or trigger room allocation.
+    // these SLA numbers just for report, dont affect AVL order or allocation
     private static final int STANDARD_SLA_MINUTES = 30;
     private static final int ELITE_SLA_MINUTES = 20;
     private static final int PLATINUM_SLA_MINUTES = 15;
@@ -75,9 +68,7 @@ public class VipAllocationControl {
         this.confirmationCounter = 20000000;
     }
 
-    /**
-     * 跑这个模块自己的选单循环,直到使用者选择返回。
-     */
+    // menu loop, 0 to exit
     public void run() {
         boolean running = true;
         while (running) {
@@ -101,54 +92,42 @@ public class VipAllocationControl {
         }
     }
 
-    // ========== 功能1:VIP登记 ==========
+    // Feature 1: VIP Registration
 
     private void doRegister() {
-        // 第一步:先拿到会员本人。空白代表使用者要取消;打错编号就地重问,
-        // 不把人踢回主选单——打错字是最常见的情况,重问才是对的
+        // get the member first, blank input = cancel
+        // wrong member id just loops and asks again, doesnt kick back to main menu
         Member member = promptValidMember();
         if (member == null) {
             vipAllocationCLI.displayCancelled();
             return;
         }
 
-        // 把会员等级(文字)换算成排名数字,插进树时靠这个数字决定优先级——
-        // 同一位会员这次登记的每一笔Booking等级都一样,只需要算一次
-        // tierRank<=0(比如Walk-In入住后自动开的Standard会员)一样放行——业务规则是
-        // "任何有memberId的会员,只要走VIP这条路登记,优先权本来就该高于Walk-In队伍",
-        // 不是只有Elite/Platinum/Diamond才算数。Standard插进树后排名自然垫底(compareTo
-        // 只看tierRank/arrivalSequence,0天生排在1/2/3后面),但仍然会跟真VIP一样,
-        // 排在WalkInControl.tryAllocate()挡住的Walk-In队伍前面——这就是要的效果
+        // this is the tier to rank conversion, it's what actually drives the priority ordering
+        // once the booking gets inserted into the AVL tree
         int tierRank = TierRankUtility.tierToRank(member.getTier());
 
-        // 这位VIP可能一次要订好几间房(不一定同房型),所以会员资料只查一次,
-        // 底下用同一个confirmationNumber循环开多笔Booking,直到不用再加了。
-        // confirmationNumber 延后到确定第一笔Booking真的要建立时才发号(见下方),
-        // 不能一进循环就先发——不然客人在房型/晚数这一步按空白取消,号码已经被
-        // ++掉、却从头到尾没建过任何Booking,永远烧掉一个不会再出现的确认号。
+        // one VIP can book more than one room in a single session, so the member is only looked
+        // up once here and the loop below reuses the same confirmationNumber for every room
         String confirmationNumber = null;
 
         boolean continueBooking = true;
         while (continueBooking) {
-            // 问要什么房型,顺便决定这笔Booking该进哪一棵树
+            // room type decides which one of the 3 trees this booking belongs to
             String roomType = promptValidRoomType();
             if (roomType == null) {
-                // 房型这里留空白,等同"不用再加房间了",直接结束这一轮登记,
-                // 不用额外印取消讯息——跟平常按"add another room? n"退出是一样的效果
-                break;
+                break; // blank = no more rooms, stop the loop
             }
             SearchTreeInterface<Booking> tree = getTreeForRoomType(roomType);
 
-            // 住几晚要在客人还在面前的登记当下先问好,存进Booking——
-            // 分房不再保证是当场发生的,之后可能是房间空出来才自动触发,
-            // 到时候客人不一定还在,没办法临时问
+            // can happen much later than registration
             int numberOfNights = promptValidNumberOfNights();
             if (numberOfNights == Integer.MIN_VALUE) {
                 break;
             }
 
-            // 走到这里代表这一笔真的要建立了,第一次进来才发号,同一位会员
-            // 之后再加订的房间沿用同一个confirmationNumber
+            // only generate confirmationNumber the first time a room is actually confirmed here,
+            // so a cancel before this not burn a number for nothing 
             if (confirmationNumber == null) {
                 confirmationCounter++;
                 confirmationNumber = String.valueOf(confirmationCounter);
@@ -158,34 +137,30 @@ public class VipAllocationControl {
             bookingCounter++;
             String bookingId = "VB" + String.format("%06d", bookingCounter);
 
-            // 把这个人的姓名、电话、会员编号都从Member身上抄一份进Booking,
-            // 因为这时候还没建Guest,这些资料要先存在Booking里,等真的分到房才拿出来用
+            // name/phone are just copied from Member for now, Guest record only gets built
+            // later in tryAllocate() once a room is actually assigned
             Booking booking = new Booking(bookingId, confirmationNumber, member.getName(),
                     member.getPhone(), member.getMemberId(), roomType, BookingStatus.PENDING,
                     "VIP", arrivalCounter, tierRank, currentTimestamp());
             booking.setNumberOfNights(numberOfNights);
 
-            // 插进对应房型的树——AVLTree.add()内部会自己比较tierRank/arrivalSequence,
-            // 自动排到该在的位置,不用我们自己指定放哪
+            // this is the actual AVL insert - add() will perform compare and rebalance
             tree.add(booking);
             vipAllocationCLI.displayRegistrationResult(booking, member.getTier());
 
-            // 登记完立刻检查一次这个房型能不能马上分房(树里排最前面的那笔、有空房)
+            // try allocating right away in case a room for this type is already free
             tryAllocate(roomType);
 
             continueBooking = vipAllocationCLI.promptAddAnotherRoom();
         }
     }
 
-    // ========== 分房检查(不再是手动菜单动作) ==========
+    // Allocation check (not a manual menu action)
 
-    /**
-     * 检查指定房型现在能不能分房,能就把树里优先级最高的那笔Booking分掉。
-     * 两个触发时机:1) doRegister() 登记完当下跑一次;2) 之后房间从不可用变可用时
-     * (退房/清洁完成,housekeeping/checkout模块接上后)也该跑一次——目前还没有人调用
-     * 第2种情况,方法先留成public,等那边接进来直接调用。
-     * 什么都不满足就静静地什么都不做(客人留在树里继续等),不当错误处理。
-     */
+    // core allocation logic
+    // called after register(), HousekeepingControl also calls this once a room turns AVAILABLE again
+    // public cos of that 2nd caller
+    // does nothing if nobody waiting or no room free
     public void tryAllocate(String roomType) {
         SearchTreeInterface<Booking> tree = getTreeForRoomType(roomType);
         if (tree == null || tree.isEmpty()) {
@@ -197,27 +172,23 @@ public class VipAllocationControl {
             return;
         }
 
-        // 拿"优先级最高"的那一笔——因为Booking.compareTo()把等级越高的值设得越小,
-        // in-order遍历(由小到大)吐出来的第一个,天生就是优先级最高的那个,不用额外找
+        // inorder walks smallest to largest, and compareTo() makes smallest = highest priority
+        // so first node here is the one to allocate, no need extra search
         Iterator<Booking> priorityIterator = tree.getInorderIterator();
         Booking topPriority = priorityIterator.next();
 
         LocalDate checkIn = LocalDate.now();
         LocalDate checkOut = checkIn.plusDays(topPriority.getNumberOfNights());
 
-        // 真正分房——改Booking状态、写入房号、改Room状态、把这笔Booking从树里移除
-        // (它已经处理完了,不该继续留在"等待名单"里)
+        // actual handover happens here
         topPriority.setStatus(BookingStatus.CHECKED_IN);
         topPriority.setAssignedRoomNo(availableRoom.getRoomNumber());
         topPriority.setAllocatedAt(currentTimestamp());
         availableRoom.setStatus("OCCUPIED");
         tree.remove(topPriority);
 
-        // 这时候才真正建Guest(客人身份档案)——用Booking上存的姓名/电话/会员编号,
-        // 组成完整的Guest物件,再塞进guestTable,前台(模块4)之后才查得到这个人。
-        // 但如果这位VIP已经因为前一间房分房成功、guestTable里早就有他的Guest记录了,
-        // 就不能再new一个塞进去(那样guestTable里会出现两个confirmationNumber相同的
-        // Guest,查找时后者会盖住前者),而是把这间新房加进原本那个Guest的bookedRooms
+        // guest only created here not at register
+        // reuse existing guest entry if got one already (multi room case), dont duplicate
         Member member = findMemberById(topPriority.getMemberId());
         Guest guest = findGuestByConfirmationNumber(topPriority.getConfirmationNumber());
         if (guest == null) {
@@ -229,15 +200,11 @@ public class VipAllocationControl {
         }
         guest.addRoom(availableRoom.getRoomNumber());
 
-        // Record the stay period on the booking itself and link it to the guest,
-        // so the Front-Desk module can list every booking under one
-        // confirmation number with its own dates.
+        // link booking to guest, front desk (module 4) needs this to list by confirmationNumber
         topPriority.setStayPeriod(checkIn.toString(), checkOut.toString(), topPriority.getNumberOfNights());
         guest.addBooking(topPriority);
 
-        // 分房那一刻就先给客人看一下预估房费(等级折扣是"个性化促销"的一种,只影响
-        // 价格显示,不碰房型/房间状态)——正式结算金额还是要等退房才真正定案,
-        // 这里只是让客人提前知道大概要付多少
+        // discount applied here, just estimate for display, real bill settled at checkout
         double originalPrice = availableRoom.getNightlyRate() * topPriority.getNumberOfNights();
         int discountPercent = TierRankUtility.tierToDiscountPercent(member.getTier());
         double finalPrice = originalPrice - (originalPrice * discountPercent / 100.0);
@@ -246,12 +213,10 @@ public class VipAllocationControl {
                 originalPrice, discountPercent, finalPrice);
     }
 
-    // ========== 功能3:取消排队 ==========
+    // Feature 3: Cancel Waiting 
 
     private void doCancel() {
-        // 先选房型、把这个房型的等待名单印出来,让使用者看清楚树里到底有什么
-        // (含bookingId)再决定要取消哪一笔,不用盲打——树是空的话,印完"没人在等"
-        // 的提示后直接回头重问房型,不会继续往下问一个注定查不到的bookingId
+        // show waiting list first so user can see which bookingId to cancel
         SearchTreeInterface<Booking> tree;
         String roomType;
         while (true) {
@@ -267,11 +232,8 @@ public class VipAllocationControl {
             }
         }
 
-        // 用bookingId取消,不是confirmationNumber——同一个confirmationNumber可能同时
-        // 有好几笔Booking在同一个房型的树里(一次订多间房),用confirmationNumber去找
-        // 会有歧义,没办法让客人指定要取消的到底是哪一笔;bookingId每笔都是唯一的
-        // 只有bookingId,不知道这笔Booking的tierRank/arrivalSequence是多少,
-        // 没办法直接叫树去比大小导航——所以先用in-order扫过去,找到"真正的那个物件"
+        // use bookingId not confirmationNumber, one confirmationNumber can have multiple bookings in tree
+        // bookingId not part of compareTo() so cant navigate tree with it, scan inorder instead
         String bookingId = promptValidBookingId();
         if (bookingId == null) {
             vipAllocationCLI.displayCancelled();
@@ -283,14 +245,13 @@ public class VipAllocationControl {
             return;
         }
 
-        // 找到真正的物件之后,拿它自己的tierRank/arrivalSequence去比较,
-        // tree.remove()才能正确导航到它、做标准的AVL删除(必要时还会重新平衡)
+        // need the real object here not rebuilt, remove() uses tierRank/arrivalSequence to navigate
         target.setStatus(BookingStatus.CANCELLED);
         tree.remove(target);
         vipAllocationCLI.displayCancelResult(true);
     }
 
-    // ========== 功能4:查看VIP等待名单 ==========
+    // Feature 4: View VIP Waiting List
 
     private void doViewWaitingList() {
         String roomType = promptValidRoomType();
@@ -300,18 +261,14 @@ public class VipAllocationControl {
         }
         SearchTreeInterface<Booking> tree = getTreeForRoomType(roomType);
 
-        // 直接把in-order遍历的iterator传给Boundary去印,不用自己先转成清单——
-        // 因为compareTo设计的方向,这个顺序天生就是"优先级由高到低"
+        // inorder already = high priority first, straight to boundary
         vipAllocationCLI.displayWaitingList(roomType, tree.getInorderIterator());
     }
 
-    // ========== 报表1:VIP等待名单实时报表 ==========
+    // Report 1: Live VIP Waiting List Report
 
-    /**
-     * Real-time waiting report. Requests are globally sorted by the same
-     * business priority used by the AVL trees: higher tier first, then earlier
-     * arrival within the same tier. SLA targets are reporting indicators only.
-     */
+    // combine all 3 trees into one list, sort same way as AVL (tier first then earliest arrival)
+    // SLA here just for flagging rows, no effect on sort
     void doVipWaitingListReport() {
         int tierRankFilter = vipAllocationCLI.promptReportTierRank();
 
@@ -371,8 +328,7 @@ public class VipAllocationControl {
         Iterator<Booking> iterator = tree.getInorderIterator();
         while (iterator.hasNext()) {
             Booking booking = iterator.next();
-            // -1 = "All"(不限等级)。不能用0当哨兵,因为Standard会员现在也能走VIP
-            // 登记这条路,0是Standard真正的排名,不是"没有filter"的意思
+            // -1 = All, cant use 0 as sentinel since 0 is standard's real rank
             if (tierRankFilter == -1 || booking.getTierRankAtRequest() == tierRankFilter) {
                 filtered.add(booking);
                 int waitMinutes = minutesBetween(booking.getRegisteredAt(), currentTimestamp());
@@ -381,19 +337,16 @@ public class VipAllocationControl {
         }
     }
 
-    // ========== 报表2:等级分房达标率报表 ==========
+    // Report 2: Tier Allocation SLA Compliance Report
 
-    /**
-     * Measures allocation performance against the reporting-only SLA target
-     * for each tier. The date filter uses the allocation date.
-     */
+    // compare each tier wait time vs SLA target, filtered by allocated date not registered date
     void doTierSlaReport() {
         int tierRankFilter = vipAllocationCLI.promptReportTierRank();
         String fromDate = vipAllocationCLI.promptReportFromDate();
         String toDate = vipAllocationCLI.promptReportToDate();
 
-        // 固定4档(Diamond=3, Platinum=2, Elite=1, Standard=0)——Standard会员现在
-        // 也能走VIP登记这条路(排名垫底但仍插进树里),所以0档也要统计,不能排除
+        // 4 tiers, index = tierRank (diamond3 platinum2 elite1 standard0)
+        // standard included too since they can register as vip now
         int[] count = new int[4];
         int[] totalWaitMinutes = new int[4];
         int[] metCount = new int[4];
@@ -413,8 +366,7 @@ public class VipAllocationControl {
                 if (rank < 0 || rank > 3) {
                     continue;
                 }
-                // -1 = "All"(不限等级),tierRankFilter本身可能是0(Standard),
-                // 不能再用0当哨兵去判断"有没有filter"
+                // same -1=All trick as before, cant reuse 0
                 if (tierRankFilter != -1 && rank != tierRankFilter) {
                     continue;
                 }
@@ -441,8 +393,8 @@ public class VipAllocationControl {
             }
         }
 
-        // Store only ranks that have data, then use a self-written selection
-        // sort to put the weakest SLA performance first.
+        // keep tiers with data only, rank worst first below
+        // no Collections.sort allowed for this project (own ADTs only) so wrote selection sort manually
         ListInterface<Integer> reportRanks = new ArrayBasedList<>();
         for (int rank = 3; rank >= 0; rank--) {
             if (count[rank] > 0) {
@@ -492,10 +444,8 @@ public class VipAllocationControl {
         vipAllocationCLI.displayReportEnd();
     }
 
-    /**
-     * Selection sort: lowest compliance first; when compliance ties, the tier
-     * with the longer average wait comes first; final tie-break is higher tier.
-     */
+    // worst compliance first, then longer avg wait, then higher tier wins on tie
+    // (a struggling diamond matters more than a struggling standard)
     private void sortSlaRanksByRisk(ListInterface<Integer> ranks,
                                     int[] count, int[] metCount,
                                     int[] totalWaitMinutes) {
@@ -534,7 +484,7 @@ public class VipAllocationControl {
         return rankA > rankB;
     }
 
-    // ========== 报表共用辅助方法 ==========
+    // Shared Report Helper Methods
 
     private int minutesBetween(String start, String end) {
         LocalDateTime startTime = LocalDateTime.parse(start, TIMESTAMP_FORMAT);
@@ -542,10 +492,8 @@ public class VipAllocationControl {
         return (int) java.time.Duration.between(startTime, endTime).toMinutes();
     }
 
-    /**
-     * Selection sort using Booking.compareTo(): higher tier first, then earlier
-     * arrival. The wait-time list is swapped in parallel with the bookings.
-     */
+    // selection sort again, uses compareTo() directly this time
+    // swap waitMinutes together with bookings or the 2 lists go out of sync
     private void sortByVipPriority(ListInterface<Booking> bookings,
                                    ListInterface<Integer> waitMinutes) {
         int n = bookings.getNumberOfEntries();
@@ -596,31 +544,21 @@ public class VipAllocationControl {
         return "FAIL";
     }
 
-    // ========== 内部辅助方法 ==========
+    // Internal Helper Methods
 
-    // 报表要严格照这个格式 parse 时间字串算等待分钟数,所以固定长度格式,
-    // 不能用 LocalTime.toString()(秒数刚好整数时会省略,长度不固定)
+    // fixed length on purpose, LocalTime.toString() drops trailing 0 seconds and messes up parsing in minutesBetween()
     private static final DateTimeFormatter TIMESTAMP_FORMAT =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-    /**
-     * 组一个"yyyy-MM-dd HH:mm:ss"格式的当下时间字串,给 Booking 的 registeredAt/
-     * allocatedAt 用,也给报表算等待分钟数用。
-     */
+    // for registeredAt/allocatedAt + wait time math in reports
     private String currentTimestamp() {
         return LocalDateTime.now().withNano(0).format(TIMESTAMP_FORMAT);
     }
 
-    // ========== 输入重试(格式类校验失败就原地重问,不中止整个操作) ==========
+    // Input Retry (invalid input just asks again, doesn't abort the whole operation)
 
-   /**
-     * Prompts for a member ID until it resolves to a real member.
-     *
-     * <p>A wrong ID is almost always a typo, so it is treated like any other
-     * format error and re-prompted in place. Only a blank entry cancels.</p>
-     *
-     * @return the member, or null when the user cancels
-     */
+    // keep asking till id matches real member, typo shouldnt back to main menu
+    // blank only way to cancel
     private Member promptValidMember() {
 
         while (true) {
@@ -673,9 +611,7 @@ public class VipAllocationControl {
         return ValidationUtility.isBlank(bookingId) ? null : bookingId;
     }
 
-    /**
-     * 依房型决定要操作哪一棵VIP树,房型不合法回传null。
-     */
+    // map roomType string to correct tree, null if invalid
     private SearchTreeInterface<Booking> getTreeForRoomType(String roomType) {
         if (roomType == null) {
             return null;
@@ -692,11 +628,7 @@ public class VipAllocationControl {
         }
     }
 
-    /**
-     * 在memberList里线性找出memberId相符的那位会员,找不到回传null。
-     * (memberList本身只支持List的基本操作,没有直接"按ID查"的方法,
-     *  所以Control自己拿iterator一个一个比对)
-     */
+    // memberList has no lookup by id, just a List ADT, loop through manually
     private Member findMemberById(String memberId) {
         if (memberId == null) {
             return null;
@@ -711,12 +643,8 @@ public class VipAllocationControl {
         return null;
     }
 
-    /**
-     * 在roomList里找第一间"房型对得上、状态严格等于AVAILABLE"的房间。
-     * 一定要用 equals("AVAILABLE"),不能只判断"不是OCCUPIED"——
-     * 因为NEEDS_CLEANING/CLEANING_IN_PROGRESS/INSPECTED这些房间也"不是OCCUPIED",
-     * 但清洁流程还没走完,不该被分配出去。
-     */
+    // first free room of this type
+    // must check equals AVAILABLE exactly not just != OCCUPIED, NEEDS_CLEANING also != OCCUPIED but cant give out
     private Room findAvailableRoom(String roomType) {
         Iterator<Room> iterator = roomList.getIterator();
         while (iterator.hasNext()) {
@@ -728,22 +656,15 @@ public class VipAllocationControl {
         return null;
     }
 
-    /**
-     * 用confirmationNumber去guestTable里查这位客人是否已经有Guest记录
-     * (比如已经因为另一间房分房成功而建过了)。
-     * Guest的equals()/hashCode()只看confirmationNumber,所以拿一个
-     * 只填了confirmationNumber、其他栏位留null的样板去查,一样能正确命中。
-     */
+    // check if guest already got a record from earlier allocation
+    // Guest equals/hashCode only check confirmationNumber so template obj with rest null still works as lookup key
     private Guest findGuestByConfirmationNumber(String confirmationNumber) {
         Guest template = new Guest(confirmationNumber, null, null, null, null, null, null, null, 0);
         return guestTable.getEntry(template);
     }
 
-    /**
-     * 在指定的树里,用bookingId线性找出对应的Booking物件。
-     * 找到的是"真正存在树里的那个物件"(不是重新拼凑出来的),
-     * 这样才能拿去交给 tree.remove() 正确导航、删除。
-     */
+    // scan tree inorder for matching bookingId
+    // must return actual node not rebuilt one, remove() needs real tierRank/sequence to navigate
     private Booking findBookingInTree(SearchTreeInterface<Booking> tree, String bookingId) {
         Iterator<Booking> iterator = tree.getInorderIterator();
         while (iterator.hasNext()) {
