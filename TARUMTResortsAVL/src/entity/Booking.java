@@ -1,6 +1,6 @@
 package entity;
 
-/*
+/**
  * Represents one booking request.
  * One guest may have multiple bookings, so each booking has its own bookingId.
  *

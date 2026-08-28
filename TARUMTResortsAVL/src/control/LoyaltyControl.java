@@ -13,21 +13,15 @@ import utility.TierRankUtility;
 import utility.ValidationUtility;
 
 /**
- * LoyaltyControl.java - 模块5(Loyalty and Rewards Service)的业务逻辑。
+ * Controls the main operations of the Loyalty and Rewards Service module.
+ * Member, redemption catalog and transaction records are managed through
+ * list ADTs.
  *
- * @author 某某
- *
- * 说明:
- * - 兑换记录不挂在Member身上,单独用一份共用清单存所有会员的RedemptionTransaction,
- *   查询时用memberId过滤即可,不需要为此改动Member entity
- * - 赚积分(awardPoints)本来是设计给退房结账那一刻触发的,退房流程现在还没做——
- *   现在先接一个"手动加分"的菜单动作当调用入口(职员自行调整/促销用),
- *   将来退房流程做出来,一样呼叫同一个awardPoints(),逻辑不用重写
- * - 只对"会调用collection ADT方法的操作"(兑换、手动加分)做输入校验
+ * @author Lim Wei Shern
  */
 public class LoyaltyControl {
 
-    // 手动/自动加分,新一批积分预设多久后过期(单位:月)
+    // New points batches expire after this number of months.
     private static final int POINTS_VALIDITY_MONTHS = 12;
 
     private final LoyaltyCLI loyaltyCLI;
@@ -38,9 +32,9 @@ public class LoyaltyControl {
     private int ledgerCounter;
 
     public LoyaltyControl(LoyaltyCLI loyaltyCLI,
-                           ListInterface<Member> memberList,
-                           ListInterface<RedemptionItem> redemptionCatalog,
-                           ListInterface<RedemptionTransaction> redemptionHistory) {
+            ListInterface<Member> memberList,
+            ListInterface<RedemptionItem> redemptionCatalog,
+            ListInterface<RedemptionTransaction> redemptionHistory) {
         if (loyaltyCLI == null || memberList == null || redemptionCatalog == null || redemptionHistory == null) {
             throw new IllegalArgumentException("LoyaltyControl dependencies cannot be null");
         }
@@ -51,9 +45,7 @@ public class LoyaltyControl {
         this.ledgerCounter = 0;
     }
 
-    /**
-     * 跑这个模块自己的选单循环,直到使用者选择返回。
-     */
+    // Main Menu
     public void run() {
         boolean running = true;
         while (running) {
@@ -80,32 +72,31 @@ public class LoyaltyControl {
         }
     }
 
-    // ========== 功能1:查看积分到期状况 ==========
+    // Option 1: View Points Expiry
 
-  private void doViewExpiry() {
+    private void doViewExpiry() {
 
-    if (memberList.isEmpty()) {
-        loyaltyCLI.displayNoMembers();
-        return;
+        if (memberList.isEmpty()) {
+            loyaltyCLI.displayNoMembers();
+            return;
+        }
+
+        loyaltyCLI.displayExpiryMemberTable(buildExpiryMemberRows());
+
+        Member member = promptValidMember(null);
+
+        if (member == null) {
+            loyaltyCLI.displayCancelled();
+            return;
+        }
+
+        loyaltyCLI.displayPointsExpiry(
+                member,
+                member.getPointsLedger().getIterator(),
+                calculateActivePoints(member));
     }
 
-    // Display members sorted by Member ID
-    loyaltyCLI.displayExpiryMemberTable(buildExpiryMemberRows());
-
-    Member member = promptValidMember(null);
-
-    if (member == null) {
-        loyaltyCLI.displayCancelled();
-        return;
-    }
-
-    loyaltyCLI.displayPointsExpiry(
-            member,
-            member.getPointsLedger().getIterator(),
-            calculateActivePoints(member));
-}
-
-    // ========== 功能2:兑换积分 ==========
+    // Option 2: Redeem Points
 
     private void doRedeem() {
         Member member = promptValidMember("Please try again to continue the redemption.");
@@ -114,16 +105,13 @@ public class LoyaltyControl {
             return;
         }
 
-        // 先按pointsRequired由小到大把清单排好,再显示——自己写selection sort,
-        // 不能用Collections.sort()
+        // Sort the catalog by point cost in ascending order using selection sort.
         sortCatalogByPoints();
-        // 兑换用的余额一定要是"扣掉已过期批次"的真正可用余额,不能直接拿currentPoints——
-        // currentPoints只单纯累加/扣减,从来没有主动把过期的那部分减掉
+        // Active points exclude ledger batches that have already expired.
         int activePoints = calculateActivePoints(member);
         loyaltyCLI.displayCatalog(redemptionCatalog.getIterator(), activePoints);
 
-        // 目录已经按 points 升序排好,第一笔就是最便宜的——连它都买不起就直接
-        // 告知,不要让使用者在清单里一个一个试
+        // The first catalog entry is the cheapest after sorting.
         if (!redemptionCatalog.isEmpty()
                 && activePoints < redemptionCatalog.getEntry(1).getPointsRequired()) {
             loyaltyCLI.displayCannotAffordAnything(activePoints,
@@ -137,13 +125,12 @@ public class LoyaltyControl {
             return;
         }
 
-        // 直接扣currentPoints本身(不是activePoints)——currentPoints里还留着"已经过期
-        // 但从没被减掉"的那一块,每次要用余额时都靠calculateActivePoints()现算扣掉,
-        // 不需要、也不应该主动把它从currentPoints里挖掉(那笔明细本身不能被改,只能算)
+        // Spend the actual points batches first (earliest expiry first), then reduce
+        // the stored lifetime balance by the same amount so the two stay in step.
+        consumePoints(member, item.getPointsRequired());
         member.setCurrentPoints(member.getCurrentPoints() - item.getPointsRequired());
 
-        // 兑换的东西只是符号化的项目(Free Breakfast、Spa Voucher这类),不会真的去动
-        // Room/Booking这些其他模块的真实资料——这里只负责扣分、记一笔交易
+        // Redemption records are stored separately from the Member entity.
         RedemptionTransaction transaction = new RedemptionTransaction(member.getMemberId(),
                 item.getItemName(), item.getPointsRequired(), LocalDate.now().toString());
         redemptionHistory.add(transaction);
@@ -151,17 +138,17 @@ public class LoyaltyControl {
         loyaltyCLI.displayRedemptionResult(transaction, calculateActivePoints(member));
     }
 
-    // ========== 功能3:手动加分 ==========
+    // Option 3: Add Points Manually
 
     private void doAddPoints() {
-        
+
         if (memberList.isEmpty()) {
             loyaltyCLI.displayNoMembers();
             return;
         }
 
         loyaltyCLI.displayPointsMemberTable(buildPointsMemberRows());
-        
+
         Member member = promptValidMember("Please try again to continue adding points.");
         if (member == null) {
             loyaltyCLI.displayCancelled();
@@ -174,7 +161,7 @@ public class LoyaltyControl {
             return;
         }
 
-        // 加分前先记住原本的等级,加完才能比对有没有变,顺便告诉使用者升级了没有
+        // Keep the original tier so any tier change can be displayed.
         String tierBefore = member.getTier();
 
         LocalDate earnedDate = LocalDate.now();
@@ -183,15 +170,14 @@ public class LoyaltyControl {
 
         loyaltyCLI.displayAddPointsResult(member, pointsAmount, tierBefore, calculateActivePoints(member));
     }
-// ========== 功能4:手动调整等级 ==========
+    // Option 4: Manual Tier Downgrade
 
     /**
-     * 让职员手动把某位会员降到较低的等级。
-     * 只开放降级——升级应该靠消费赚积分取得,由职员直接给会绕过整个积分机制。
-     * 只改 tier,不动 currentPoints 也不动 totalPointsEarned。
+     * Manually moves a member to a lower tier.
+     * The member's point balances are not changed.
      *
-     * 注意:awardPoints() 会依 totalPointsEarned 自动重算等级,所以这个降级
-     * 会在该会员下一次赚分时被覆盖回去——定位是临时性处分,客人恢复消费後身份自动回复。
+     * A later points award recalculates the tier from total points earned,
+     * so a manual adjustment may be replaced by the calculated tier.
      */
     private void doAdjustTier() {
 
@@ -226,7 +212,7 @@ public class LoyaltyControl {
             return;
         }
 
-       member.setTier(newTier);
+        member.setTier(newTier);
 
         String lastEarned = findLatestEarnedDate(member);
         loyaltyCLI.displayAdjustmentResult(
@@ -235,18 +221,17 @@ public class LoyaltyControl {
                 TierRankUtility.tierToDiscountPercent(oldTier),
                 TierRankUtility.tierToDiscountPercent(newTier));
     }
-    
+
     /**
-     * 找出比目前等级低的所有等级。
-     * 手动调整只开放降级——升级应该靠消费赚积分取得,由职员直接给会绕过整个积分机制。
+     * Builds the list of tiers below the member's current tier.
+     * The available tiers are returned from highest to lowest.
      *
-     * @param currentTier 会员目前的等级
-     * @return 比它低的等级,由高到低(最接近的降一级排第一);
-     *         已经在最低等级时回传空阵列
+     * @param currentTier the member's current tier
+     * @return lower tiers, or an empty array if already at the lowest tier
      */
     private String[] buildLowerTiers(String currentTier) {
 
-        String[] allTiers = {"Diamond", "Platinum", "Elite", "Standard"};
+        String[] allTiers = { "Diamond", "Platinum", "Elite", "Standard" };
         int currentRank = TierRankUtility.tierToRank(currentTier);
 
         int count = 0;
@@ -266,18 +251,13 @@ public class LoyaltyControl {
         }
         return result;
     }
-    
-    // ========== 报表1:积分即将到期提醒 ==========
+
+    // Report 1: Points Expiry Report
 
     /**
-     * filter=到期天数视窗+会员等级,按到期日由近到远(selection sort)。
-     *
-     * 这份报表的用途是决定"要通知谁"——模块规格里的
-     * "notifications alert for expiring points"。所以排序键是到期日:
-     * 最先要打电话的排最上面。
-     *
-     * 到期视窗是这份报表的核心参数,不是截断:所有点数迟早都会过期,
-     * "总共会过期多少点"没有行动意义,"未来 N 天内会过期多少"才有。
+     * Generates a report of points expiring within a selected period.
+     * Entries are filtered by expiry date and member tier, then sorted
+     * by expiry date in ascending order.
      */
     void doPointsExpiryReport() {
         int withinDays = loyaltyCLI.promptExpiryWindowDays();
@@ -292,11 +272,11 @@ public class LoyaltyControl {
         ListInterface<Integer> pointsAmounts = new ArrayBasedList<>();
         ListInterface<String> expiryDates = new ArrayBasedList<>();
 
-        // 涉及几位会员要另外数:同一位会员可能有好几批点数都在视窗内,
-        // 表格行数不等于人数
+        // Keep unique member IDs because one member may have multiple
+        // points batches expiring within the selected period.
         ListInterface<String> affectedMemberIds = new ArrayBasedList<>();
 
-        // 按等级分组的到期点数,给下面的分布区块用
+        // Parallel lists are used to group expiring points by tier.
         ListInterface<String> tierNames = new ArrayBasedList<>();
         ListInterface<Integer> tierPoints = new ArrayBasedList<>();
 
@@ -315,24 +295,33 @@ public class LoyaltyControl {
                 PointsLedgerEntry entry = ledgerIterator.next();
                 LocalDate expiry = LocalDate.parse(entry.getExpiryDate());
 
-                // 已经过期的不算——那些点数已经没了,通知也来不及
+                // Exclude points that are already expired or outside the window.
                 if (expiry.isBefore(today) || expiry.isAfter(cutoff)) {
+                    continue;
+                }
+
+                // Only what is still unspent can expire. A batch the member has
+                // already redeemed in full has nothing left to warn about, and a
+                // partly used one must report the remainder, not the original
+                // amount, so this report agrees with the points ledger.
+                int remainingPoints = entry.getRemainingPoints();
+                if (remainingPoints <= 0) {
                     continue;
                 }
 
                 memberNames.add(member.getName());
                 memberIds.add(member.getMemberId());
                 tiers.add(member.getTier());
-                pointsAmounts.add(entry.getPointsAmount());
+                pointsAmounts.add(remainingPoints);
                 expiryDates.add(entry.getExpiryDate());
 
-                totalExpiringPoints = totalExpiringPoints + entry.getPointsAmount();
+                totalExpiringPoints = totalExpiringPoints + remainingPoints;
 
                 if (affectedMemberIds.indexOf(member.getMemberId()) == -1) {
                     affectedMemberIds.add(member.getMemberId());
                 }
 
-                addToTierPoints(tierNames, tierPoints, member.getTier(), entry.getPointsAmount());
+                addToTierPoints(tierNames, tierPoints, member.getTier(), remainingPoints);
             }
         }
 
@@ -347,7 +336,7 @@ public class LoyaltyControl {
         }
 
         for (int i = 1; i <= memberNames.getNumberOfEntries(); i++) {
-            // 还剩几天是现算的,不存在资料里——存了就会过时
+            // Days remaining are calculated at report time so the value stays current.
             int daysLeft = (int) java.time.temporal.ChronoUnit.DAYS.between(
                     today, LocalDate.parse(expiryDates.getEntry(i)));
 
@@ -359,20 +348,23 @@ public class LoyaltyControl {
                 affectedMemberIds.getNumberOfEntries(), totalExpiringPoints);
 
         loyaltyCLI.displayExpiringByTierHeader();
-        loyaltyCLI.displayExpiringByTierRow("Diamond", tierPointsFor(tierNames, tierPoints, "Diamond"), totalExpiringPoints);
-        loyaltyCLI.displayExpiringByTierRow("Platinum", tierPointsFor(tierNames, tierPoints, "Platinum"), totalExpiringPoints);
-        loyaltyCLI.displayExpiringByTierRow("Elite", tierPointsFor(tierNames, tierPoints, "Elite"), totalExpiringPoints);
-        loyaltyCLI.displayExpiringByTierRow("Standard", tierPointsFor(tierNames, tierPoints, "Standard"), totalExpiringPoints);
+        loyaltyCLI.displayExpiringByTierRow("Diamond", tierPointsFor(tierNames, tierPoints, "Diamond"),
+                totalExpiringPoints);
+        loyaltyCLI.displayExpiringByTierRow("Platinum", tierPointsFor(tierNames, tierPoints, "Platinum"),
+                totalExpiringPoints);
+        loyaltyCLI.displayExpiringByTierRow("Elite", tierPointsFor(tierNames, tierPoints, "Elite"),
+                totalExpiringPoints);
+        loyaltyCLI.displayExpiringByTierRow("Standard", tierPointsFor(tierNames, tierPoints, "Standard"),
+                totalExpiringPoints);
 
         loyaltyCLI.displayReportEnd();
     }
 
     /**
-     * 按等级把到期点数累加起来。等级数量不多、名称已知,用两条对应位置的清单
-     * 存(名称/点数)做分组,不用Map。
+     * Groups expiring points by tier using parallel lists.
      */
     private void addToTierPoints(ListInterface<String> tierNames, ListInterface<Integer> tierPoints,
-                                  String tier, int points) {
+            String tier, int points) {
         int position = tierNames.indexOf(tier);
         if (position == -1) {
             tierNames.add(tier);
@@ -383,21 +375,24 @@ public class LoyaltyControl {
     }
 
     /**
-     * 查某一级累积了多少到期点数;这一级完全没有就回传0(那一行还是要印,
-     * 印出来才看得出"这一级没有点数要过期")。
+     * Returns the total expiring points recorded for a tier.
+     *
+     * @return the tier total, or 0 if the tier has no matching entries
      */
     private int tierPointsFor(ListInterface<String> tierNames, ListInterface<Integer> tierPoints,
-                               String tier) {
+            String tier) {
         int position = tierNames.indexOf(tier);
         return (position == -1) ? 0 : tierPoints.getEntry(position);
     }
 
     /**
-     * selection sort:按到期日由近到远,四条平行清单一起换位置。
+     * Sorts expiring points by expiry date in ascending order
+     * using selection sort.
+     * Parallel lists are swapped together to keep their data aligned.
      */
     private void sortByExpiryDateAscending(ListInterface<String> memberNames, ListInterface<String> memberIds,
-                                            ListInterface<String> tiers, ListInterface<Integer> pointsAmounts,
-                                            ListInterface<String> expiryDates) {
+            ListInterface<String> tiers, ListInterface<Integer> pointsAmounts,
+            ListInterface<String> expiryDates) {
         int n = expiryDates.getNumberOfEntries();
         for (int i = 1; i <= n - 1; i++) {
             int smallestPosition = i;
@@ -416,16 +411,12 @@ public class LoyaltyControl {
         }
     }
 
-    // ========== 报表2:最多人兑换的产品报表 ==========
+    // Report 2: Top Redeemed Items Report
 
     /**
-     * filter=兑换日期区间+会员等级,按兑换次数降序(selection sort)。
-     *
-     * 这份报表要同时回答两个不同的问题:
-     *   - 哪个奖品最受欢迎        → 看兑换次数
-     *   - 哪个奖品最烧点数        → 看点数消耗
-     * 两者常常不是同一个答案(便宜的奖品兑换次数多、贵的奖品次数少但吃掉大半点数),
-     * 只按次数排会看不出点数负债集中在哪里,所以结论行两个都印。
+     * Generates a redemption report filtered by date and member tier.
+     * Redemption records are grouped by item and sorted by redemption count
+     * in descending order using selection sort.
      */
     void doTopRedeemedItemsReport() {
         String fromDate = loyaltyCLI.promptReportFromDate();
@@ -436,7 +427,7 @@ public class LoyaltyControl {
         ListInterface<Integer> redemptionCounts = new ArrayBasedList<>();
         ListInterface<Integer> totalPointsUsed = new ArrayBasedList<>();
 
-        // 同一批兑换记录再按会员等级分一次组,用来看"谁在换"而不是"换了什么"
+        // Parallel lists group redemption activity by member tier.
         ListInterface<String> tierNames = new ArrayBasedList<>();
         ListInterface<Integer> tierRedemptions = new ArrayBasedList<>();
         ListInterface<Integer> tierPointsUsed = new ArrayBasedList<>();
@@ -451,7 +442,8 @@ public class LoyaltyControl {
             boolean dateMatches = transaction.getDate().compareTo(fromDate) >= 0
                     && transaction.getDate().compareTo(toDate) <= 0;
 
-            // 兑换记录身上只有 memberId,等级要回查会员才知道
+            // Redemption records store the member ID, so the member list
+            // is searched to obtain the tier used for report grouping.
             Member member = findMemberById(transaction.getMemberId());
             boolean tierMatches = "ALL".equalsIgnoreCase(tierFilter)
                     || (member != null && tierFilter.equalsIgnoreCase(member.getTier()));
@@ -473,7 +465,8 @@ public class LoyaltyControl {
                 totalPointsUsed.replace(position, totalPointsUsed.getEntry(position) + transaction.getPointsUsed());
             }
 
-            // 查不到会员的记录(资料坏了)还是算进上面的奖品统计,只是没办法归到某一级
+            // A transaction with a missing member can still contribute to
+            // item totals, but it cannot be grouped by membership tier.
             if (member != null) {
                 addToTierBehaviour(tierNames, tierRedemptions, tierPointsUsed,
                         member.getTier(), transaction.getPointsUsed());
@@ -491,14 +484,14 @@ public class LoyaltyControl {
         }
 
         for (int i = 1; i <= itemNames.getNumberOfEntries(); i++) {
-            // 单价要回目录查——它是奖品本身的属性,不在兑换记录身上
+            // Point cost is retrieved from the current redemption catalog.
             loyaltyCLI.displayTopRedeemedItemsReportRow(itemNames.getEntry(i),
                     pointsRequiredFor(itemNames.getEntry(i)),
                     redemptionCounts.getEntry(i), totalPointsUsed.getEntry(i));
         }
 
-        // 排序后第一笔就是兑换次数最多的;吃掉最多点数的那个要另外找,
-        // 因为它不一定是同一个奖品
+        // The first entry has the highest redemption count after sorting.
+        // The item using the most points is found separately.
         int biggestSink = findBiggestPointsSink(totalPointsUsed);
 
         loyaltyCLI.displayTopRedeemedItemsSummary(
@@ -506,8 +499,7 @@ public class LoyaltyControl {
                 itemNames.getEntry(1), redemptionCounts.getEntry(1),
                 itemNames.getEntry(biggestSink), totalPointsUsed.getEntry(biggestSink));
 
-        // 这份报表叫 TOP REDEEMED,主角就是"几个人换过",所以柱状图画的是次数占比,
-        // 不是点数占比。点数那条线索由上面的 Biggest points sink 那一行负责
+        // The chart is based on redemption count rather than points used.
         loyaltyCLI.displayMostRedeemedItemsHeader();
         for (int i = 1; i <= itemNames.getNumberOfEntries(); i++) {
             loyaltyCLI.displayMostRedeemedItemsRow(itemNames.getEntry(i),
@@ -524,11 +516,10 @@ public class LoyaltyControl {
     }
 
     /**
-     * 把一笔兑换累加到它所属等级的次数与点数上。跟报表1的 addToTierPoints 一样
-     * 是"两条(现在三条)对应位置的清单当分组表"的做法,不用Map。
+     * Groups redemption count and point usage by tier using parallel lists.
      */
     private void addToTierBehaviour(ListInterface<String> tierNames, ListInterface<Integer> tierRedemptions,
-                                     ListInterface<Integer> tierPointsUsed, String tier, int pointsUsed) {
+            ListInterface<Integer> tierPointsUsed, String tier, int pointsUsed) {
         int position = tierNames.indexOf(tier);
         if (position == -1) {
             tierNames.add(tier);
@@ -541,25 +532,23 @@ public class LoyaltyControl {
     }
 
     /**
-     * 印出某一级的兑换行为。这一级完全没有人兑换也照印0——"Standard 一次都没换过"
-     * 正是这个区块要让人看到的事,那一行不见了会以为是漏算。
+     * Displays the redemption totals for one membership tier.
+     * Tiers without matching transactions are displayed with zero values.
      */
     private void printTierBehaviourRow(ListInterface<String> tierNames, ListInterface<Integer> tierRedemptions,
-                                        ListInterface<Integer> tierPointsUsed, String tier) {
+            ListInterface<Integer> tierPointsUsed, String tier) {
         int position = tierNames.indexOf(tier);
         int redemptions = (position == -1) ? 0 : tierRedemptions.getEntry(position);
         int pointsUsed = (position == -1) ? 0 : tierPointsUsed.getEntry(position);
         loyaltyCLI.displayRedemptionByTierRow(tier, redemptions, pointsUsed);
     }
 
-
     /**
-     * 回兑换目录查这个奖品要多少点。单价是奖品本身的属性,兑换记录里只有
-     * "这次用掉多少点",两者在价格没改过的情况下相等,但该问的对象是目录。
+     * Searches the redemption catalog for an item's current point cost
+     * using a linear scan.
      *
-     * 线性搜寻——目录只有几笔,而且要按名字找(不是按位置),没有更快的路。
-     *
-     * @return 单价;目录里已经找不到这个奖品就回传 -1,由 boundary 印成 "-"
+     * @param itemName the item name to find
+     * @return the required points, or -1 if the item is not in the catalog
      */
     private int pointsRequiredFor(String itemName) {
         for (int i = 1; i <= redemptionCatalog.getNumberOfEntries(); i++) {
@@ -572,10 +561,10 @@ public class LoyaltyControl {
     }
 
     /**
-     * 找出消耗点数最多的那个奖品在清单里的位置。
-     * 跟"兑换次数最多"常常不是同一个——便宜的奖品次数多、贵的奖品次数少却烧掉大半点数。
+     * Finds the 1-based position of the item with the highest
+     * total point usage.
      *
-     * @return 位置(从1开始)
+     * @return the position of the item with the highest point usage
      */
     private int findBiggestPointsSink(ListInterface<Integer> totalPointsUsed) {
         int topPosition = 1;
@@ -588,21 +577,21 @@ public class LoyaltyControl {
     }
 
     /**
-     * selection sort:按兑换次数由大到小,三条平行清单一起换位置。
-     *
-     * 次数一样时改看点数总额(大的排前面)。没有这条的话,同分的奖品会照
-     * 资料档里碰巧的先后顺序排——那不是排序结果,只是读档顺序。
+     * Sorts redemption items by redemption count in descending order
+     * using selection sort.
+     * Total points used is the tie-breaker, and all parallel lists
+     * are swapped together.
      */
     private void sortByRedemptionCountDescending(ListInterface<String> itemNames,
-                                                  ListInterface<Integer> redemptionCounts,
-                                                  ListInterface<Integer> totalPointsUsed) {
+            ListInterface<Integer> redemptionCounts,
+            ListInterface<Integer> totalPointsUsed) {
         int n = itemNames.getNumberOfEntries();
         for (int i = 1; i <= n - 1; i++) {
             int largestPosition = i;
             for (int j = i + 1; j <= n; j++) {
                 if (rankedHigher(redemptionCounts.getEntry(j), totalPointsUsed.getEntry(j),
-                                 redemptionCounts.getEntry(largestPosition),
-                                 totalPointsUsed.getEntry(largestPosition))) {
+                        redemptionCounts.getEntry(largestPosition),
+                        totalPointsUsed.getEntry(largestPosition))) {
                     largestPosition = j;
                 }
             }
@@ -615,7 +604,10 @@ public class LoyaltyControl {
     }
 
     /**
-     * a 是不是该排在 b 前面:先比兑换次数,平手再比点数总额。
+     * Compares two redemption items for report sorting.
+     * Higher redemption count comes first, followed by total points used.
+     *
+     * @return true if item A should appear before item B
      */
     private boolean rankedHigher(int countA, int pointsA, int countB, int pointsB) {
         if (countA != countB) {
@@ -625,7 +617,8 @@ public class LoyaltyControl {
     }
 
     /**
-     * 把一份ListInterface里两个位置的值互换,给报表的平行清单排序共用。
+     * Swaps two 1-based positions in a list.
+     * Used to keep parallel lists aligned during sorting.
      */
     private <T> void swap(ListInterface<T> list, int positionA, int positionB) {
         T temp = list.getEntry(positionA);
@@ -633,19 +626,16 @@ public class LoyaltyControl {
         list.replace(positionB, temp);
     }
 
-    // ========== 赚积分(手动加分/退房结账都会触发) ==========
+    // Points Management
 
     /**
-     * 帮一位会员记一笔积分明细、更新余额,并按新的totalPointsEarned自动重算等级。
-     * 现在由doAddPoints()(手动加分)调用;将来退房结账(billing/checkout)接上后,
-     * 一样呼叫这个方法即可,不用重写加分逻辑。
-     * 只会自动升级,不会自动降级——因为totalPointsEarned只增不减,这是Member entity
-     * 原本的设计(避免客人兑换东西花掉积分导致被降级)。
+     * Adds a new points batch, updates the member's balances and recalculates
+     * the membership tier from total points earned.
      *
-     * @param member 要记分的会员
-     * @param pointsAmount 这一批赚了多少分
-     * @param earnedDate 这批分什么时候赚的
-     * @param expiryDate 这批分什么时候过期
+     * @param member       the member receiving the points
+     * @param pointsAmount number of points earned
+     * @param earnedDate   date the points were earned
+     * @param expiryDate   date the points expire
      */
     public void awardPoints(Member member, int pointsAmount, String earnedDate, String expiryDate) {
         ledgerCounter++;
@@ -664,14 +654,12 @@ public class LoyaltyControl {
     }
 
     /**
-     * 给退房结账用的入口——FrontDeskControl不用另外拿一份memberList自己查,
-     * 直接给memberId跟这次结账赚了多少分,这里负责查会员、算到期日、呼叫awardPoints()。
-     * 查不到会员就回传null,呼叫方自行决定要不要显示"找不到会员"这种提示
-     * (正常不该发生,因为现在每位入住的客人都一定有memberId,查不到代表资料本身有问题)。
+     * Awards points to a member identified by member ID.
+     * Used by the Front-Desk module after check-out.
      *
-     * @param memberId 要记分的会员ID
-     * @param pointsAmount 这次消费赚了多少分
-     * @return 更新后的会员物件,查不到就回传null
+     * @param memberId     the member ID
+     * @param pointsAmount number of points earned
+     * @return the updated member, or null if the member is not found
      */
     public Member awardPointsByMemberId(String memberId, int pointsAmount) {
         Member member = findMemberById(memberId);
@@ -685,19 +673,20 @@ public class LoyaltyControl {
     }
 
     /**
-     * 给退房结算价格用——查这位会员**现在真正**的等级(不是Guest身上入住当天的快照),
-     * 折扣要照实际状态算才准。查不到会员就回传null,呼叫方自行决定折扣是0%还是不显示。
+     * Returns a member's current tier for use by the Front-Desk module.
      *
-     * @param memberId 要查的会员ID
-     * @return 该会员现在的等级文字,查不到就回传null
+     * @param memberId the member ID
+     * @return the current tier, or null if the member is not found
      */
     public String getTierByMemberId(String memberId) {
         Member member = findMemberById(memberId);
         return (member == null) ? null : member.getTier();
     }
-/**
-     * 把 memberList 里每一位会员组成一行表格资料,按「上次赚积分的日期」升序——
-     * 最久没来的排最前面,让职员一眼看出哪些会员该被关注。
+    // Member Display Helpers
+
+    /**
+     * Builds member display rows ordered by the latest earned date.
+     * Members with no earned-date record appear first.
      */
     private String buildMemberRows() {
 
@@ -715,18 +704,20 @@ public class LoyaltyControl {
         String result = "";
         for (int i = 1; i <= members.getNumberOfEntries(); i++) {
             String shown = lastEarnedDates.getEntry(i).isEmpty()
-                    ? "-" : lastEarnedDates.getEntry(i);
+                    ? "-"
+                    : lastEarnedDates.getEntry(i);
             result = result + buildMemberRow(members.getEntry(i), shown);
         }
         return result;
     }
 
     /**
-     * selection sort:按上次赚分日期由早到晚,两条平行清单一起换位置。
-     * 空字串(从未赚过分)在字典序里最小,自然排到最前面——那正是最该被关注的会员。
+     * Sorts members by latest earned date in ascending order
+     * using selection sort.
+     * The parallel date list is moved together with the member list.
      */
     private void sortByLastEarnedAscending(ListInterface<Member> members,
-                                            ListInterface<String> lastEarnedDates) {
+            ListInterface<String> lastEarnedDates) {
         int n = lastEarnedDates.getNumberOfEntries();
         for (int i = 1; i <= n - 1; i++) {
             int smallestPosition = i;
@@ -744,7 +735,7 @@ public class LoyaltyControl {
     }
 
     /**
-     * 把一位会员组成一行表格资料,栏宽跟 LoyaltyCLI 的表头一致。
+     * Builds one formatted row for the member table.
      */
     private String buildMemberRow(Member member, String lastEarned) {
         return String.format("%-9s| %-20s| %8d | %-11s| %s%n",
@@ -754,13 +745,10 @@ public class LoyaltyControl {
                 member.getTier(),
                 lastEarned);
     }
-    
+
     /**
-     * 把 memberList 组成「查看积分到期」用的简表,按 Member ID 升序。
-     *
-     * <p>跟 buildMemberRows() 分开是因为两个画面要看的东西不同:降级那张要看积分和
-     * 上次来访(所以按最久没来排),这张只是让职员从名单里挑一个人来查明细,按 ID
-     * 排最好找。</p>
+     * Builds the member directory used when viewing points expiry.
+     * Members are sorted by member ID in ascending order.
      */
     private String buildExpiryMemberRows() {
 
@@ -781,12 +769,10 @@ public class LoyaltyControl {
         }
         return result;
     }
-/**
-     * 把 memberList 组成「手动加分」用的简表,按 Member ID 升序。
-     *
-     * <p>比到期查询那张多一栏可用积分——加分前先看到目前余额,才好判断要加多少。
-     * 显示的是 calculateActivePoints(),不是 currentPoints,因为过期批次不该算进
-     * 可用余额里。</p>
+
+    /**
+     * Builds the member directory used when manually adding points.
+     * Active points are shown instead of the stored point balance.
      */
     private String buildPointsMemberRows() {
 
@@ -808,9 +794,9 @@ public class LoyaltyControl {
         }
         return result;
     }
+
     /**
-     * selection sort:按 Member ID 由小到大。
-     * ID 是 M + 四位数字,长度固定,字典序即数值序。
+     * Sorts members by member ID in ascending order using selection sort.
      */
     private void sortByMemberIdAscending(ListInterface<Member> members) {
         int n = members.getNumberOfEntries();
@@ -827,18 +813,15 @@ public class LoyaltyControl {
             }
         }
     }
-    
-    // ========== 输入重试(格式类校验失败就原地重问,不中止整个操作) ==========
 
-   /**
-     * 问会员编号,一直问到查得到人为止。
+    // Input Validation
+
+    /**
+     * Re-prompts until an existing member is selected.
+     * Blank input cancels the operation.
      *
-     * <p>「查无此人」跟「格式错」一样是可以恢复的错误——会员名单就印在这个 prompt
-     * 正上方,打错字的人只要重打就好,不该被踢回主选单。只有输入空白才代表取消。</p>
-     *
-     * @param retryHint 附在 "not found" 后面、各功能自己的提示语;传 null 就只印
-     *                  单纯的 "not found"
-     * @return 查到的会员;使用者取消时回传 null
+     * @param retryHint optional message shown after a failed lookup
+     * @return the matching member, or null if cancelled
      */
     private Member promptValidMember(String retryHint) {
 
@@ -864,10 +847,11 @@ public class LoyaltyControl {
     }
 
     /**
-     * 跟 promptValidMember() 同样的重试行为,只是用调整等级专用的提问文字。
+     * Re-prompts until an existing member is selected for tier adjustment.
+     * Blank input cancels the operation.
      *
-     * @param retryHint 附在 "not found" 后面的提示语
-     * @return 查到的会员;使用者取消时回传 null
+     * @param retryHint message shown after a failed lookup
+     * @return the matching member, or null if cancelled
      */
     private Member promptValidMemberToAdjust(String retryHint) {
 
@@ -889,11 +873,13 @@ public class LoyaltyControl {
     }
 
     /**
-     * 兑换清单在 doRedeem() 里显示之前一定先按 points 排好序,清单显示的编号(No.)
-     * 直接对应 ListInterface 的 position(都是从1开始),不用另外查名字。
-     * loyaltyCLI.promptItemNumber() 空白时回传 Integer.MIN_VALUE 代表取消,
-     * 跟"打了数字但超出范围"这种要重问的情况分开。
+     * Re-prompts until a valid and affordable catalog item is selected.
+     * Catalog numbers correspond to the 1-based positions in the list.
+     *
+     * @param activePoints the member's currently usable points
+     * @return the selected item, or null if cancelled
      */
+
     private RedemptionItem promptValidRedemptionChoice(int activePoints) {
 
         while (true) {
@@ -919,6 +905,11 @@ public class LoyaltyControl {
         }
     }
 
+    /**
+     * Re-prompts until a positive points amount is entered.
+     *
+     * @return the entered amount, or Integer.MIN_VALUE if cancelled
+     */
     private int promptValidPointsAmount() {
         int pointsAmount;
         while (true) {
@@ -934,9 +925,11 @@ public class LoyaltyControl {
     }
 
     /**
-     * loyaltyCLI.promptTargetTier()空白回传null代表取消;非空白但不是合法选项
-     * 回传""(空字串,不是null)代表格式错误、要重问——用这两种不同的回传值分开
-     * "取消"跟"选错"这两种状况。
+     * Re-prompts until a valid lower tier is selected.
+     * null represents cancellation, while an empty string represents
+     * invalid non-blank input.
+     *
+     * @return the selected tier, or null if cancelled
      */
     private String promptValidTargetTier(String currentTier, String[] options) {
         String newTier;
@@ -952,35 +945,84 @@ public class LoyaltyControl {
         }
     }
 
-    // ========== 内部辅助方法 ==========
+    // Internal Helpers
 
     /**
-     * 算出这位会员真正能拿去兑换/显示的余额——currentPoints本身只是单纯的
-     * "历史累加-历史兑换",从来没有主动把过期批次扣掉,所以每次要用余额之前都要
-     * 现算一次"已经过期、但还没被扣掉"的部分,从currentPoints里减掉再拿去用。
-     * 不直接改pointsLedger或存一个"已扣过期"旗标——PointsLedgerEntry是不可变的明细,
-     * 过期批次本身还是要留着给doViewExpiry()完整显示(只是被标成EXPIRED)。
-     * 因为这个函数每次都是从currentPoints现减,不是累加状态,重复呼叫也不会重复扣。
+     * Spends points from the member's ledger, earliest expiry first, so the batch
+     * closest to being lost is used up before the ones that are still good for a
+     * while. Consuming the batch is also what stops the same points from being
+     * deducted twice: once at redemption and again when that batch expires.
+     * A redemption larger than one batch spills over into the next.
+     *
+     * @param member the member redeeming points
+     * @param amount how many points the redemption costs
      */
-    private int calculateActivePoints(Member member) {
-        int expiredTotal = 0;
+    private void consumePoints(Member member, int amount) {
+        ListInterface<PointsLedgerEntry> batches = new ArrayBasedList<>();
         LocalDate today = LocalDate.now();
         Iterator<PointsLedgerEntry> iterator = member.getPointsLedger().getIterator();
         while (iterator.hasNext()) {
             PointsLedgerEntry entry = iterator.next();
-            if (LocalDate.parse(entry.getExpiryDate()).isBefore(today)) {
-                expiredTotal += entry.getPointsAmount();
+            if (!LocalDate.parse(entry.getExpiryDate()).isBefore(today)
+                    && entry.getRemainingPoints() > 0) {
+                batches.add(entry);
             }
         }
-        return member.getCurrentPoints() - expiredTotal;
+        sortBatchesByExpiryDateAscending(batches);
+
+        int outstanding = amount;
+        for (int i = 1; i <= batches.getNumberOfEntries() && outstanding > 0; i++) {
+            outstanding -= batches.getEntry(i).consume(outstanding);
+        }
     }
+
     /**
-     * 找出这位会员积分明细里最晚的一笔 earnedDate。
-     * 积分是在退房结帐那一刻入帐的,所以这个日期就代表他最後一次完成入住的时间,
-     * 不需要在 Member 上另外多存一个「上次来访」栏位。
+     * Sorts points batches by expiry date in ascending order using selection sort.
+     * The ledger happens to be stored in expiry order today, but sorting here means
+     * the spending order stays correct even if a back-dated batch is added later.
+     */
+    private void sortBatchesByExpiryDateAscending(ListInterface<PointsLedgerEntry> batches) {
+        int n = batches.getNumberOfEntries();
+        for (int i = 1; i <= n - 1; i++) {
+            int smallestPosition = i;
+            for (int j = i + 1; j <= n; j++) {
+                if (batches.getEntry(j).getExpiryDate()
+                        .compareTo(batches.getEntry(smallestPosition).getExpiryDate()) < 0) {
+                    smallestPosition = j;
+                }
+            }
+            if (smallestPosition != i) {
+                swap(batches, i, smallestPosition);
+            }
+        }
+    }
+
+    /**
+     * Calculates the usable point balance by adding up what is left in every batch
+     * that has not expired yet.
+     * Expired entries are kept for history but contribute nothing, and points that
+     * were already redeemed are gone from their batch, so nothing is counted twice.
+     */
+    private int calculateActivePoints(Member member) {
+        int active = 0;
+        LocalDate today = LocalDate.now();
+        Iterator<PointsLedgerEntry> iterator = member.getPointsLedger().getIterator();
+        while (iterator.hasNext()) {
+            PointsLedgerEntry entry = iterator.next();
+            if (!LocalDate.parse(entry.getExpiryDate()).isBefore(today)) {
+                active += entry.getRemainingPoints();
+            }
+        }
+        return active;
+    }
+
+    /**
+     * Finds the latest earned date in a member's points ledger.
+     * Non-null dates use yyyy-MM-dd format, so string comparison
+     * follows chronological order.
      *
-     * @param member 要查的会员
-     * @return 最晚的赚分日期;从未赚过分时回传空字串
+     * @param member the member to check
+     * @return the latest earned date, or an empty string if none exists
      */
     private String findLatestEarnedDate(Member member) {
 
@@ -988,15 +1030,20 @@ public class LoyaltyControl {
         Iterator<PointsLedgerEntry> iterator = member.getPointsLedger().getIterator();
         while (iterator.hasNext()) {
             String earned = iterator.next().getEarnedDate();
-            // 日期是 yyyy-MM-dd,字典序即时间序,直接比字串就够
+            // Dates use yyyy-MM-dd format, so string comparison follows chronological order.
             if (earned != null && earned.compareTo(latest) > 0) {
                 latest = earned;
             }
         }
         return latest;
     }
+
     /**
-     * 在memberList里线性找出memberId相符的那位会员,找不到回传null。
+     * Searches for a member by member ID using a linear scan.
+     * The search takes O(n) time in the worst case.
+     *
+     * @param memberId the member ID to find
+     * @return the matching member, or null if not found
      */
     private Member findMemberById(String memberId) {
         if (memberId == null) {
@@ -1013,8 +1060,9 @@ public class LoyaltyControl {
     }
 
     /**
-     * 把redemptionCatalog按pointsRequired由小到大原地排序(selection sort)。
-     * 用ListInterface的position-based方法(getEntry/replace)操作,不靠java.util排序工具。
+     * Sorts the redemption catalog by required points in ascending order
+     * using selection sort.
+     * The list is modified through its position-based ADT operations.
      */
     private void sortCatalogByPoints() {
         int n = redemptionCatalog.getNumberOfEntries();

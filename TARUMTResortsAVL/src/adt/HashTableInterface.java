@@ -3,71 +3,72 @@ package adt;
 import java.util.Iterator;
 
 /**
- * HashTableInterface.java
- * ADT Hash Table — 靠对条目算 hash 值来决定存放位置的非线性结构,
- * 用来支持接近 O(1) 的新增/查找/移除。
+ * Hash table ADT for storing and searching entries.
+ * Uses hashCode() and equals() to find matching entries.
  *
- * @author 某某
+ * Adapted from: BMCS2063 Sample Code, Chapter 10,
+ * Modified to store T objects directly and support iteration.
  *
- * 来源: [若这份规格是参考课程 sample code / 教材而来,请在此注明出处;
- *        若是自己独立设计的,可以删除这行]
- *
- * 说明:查找/移除用的参数是 T(条目本身,靠它的 hashCode()/equals() 去比对),
- * 不是像 getEntry(String confirmationNumber) 这种写死业务专属参数的写法,
- * 这样规格才能保持通用、不跟"客人""确认号"这类业务概念绑死。
- *
- * @param <T> 存放的元素类型,需要有意义的 hashCode() 和 equals() 实现
+ * @author Lim Wei Shern
  */
 public interface HashTableInterface<T> {
 
     /**
-     * 把一个新条目加进这个 hash table。
-     * @param newEntry 要加入的条目
-     * @return 加入成功返回 true
+     * Adds a new entry to the hash table.
+     *
+     * @param newEntry the entry to add
+     * @return true if the entry is added successfully
      */
     public boolean add(T newEntry);
 
     /**
-     * 移除跟给定条目相等(hashCode/equals判断)的条目。
-     * @param anEntry 要移除的条目(用来比对)
-     * @return 被移除的条目,找不到则返回 null
+     * Removes an entry that matches the given entry.
+     *
+     * @param anEntry the entry to remove
+     * @return the removed entry, or null if not found
      */
     public T remove(T anEntry);
 
-    /**
-     * 找出跟给定条目相等的那一条完整资料。
-     * @param anEntry 要寻找的条目(用来比对)
-     * @return 找到的条目,找不到则返回 null
+     /**
+     * Searches for an entry that matches the given entry.
+     *
+     * @param anEntry the entry to search for
+     * @return the matching entry, or null if not found
      */
     public T getEntry(T anEntry);
 
-    /**
-     * 检查这个 hash table 里是否存在跟给定条目相等的资料。
-     * @param anEntry 要检查的条目
-     * @return 存在则返回 true
+   /**
+     * Checks whether a matching entry exists in the hash table.
+     *
+     * @param anEntry the entry to check
+     * @return true if the entry exists
      */
     public boolean contains(T anEntry);
 
     /**
-     * 取得这个 hash table 目前的条目总数。
-     * @return 条目总数
+     * Returns the number of entries currently stored.
+     *
+     * @return the number of entries
      */
     public int getNumberOfEntries();
 
     /**
-     * 检查这个 hash table 是否为空。
-     * @return 是空的则返回 true
+     * Checks whether the hash table is empty.
+     *
+     * @return true if the hash table is empty
      */
     public boolean isEmpty();
 
     /**
-     * 清空这个 hash table,移除所有条目。
+     * Removes all entries from the hash table.
      */
     public void clear();
 
     /**
-     * 取得一个能遍历这个 hash table 所有条目的 iterator(顺序不保证)。
-     * @return 这个 hash table 的 iterator
+     * Returns an iterator for traversing all stored entries.
+     * The traversal order is not guaranteed.
+     *
+     * @return an iterator for the stored entries
      */
     public Iterator<T> getIterator();
 }

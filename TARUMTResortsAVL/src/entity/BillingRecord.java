@@ -1,6 +1,6 @@
 package entity;
 
-/*
+/**
  * Represents one settled bill for a guest.
  * A guest may have multiple billing records.
  *

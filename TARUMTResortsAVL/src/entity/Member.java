@@ -3,7 +3,7 @@ package entity;
 import adt.DoublyLinkedList;
 import adt.ListInterface;
 
-/*
+/**
  * Represents a hotel member and their loyalty points.
  *
  * currentPoints     - points currently available for redemption

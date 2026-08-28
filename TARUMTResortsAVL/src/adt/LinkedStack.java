@@ -4,21 +4,16 @@ import java.util.Iterator;
 import java.util.NoSuchElementException;
 
 /**
- * LinkedStack.java
- * StackInterface 的实现 —— 用单向链表当底层结构。
+ * Stack implementation using a singly linked structure.
+ * Push and pop are performed at the top of the stack in O(1) time.
  *
- * @author 某某
- *
- * 说明:
- * - 给模块3(Housekeeping,RoomHistory.statusStack)用
- * - push/pop 都只操作链表最前面那个节点(topNode),两者都是 O(1)
- *
- * @param <T> 存放的元素类型
+ * @author Hoo Theng Qin
+ * @param <T> type of entry stored in the stack
  */
 public class LinkedStack<T> implements StackInterface<T> {
 
-    private Node<T> topNode;      // 栈顶节点
-    private int numberOfEntries;  // 目前有几个条目
+    private Node<T> topNode;      
+    private int numberOfEntries;  
 
     public LinkedStack() {
         topNode = null;
@@ -59,7 +54,7 @@ public class LinkedStack<T> implements StackInterface<T> {
 
     @Override
     public boolean isFull() {
-        // 链表动态扩充,不会满
+        // Linked nodes can grow dynamically, so the stack has no fixed capacity.
         return false;
     }
 
@@ -80,7 +75,7 @@ public class LinkedStack<T> implements StackInterface<T> {
     }
 
     /**
-     * Node —— 单向链表的节点,存资料 + 指向下一个节点的引用
+     * Node used to link entries in the stack.
      */
     private class Node<E> {
         private E data;
@@ -91,8 +86,8 @@ public class LinkedStack<T> implements StackInterface<T> {
         }
     }
 
-    /**
-     * LinkedStackIterator —— 从topNode开始沿着next走,天生就是"栈顶到栈底"的顺序
+     /**
+     * Iterates through the stack from top to bottom.
      */
     private class LinkedStackIterator implements Iterator<T> {
         private Node<T> currentNode;

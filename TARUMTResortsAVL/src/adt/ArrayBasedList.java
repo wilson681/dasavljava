@@ -4,23 +4,17 @@ import java.util.Iterator;
 import java.util.NoSuchElementException;
 
 /**
- * ArrayBasedList.java
- * ListInterface 的实现之一 —— 用普通 Java 数组当底层结构。
+ * List implementation using a resizable array.
+ * Positions follow the ListInterface convention and start from 1.
  *
- * @author 某某
- *
- * 说明:
- * - 不能用 java.util.ArrayList,数组满了要自己写扩容逻辑
- * - 给 Guest.bookedRooms、Room主清单 这类"不算任何模块正式ADT"的场景用
- * - 位置(position)从 1 开始算,不是从 0——这是照 ListInterface 规格给的语意
- *
- * @param <T> 存放的元素类型
+ * @author Lim Wei Shern
+ * @param <T> type of entry stored in the list
  */
 public class ArrayBasedList<T> implements ListInterface<T> {
 
     private static final int DEFAULT_CAPACITY = 25;
-    private T[] entries;          // 底层数组
-    private int numberOfEntries;  // 目前有几个条目
+    private T[] entries;
+    private int numberOfEntries;
 
     public ArrayBasedList() {
         entries = createArray(DEFAULT_CAPACITY);
@@ -28,8 +22,8 @@ public class ArrayBasedList<T> implements ListInterface<T> {
     }
 
     /**
-     * 开一个指定大小的阵列。Java不允许直接 new T[capacity](泛型阵列限制),
-     * 先建Object[]再强制转型是标准workaround,不是Collections Framework的东西。
+     * Creates the underlying array.
+     * Java does not allow direct creation of generic arrays.
      */
     @SuppressWarnings("unchecked")
     private T[] createArray(int capacity) {
@@ -37,7 +31,7 @@ public class ArrayBasedList<T> implements ListInterface<T> {
     }
 
     /**
-     * 数组满了就换一个两倍大的新数组,把旧资料搬过去——这就是"自己写扩容逻辑"。
+     * Doubles the array capacity when the current array is full.
      */
     private void ensureCapacity() {
         if (numberOfEntries == entries.length) {
@@ -59,13 +53,12 @@ public class ArrayBasedList<T> implements ListInterface<T> {
 
     @Override
     public boolean add(int newPosition, T newEntry) {
-        // 位置从1开始,合法范围是 1 ~ numberOfEntries+1(+1是允许插在最后面变成新的一个)
+        // Valid positions range from 1 to numberOfEntries + 1.
         if (newPosition < 1 || newPosition > numberOfEntries + 1) {
             return false;
         }
         ensureCapacity();
-        // 从最后面开始,把newPosition(含)之后的条目都往后搬一格,腾出插入的空位
-        // 一定要从后面往前搬,不然会把还没搬走的资料覆盖掉
+        // Shift entries backward from the end to avoid overwriting data.
         for (int i = numberOfEntries; i > newPosition - 1; i--) {
             entries[i] = entries[i - 1];
         }
@@ -80,11 +73,12 @@ public class ArrayBasedList<T> implements ListInterface<T> {
             return null;
         }
         T removed = entries[givenPosition - 1];
-        // 把givenPosition之后的条目都往前搬一格,把移除后留下的空隙补起来
+        // Shift later entries forward to close the removed position.
         for (int i = givenPosition - 1; i < numberOfEntries - 1; i++) {
             entries[i] = entries[i + 1];
         }
-        entries[numberOfEntries - 1] = null;   // 最后一格现在是重复的,清掉避免留着旧引用
+        // Remove the unused reference from the old last position.
+        entries[numberOfEntries - 1] = null;
         numberOfEntries--;
         return removed;
     }
@@ -114,10 +108,10 @@ public class ArrayBasedList<T> implements ListInterface<T> {
 
     @Override
     public int indexOf(T anEntry) {
-        // 线性扫描,靠anEntry自己的equals()判断是不是同一笔
+        // Search sequentially and use equals() to identify a matching entry.
         for (int i = 0; i < numberOfEntries; i++) {
             if (entries[i].equals(anEntry)) {
-                return i + 1;   // 转成"从1开始"的位置
+                return i + 1; // Convert array index to 1-based list position.
             }
         }
         return -1;
@@ -140,7 +134,7 @@ public class ArrayBasedList<T> implements ListInterface<T> {
 
     @Override
     public boolean isFull() {
-        // 会自动扩容(ensureCapacity),永远不会真的卡在"满了加不进去"的状态
+        // The array expands automatically, so the list has no fixed capacity.
         return false;
     }
 
@@ -150,8 +144,7 @@ public class ArrayBasedList<T> implements ListInterface<T> {
     }
 
     /**
-     * ArrayListIterator —— 直接照着底层数组的顺序走,不用像Tree/Queue那样
-     * 另外先复制一份,因为数组本身的顺序就是List该有的顺序
+     * Iterates through the list from first to last.
      */
     private class ArrayListIterator implements Iterator<T> {
         private int currentIndex;

@@ -1,6 +1,6 @@
 package entity;
 
-/*
+/**
  * Records a successful room status rollback.
  * Each rollback is stored as a separate log entry.
  *

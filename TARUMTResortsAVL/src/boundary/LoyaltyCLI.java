@@ -10,48 +10,37 @@ import java.util.Scanner;
 import utility.ValidationUtility;
 
 /**
- * LoyaltyCLI.java - 模块5(Loyalty and Rewards Service)的 console 界面。
+ * Handles user input and output for the Loyalty and Rewards Service module.
  *
- * @author 某某
- *
- * 说明:
- * - 只负责跟使用者对话(Scanner输入、println输出),不做任何业务判断
- * - 所有 console 印出来的文字都用英文,代码注释才用中文
+ * @author Lim Wei Shern
  */
 public class LoyaltyCLI {
 
     private static final String DIVIDER = "--------------------------------------------------------";
-    // 报表表格自己的分隔线——以前借用 LEDGER/CATALOG 那两条,栏宽对不上会歪掉
-    private static final String REPORT_TABLE_DIVIDER =
-            "------------------------------------------------------------------------";
-    private static final int MAX_BAR_WIDTH = 20;   // 星号柱状图最多印几颗
+    private static final String REPORT_TABLE_DIVIDER = "------------------------------------------------------------------------";
+    private static final int MAX_BAR_WIDTH = 20;
 
-    private static final String LEDGER_TABLE_DIVIDER = "---- ---------- -------------- -------------- ----------";
+    private static final String LEDGER_TABLE_DIVIDER = "---- ---------- ----------- -------------- -------------- --------------";
     private static final String CATALOG_TABLE_DIVIDER = "---- -------------------------- -------------- ----------";
-  
-    private static final String MEMBER_TABLE_HEADER =
-            String.format("%-9s| %-20s| %8s | %-11s| %s",
-                    "MemberId", "MemberName", "Point", "VipTier", "Last Visited Date");
-    private static final String MEMBER_TABLE_DIVIDER =
-            "---------|---------------------|----------|------------|------------";
-    private static final String EXPIRY_MEMBER_TABLE_HEADER =
-        String.format("%-9s| %-20s| %-11s",
-                "MemberId", "MemberName", "Tier");
 
-    private static final String EXPIRY_MEMBER_TABLE_DIVIDER =
-            "---------|---------------------|------------";
-    private static final String POINTS_MEMBER_TABLE_HEADER =
-            String.format("%-9s| %-20s| %8s | %s",
-                    "MemberId", "MemberName", "Point", "Tier");
+    private static final String MEMBER_TABLE_HEADER = String.format("%-9s| %-20s| %8s | %-11s| %s",
+            "MemberId", "MemberName", "Point", "VipTier", "Last Visited Date");
+    private static final String MEMBER_TABLE_DIVIDER = "---------|---------------------|----------|------------|------------";
+    private static final String EXPIRY_MEMBER_TABLE_HEADER = String.format("%-9s| %-20s| %-11s",
+            "MemberId", "MemberName", "Tier");
 
-    private static final String POINTS_MEMBER_TABLE_DIVIDER =
-            "---------|---------------------|----------|------------";
+    private static final String EXPIRY_MEMBER_TABLE_DIVIDER = "---------|---------------------|------------";
+    private static final String POINTS_MEMBER_TABLE_HEADER = String.format("%-9s| %-20s| %8s | %s",
+            "MemberId", "MemberName", "Point", "Tier");
+
+    private static final String POINTS_MEMBER_TABLE_DIVIDER = "---------|---------------------|----------|------------";
     private Scanner scanner;
 
     public LoyaltyCLI() {
         scanner = new Scanner(System.in);
     }
 
+    // Main Menu
     public int displayMenuAndGetChoice() {
         System.out.println();
         System.out.println("===== Loyalty and Rewards Service =====");
@@ -80,6 +69,7 @@ public class LoyaltyCLI {
         System.out.println("Cancelled. Returning to menu.");
     }
 
+    // Member Selection
     public String promptMemberId() {
         System.out.print("Enter member ID (blank to cancel): ");
         return scanner.nextLine().trim();
@@ -90,13 +80,15 @@ public class LoyaltyCLI {
     }
 
     /**
-     * 跟其他模块(如VIP登记)统一格式:"Member ID X not found. <动作> failed."
-     * 给会导致某个动作直接中止的查无此人情境用(兑换、加分),纯查看资料(doViewExpiry)不用。
+     * Displays a member-not-found message for an operation that cannot continue.
+     *
+     * @param memberId     the member ID entered
+     * @param failedAction the action that could not be completed
      */
     public void displayMemberNotFound(String memberId, String failedAction) {
         System.out.println("Member ID " + memberId + " not found. " + failedAction);
     }
-    
+
     public void displayExpiryMemberTable(String rows) {
         System.out.println();
         System.out.println("===== Member Directory =====");
@@ -106,6 +98,7 @@ public class LoyaltyCLI {
         System.out.print(rows);
         System.out.println();
     }
+
     public void displayPointsMemberTable(String rows) {
         System.out.println();
         System.out.println("===== Member Directory =====");
@@ -115,8 +108,12 @@ public class LoyaltyCLI {
         System.out.print(rows);
         System.out.println();
     }
-    // ========== 功能1:查看积分到期状况 ==========
+    // Option 1: View Points Expiry
 
+    /**
+     * Displays the member's points ledger and marks each batch as active, partly
+     * or fully used, or expired.
+     */
     public void displayPointsExpiry(Member member, Iterator<PointsLedgerEntry> ledger, int activePoints) {
         System.out.println();
         System.out.println("===== Points Ledger: " + member.getName() + " (" + member.getMemberId() + ") =====");
@@ -126,23 +123,36 @@ public class LoyaltyCLI {
             System.out.println("No points batches on record.");
             return;
         }
-        System.out.println(String.format("%-4s %-10s %-14s %-14s %s", "No.", "Points", "Earned", "Expires", "Status"));
+        System.out.println(String.format("%-4s %-10s %-11s %-14s %-14s %s",
+                "No.", "Points", "Remaining", "Earned", "Expires", "Status"));
         System.out.println(LEDGER_TABLE_DIVIDER);
         LocalDate today = LocalDate.now();
         int rank = 1;
         while (ledger.hasNext()) {
             PointsLedgerEntry entry = ledger.next();
-            // 过期批次照样列出来(方便对账/查历史),但用EXPIRED标出来——
-            // 单纯文字标记,不用ANSI加粗转义码,避免在NetBeans/不支援ANSI的console下变成乱码
+            // Expired batches stay visible for history. Points are spent earliest
+            // expiry first, so a batch can also be partly or fully used up.
+            // Plain text markers only, no ANSI escapes, so the table still lines up
+            // in consoles that do not support them.
             boolean expired = LocalDate.parse(entry.getExpiryDate()).isBefore(today);
-            String status = expired ? "EXPIRED" : "";
-            System.out.println(String.format("%-4d %-10d %-14s %-14s %s",
-                    rank, entry.getPointsAmount(), entry.getEarnedDate(), entry.getExpiryDate(), status));
+            String status;
+            if (expired) {
+                status = "EXPIRED";
+            } else if (entry.getRemainingPoints() == 0) {
+                status = "USED";
+            } else if (entry.getRemainingPoints() < entry.getPointsAmount()) {
+                status = "PARTIALLY USED";
+            } else {
+                status = "ACTIVE";
+            }
+            System.out.println(String.format("%-4d %-10d %-11d %-14s %-14s %s",
+                    rank, entry.getPointsAmount(), entry.getRemainingPoints(),
+                    entry.getEarnedDate(), entry.getExpiryDate(), status));
             rank++;
         }
     }
 
-    // ========== 功能2:兑换积分 ==========
+    // Option 2: Redeem Points
 
     public void displayCatalog(Iterator<RedemptionItem> catalog, int currentPoints) {
         System.out.println();
@@ -161,6 +171,12 @@ public class LoyaltyCLI {
         }
     }
 
+    /**
+     * Prompts for an item number from the redemption catalog.
+     *
+     * @return the selected number, Integer.MIN_VALUE if cancelled,
+     *         or -1 if the input is not numeric
+     */
     public int promptItemNumber() {
         System.out.print("Enter the No. of the item to redeem (blank to cancel): ");
         String input = scanner.nextLine().trim();
@@ -175,19 +191,22 @@ public class LoyaltyCLI {
     }
 
     public void displayInvalidItemNumber(int itemNumber, int catalogSize) {
-        System.out.println("\"" + itemNumber + "\" is not a valid No. Enter a number between 1 and " + catalogSize + ".");
+        System.out
+                .println("\"" + itemNumber + "\" is not a valid No. Enter a number between 1 and " + catalogSize + ".");
     }
 
     public void displayInsufficientPoints(int currentPoints, int required) {
         System.out.println("Not enough points. You have " + currentPoints
                 + " pts, this item needs " + required + " pts.");
     }
+
     public void displayCannotAffordAnything(int currentPoints, int cheapestRequired) {
         System.out.println();
         System.out.println("You have " + currentPoints + " pts. The cheapest item needs "
                 + cheapestRequired + " pts.");
         System.out.println("Nothing can be redeemed right now.");
     }
+
     public void displayRedemptionResult(RedemptionTransaction transaction, int remainingPoints) {
         System.out.println();
         System.out.println(DIVIDER);
@@ -199,7 +218,14 @@ public class LoyaltyCLI {
         System.out.println(DIVIDER);
     }
 
-    // ========== 功能3:手动加分 ==========
+    // Option 3: Add Points Manually
+
+    /**
+     * Prompts for the number of points to add.
+     *
+     * @return the entered amount, Integer.MIN_VALUE if cancelled,
+     *         or -1 if the input is not numeric
+     */
 
     public int promptPointsAmount() {
         System.out.print("Enter points to add (blank to cancel): ");
@@ -232,7 +258,7 @@ public class LoyaltyCLI {
         }
         System.out.println(DIVIDER);
     }
-    // ========== 功能4:手动调整等级 ==========
+    // Option 4: Manual Tier Downgrade
 
     public void displayMemberTable(String rows) {
         System.out.println();
@@ -253,13 +279,12 @@ public class LoyaltyCLI {
         return scanner.nextLine().trim();
     }
 
-    
-   /**
-     * 让使用者从「比目前低的等级」里选一个,用数字选避免拼错。
+    /**
+     * Prompts the user to select a lower membership tier.
      *
-     * @param currentTier 这位会员现在的等级
-     * @param options 可选的较低等级
-     * @return 选到的等级文字,选项无效则回传 null
+     * @param currentTier the member's current tier
+     * @param options     available lower tiers
+     * @return the selected tier, null if cancelled, or an empty string if invalid
      */
     public String promptTargetTier(String currentTier, String[] options) {
         System.out.println();
@@ -280,7 +305,7 @@ public class LoyaltyCLI {
                 return options[choice - 1];
             }
         } catch (NumberFormatException e) {
-            // fall through to the invalid-but-not-blank return below
+            // Invalid non-blank input is handled by the return value below.
         }
         return "";
     }
@@ -308,7 +333,7 @@ public class LoyaltyCLI {
     }
 
     public void displayAdjustmentResult(String row, String oldTier, String newTier,
-                                        int oldDiscount, int newDiscount) {
+            int oldDiscount, int newDiscount) {
         System.out.println();
         System.out.println(DIVIDER);
         System.out.println("  TIER DOWNGRADE SUCCESSFUL");
@@ -320,11 +345,12 @@ public class LoyaltyCLI {
         System.out.println(MEMBER_TABLE_DIVIDER);
         System.out.print(row);
     }
+
     public void displayAlreadyLowestTier(String name, String tier) {
         System.out.println(name + " is already on " + tier + ", the lowest tier. "
                 + "Nothing to downgrade.");
     }
-    // ========== 报表共用输入/输出 ==========
+    // Report Input / Output
 
     public String promptReportTierFilter() {
         System.out.println();
@@ -345,6 +371,10 @@ public class LoyaltyCLI {
         }
     }
 
+    /**
+     * Prompts for the lower date bound used by a report.
+     * Blank input represents no lower bound.
+     */
     public String promptReportFromDate() {
         while (true) {
             System.out.println();
@@ -361,6 +391,10 @@ public class LoyaltyCLI {
         }
     }
 
+    /**
+     * Prompts for the upper date bound used by a report.
+     * Blank input represents no upper bound.
+     */
     public String promptReportToDate() {
         while (true) {
             System.out.println();
@@ -382,20 +416,19 @@ public class LoyaltyCLI {
     }
 
     /**
-     * 报表收尾线。用报表自己那条(72字),不是模块通用的 DIVIDER(56字)——
-     * 收尾线要跟上面表格的宽度对齐,不然框会缺一截。
-     * 这个方法只有报表1、报表2在用。
+     * Displays the closing divider used by report tables.
      */
     public void displayReportEnd() {
         System.out.println(REPORT_TABLE_DIVIDER);
     }
 
-    // ========== 报表1:积分即将到期提醒 ==========
+    // Report 1: Points Expiry Report
 
     /**
-     * 到期视窗天数。让使用者直接打数字而不是选1/2/3——"我要看未来几天"
-     * 是随场景变的:平常看30天,做月底清单看90天,查全部就打3650。
-     * 打错要重问,不能默默用一个使用者没打过的天数去跑报表。
+     * Prompts for the number of days included in the expiry window.
+     * Invalid values are rejected until a non-negative whole number is entered.
+     *
+     * @return the selected number of days
      */
     public int promptExpiryWindowDays() {
         while (true) {
@@ -408,7 +441,7 @@ public class LoyaltyCLI {
                     return days;
                 }
             } catch (NumberFormatException e) {
-                // 落到下面的重问
+                // Invalid input is handled by the message below.
             }
             System.out.println("Invalid number of days, please enter 0 or a positive whole number.");
         }
@@ -429,19 +462,18 @@ public class LoyaltyCLI {
     }
 
     /**
-     * 一批点数一行。剩几天是这一行的重点——日期本身要读者自己去跟今天相减,
-     * 直接印天数才看得出急不急,今天到期的再多标一个记号。
+     * Displays one expiring points batch.
+     * Batches expiring today are marked for emphasis.
      */
     public void displayPointsExpiryReportRow(String memberName, String memberId, String tier,
-                                              int pointsAmount, String expiryDate, int daysLeft) {
+            int pointsAmount, String expiryDate, int daysLeft) {
         String marker = (daysLeft == 0) ? "   <-- TODAY" : "";
         System.out.println(String.format("%-20s %-9s %-9s %8d   %-10s %9d%s",
                 memberName, memberId, tier, pointsAmount, expiryDate, daysLeft, marker));
     }
 
     /**
-     * 只印两个数:要联络几位会员、总共多少点数会消失。
-     * 表格行数不等于人数(一位会员可以有好几批点数),所以人数要另外印。
+     * Displays the number of affected members and total expiring points.
      */
     public void displayPointsExpirySummary(int membersAffected, int totalExpiringPoints) {
         System.out.println(REPORT_TABLE_DIVIDER);
@@ -455,16 +487,14 @@ public class LoyaltyCLI {
     }
 
     /**
-     * 一个等级一行,即使那一级是0也照印——"Diamond 这次没有点数要过期"
-     * 本身就是要看到的资讯,那一行不见了会以为是漏算。
+     * Displays the expiring points and percentage share for one tier.
      */
     public void displayExpiringByTierRow(String tier, int pointsExpiring, int totalExpiringPoints) {
         double share = (totalExpiringPoints <= 0) ? 0.0 : pointsExpiring * 100.0 / totalExpiringPoints;
         System.out.printf("  %-20s %7d  (%5.1f%%)  %s%n", tier, pointsExpiring, share, bar(share));
     }
 
-    // ========== 报表2:最多人兑换的产品报表 ==========
-
+    // Report 2: Top Redeemed Items Report
     public void displayTopRedeemedItemsReportHeader(String fromDate, String toDate, String tierFilter) {
         System.out.println();
         System.out.println(REPORT_TABLE_DIVIDER);
@@ -480,12 +510,11 @@ public class LoyaltyCLI {
     }
 
     /**
-     * 两行结论刻意分开印:"最受欢迎"看次数,"最烧点数"看点数总额,
-     * 这两个常常不是同一个奖品,而后者才是点数负债的来源。
+     * Displays overall redemption totals and the leading items.
      */
     public void displayTopRedeemedItemsSummary(int totalRedemptions, int totalPointsSpent,
-                                                String mostPopularItem, int mostPopularCount,
-                                                String biggestSinkItem, int biggestSinkPoints) {
+            String mostPopularItem, int mostPopularCount,
+            String biggestSinkItem, int biggestSinkPoints) {
         double sinkShare = (totalPointsSpent <= 0) ? 0.0 : biggestSinkPoints * 100.0 / totalPointsSpent;
 
         System.out.println(REPORT_TABLE_DIVIDER);
@@ -498,8 +527,7 @@ public class LoyaltyCLI {
     }
 
     /**
-     * 柱状图画的是"多少人换过",不是"烧掉多少点"——报表叫 TOP REDEEMED,
-     * 问的就是人气。点数那条线索交给上面的 Biggest points sink 那一行。
+     * Displays the redemption share chart based on redemption count.
      */
     public void displayMostRedeemedItemsHeader() {
         System.out.println();
@@ -511,10 +539,10 @@ public class LoyaltyCLI {
         System.out.printf("  %-20s %7d  (%5.1f%%)  %s%n", itemName, redemptionCount, share, bar(share));
     }
 
-    // ========== 报表共用的显示工具 ==========
+    // Report Display Helpers
 
     /**
-     * 报表产生的时间戳。报表是给管理层看的文件,要标明这份数字是什么时候的快照。
+     * Returns the timestamp used when generating a report.
      */
     private String generatedAt() {
         return java.time.LocalDateTime.now().withNano(0)
@@ -522,8 +550,8 @@ public class LoyaltyCLI {
     }
 
     /**
-     * 星号柱状图:一颗星 = 5% 占比。点数的量级差很大(几百到几千),
-     * 按百分比画才比得出来。
+     * Builds a percentage bar where each '*' represents 5%.
+     * The bar is limited to MAX_BAR_WIDTH stars.
      */
     private String bar(double percentage) {
         int stars = (int) (percentage / 5.0);
@@ -538,25 +566,21 @@ public class LoyaltyCLI {
     }
 
     /**
-     * 一个奖品一行。Points Each 是目录上的单价,不是算出来的平均——印它是为了
-     * 解释旁边那两栏:便宜的奖品换的人多、贵的奖品换的人少却吃掉大半点数。
-     * 三栏之间对得起来(单价 x 次数 = 点数总额),读的人可以自己验。
+     * Displays one item in the redeemed-items report.
+     * A missing catalog item is displayed with "-" for its point cost.
      *
-     * @param pointsRequired 目录单价;-1 代表这个奖品已经不在目录里了
+     * @param pointsRequired the catalog point cost, or -1 if the item
+     *                       is no longer in the catalog
      */
     public void displayTopRedeemedItemsReportRow(String itemName, int pointsRequired,
-                                                  int redemptionCount, int totalPointsUsed) {
+            int redemptionCount, int totalPointsUsed) {
         String each = (pointsRequired < 0) ? "-" : String.valueOf(pointsRequired);
         System.out.println(String.format("%-30s %13s %13d %13d",
                 itemName, each, redemptionCount, totalPointsUsed));
     }
 
     /**
-     * 上面的表回答"换了什么",这个区块回答"谁在换"。
-     *
-     * 关键那一栏是 Avg Points——高等级会员点数多,会存着换贵的奖品;
-     * 低等级点数少,倾向马上换掉换得起的便宜奖品。平均值把这个差别摊开来看,
-     * 用等级filter一次只能看一级,这里是四级并排比。
+     * Displays redemption statistics grouped by membership tier.
      */
     public void displayRedemptionByTierHeader() {
         System.out.println();
@@ -566,7 +590,7 @@ public class LoyaltyCLI {
     }
 
     public void displayRedemptionByTierRow(String tier, int redemptions, int pointsUsed) {
-        // 一次都没换过就没有平均可言,印"-"而不是0——0会被读成"平均花0点"
+        // No average exists when there are no redemptions.
         String average = (redemptions == 0) ? "-" : String.valueOf(pointsUsed / redemptions);
         System.out.println(String.format("  %-16s %11d %13d %11s",
                 tier, redemptions, pointsUsed, average));

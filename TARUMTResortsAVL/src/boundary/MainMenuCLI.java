@@ -3,13 +3,9 @@ package boundary;
 import java.util.Scanner;
 
 /**
- * MainMenuCLI.java - Displays the system main screen and main menu, and reads
- * the actor's menu choice.
+ * Handles user input and output for the system main menu and report menu.
  *
- * 注意:所有 console 上会印出来的文字都用英文——这是"系统运行时的输出",
- * 跟代码注释(给我们自己看,可以中文)是两回事。
- *
- * @author Wilson
+ * @author Lim Wei Shern
  */
 public class MainMenuCLI {
 
@@ -30,8 +26,9 @@ public class MainMenuCLI {
     }
 
     /**
-     * Displays the main menu and reads the actor's choice.
-     * @return the number the actor typed, or -1 if the input wasn't a number
+     * Displays the main menu and reads the user's choice.
+     *
+     * @return the selected number, or -1 if the input is not numeric
      */
     public int displayMainMenuAndGetChoice() {
         System.out.println();
@@ -45,7 +42,6 @@ public class MainMenuCLI {
         System.out.println("0) Exit");
         System.out.print("Enter your choice: ");
 
-        // 读一行输入,转成数字;打的不是数字就回传 -1,交给Control判断成无效选择
         String input = scanner.nextLine().trim();
         try {
             return Integer.parseInt(input);
@@ -55,16 +51,16 @@ public class MainMenuCLI {
     }
 
     /**
-     * Tells the actor their menu choice wasn't valid.
+     * Displays an invalid menu choice message.
      */
     public void displayInvalidChoice() {
         System.out.println("Invalid input, please try again.");
     }
 
     /**
-     * Displays the flat list of every report across all five modules and
-     * reads the actor's choice.
-     * @return the number the actor typed, or -1 if the input wasn't a number
+     * Displays the reports available across all modules and reads the user's choice.
+     *
+     * @return the selected report number, or -1 if the input is not numeric
      */
     public int displayReportsMenuAndGetChoice() {
         System.out.println();
@@ -97,9 +93,7 @@ public class MainMenuCLI {
     }
 
     /**
-     * Holds the screen after a report has been printed, so the actor can
-     * actually read it before the Reports menu is drawn again and scrolls
-     * it out of view.
+     * Pauses the screen until the user presses Enter.
      */
     public void promptContinue() {
         System.out.println();
@@ -107,16 +101,17 @@ public class MainMenuCLI {
         scanner.nextLine();
     }
 
-    /**
-     * Tells the actor the module they picked isn't built yet.
-     * @param moduleName the module's display name
+     /**
+     * Displays a message when a selected module is not ready.
+     *
+     * @param moduleName the module display name
      */
     public void displayModuleNotReady(String moduleName) {
         System.out.println(moduleName + " module is not ready yet.");
     }
 
     /**
-     * Displays the shutdown message.
+     * Displays the system shutdown message.
      */
     public void displayExitMessage() {
         System.out.println("System shut down. Thank you for using TARUMT Resorts.");

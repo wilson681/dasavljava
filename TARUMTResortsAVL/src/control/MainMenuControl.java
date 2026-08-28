@@ -33,46 +33,43 @@ import entity.Room;
 import entity.RollbackLogEntry;
 
 /**
- * MainMenuControl.java - Controls the main menu flow: shows the main screen,
- * reads the actor's menu choice, and routes to each module's own Control.
+ * Controls the system main menu and connects the five modules.
+ * Shared ADT instances are created here and passed to the modules that
+ * need them so all modules operate on the same data.
  *
- * 这里同时是"总装配点"——各模块要共用的 ADT 实例,都在这里 new 一次, 再传给需要用到的模块
- * Control,让大家共用同一份、不是各自另外造一份。
- *
- * @author Wilson
+ * @author Lim Wei Shern
  */
 public class MainMenuControl {
 
-    // Reports 菜单目前有几份报表(1~10),用来判断使用者打的选项在不在范围内
+    // Number of reports available in the Reports menu.
     private static final int REPORT_COUNT = 10;
 
     private final MainMenuCLI mainMenuCLI;
 
-    // ===== 共用容器,按房型分开的三棵VIP树 =====
+    // Shared VIP waiting trees, separated by room type.
     private final SearchTreeInterface<Booking> standardVipTree;
     private final SearchTreeInterface<Booking> deluxeVipTree;
     private final SearchTreeInterface<Booking> suiteVipTree;
 
-    // ===== 共用容器,按房型分开的三条Walk-In队伍 =====
+    // Shared Walk-In queues, separated by room type.
     private final QueueInterface<Booking> standardWalkInQueue;
     private final QueueInterface<Booking> deluxeWalkInQueue;
     private final QueueInterface<Booking> suiteWalkInQueue;
 
-    // ===== 共用容器,给各模块查资料用 =====
+    // Shared system data used across multiple modules.
     private final ListInterface<Member> memberList;
     private final ListInterface<Room> roomList;
     private final HashTableInterface<Guest> guestTable;
 
-    // ===== 共用容器,给模块5(Loyalty and Rewards)用 =====
+    // Shared Loyalty and Rewards data.
     private final ListInterface<RedemptionItem> redemptionItemList;
     private final ListInterface<RedemptionTransaction> redemptionTransactionList;
 
-    // ===== 共用容器,给模块3(Housekeeping)自己写、自己读的回滚事件流水,其他模块不会用到 =====
+    // Stores successful housekeeping rollback events.
     private final ListInterface<RollbackLogEntry> rollbackLog;
 
-    // ===== 各模块的Control只造一次、整个程式生命周期共用一份 =====
-    // 之前每次进入模块都 new 一个新的Control,会把里面的bookingCounter/confirmationCounter
-    // 归零重来,但共用队伍/树里还留着旧资料,导致新登记跟旧的撞号——所以改成在这里只建一次
+    // Module controls are created once and reused throughout the program.
+    // This preserves their counters and shared state between menu visits.
     private final WalkInControl walkInControl;
     private final VipAllocationControl vipAllocationControl;
     private final FrontDeskControl frontDeskControl;
@@ -80,8 +77,10 @@ public class MainMenuControl {
     private final HousekeepingControl housekeepingControl;
 
     /**
-     * @param mainMenuCLI the boundary responsible for displaying the main
-     * screen
+     * Creates the shared ADTs, loads the initial data and assembles
+     * the module controls.
+     *
+     * @param mainMenuCLI the boundary responsible for the system main menu
      */
     public MainMenuControl(MainMenuCLI mainMenuCLI) {
         if (mainMenuCLI == null) {
@@ -106,15 +105,11 @@ public class MainMenuControl {
 
         this.rollbackLog = new ArrayBasedList<>();
 
-        // 用DAO从txt把种子资料读进来,填满memberList/roomList/redemptionItemList,
-        // 这样VIP/Walk-In/Loyalty模块才有真的会员/房间/兑换清单资料可以测试,不用硬编码
+        // Load the main member and room records into the shared ADTs.
         new MemberDao().loadMembers(memberList);
         new RoomDao().loadRooms(roomList);
-        /*
-         * Each Room already owns its own RoomHistory.
-         * After loading all rooms, record each room's initial status
-         * into its Stack so rollback has a starting state.
-         */
+        // Each room owns its own status-history stack.
+        // Record its initial status so rollback has a starting state.
         for (int i = 1; i <= roomList.getNumberOfEntries(); i++) {
 
             Room room = (Room) roomList.getEntry(i);
@@ -123,8 +118,8 @@ public class MainMenuControl {
                     .getStatusStack()
                     .isEmpty()) {
 
-                // 正在清洁流程中的房间,多补一笔"之前是OCCUPIED"的记录,让 Room History
-                // 报表的记录数不会每间房都长得一样,demo时数字才有变化可以展示
+                // Seed housekeeping rooms with OCCUPIED as the previous state
+                // before recording their current housekeeping status.
                 if (room.getStatus().equals("NEEDS_CLEANING")
                         || room.getStatus().equals("CLEANING_IN_PROGRESS")
                         || room.getStatus().equals("INSPECTED")) {
@@ -141,10 +136,7 @@ public class MainMenuControl {
 
         new RedemptionItemDao().loadRedemptionItems(redemptionItemList);
 
-        // 额外的种子资料,让开机后 Reports 菜单的 10 份报表都已经有资料可以测,不用先手动
-        // 跑完整的登记/分房/退房流程——各自的格式/职责说明见 dao/ 底下对应类别的 javadoc。
-        // 编号(bookingId/confirmationNumber/billingId/ledgerId)都用跟真人操作不同的前缀/区间,
-        // 保证不会跟之后手动操作产生的编号撞号。
+        // Load additional seed records required by the modules and reports.
         new PointsLedgerDao().loadPointsLedger(memberList);
         new RedemptionHistoryDao().loadRedemptionHistory(redemptionTransactionList);
         new RollbackLogDao().loadRollbackLog(rollbackLog);
@@ -154,35 +146,33 @@ public class MainMenuControl {
         new GuestDao().loadGuests(guestTable);
         new GuestBookingDao().loadGuestBookings(guestTable, memberList);
         new BillingRecordDao().loadBillingRecords(guestTable);
-
-        // WalkInControl也要拿到VIP的三棵树(只读,用来检查isEmpty())才能落实
-        // "VIP永远优先"这条两个模块共用的规则
+        // Walk-In also receives the VIP trees so it can check VIP priority
+        // before allocating a room.
         this.walkInControl = new WalkInControl(
                 new WalkInCLI(), standardWalkInQueue, deluxeWalkInQueue, suiteWalkInQueue,
                 standardVipTree, deluxeVipTree, suiteVipTree, roomList, guestTable, memberList);
         this.vipAllocationControl = new VipAllocationControl(
                 new VipAllocationCLI(), standardVipTree, deluxeVipTree, suiteVipTree,
                 memberList, roomList, guestTable);
-        // loyaltyControl要先造出来,因为退房结账(FrontDeskControl)要拿它的引用
-        // 去调用awardPointsByMemberId(),不能反过来
-
+        // Housekeeping needs both allocation controls so an available room
+        // can be offered to waiting bookings again.
         this.housekeepingControl = new HousekeepingControl(
                 new HousekeepingCLI(),
                 roomList,
                 vipAllocationControl,
                 walkInControl,
                 rollbackLog);
-
+        // Front Desk uses Loyalty for points and tier information.
         this.loyaltyControl = new LoyaltyControl(
                 new LoyaltyCLI(), memberList, redemptionItemList, redemptionTransactionList);
-
+        // Front Desk also uses Housekeeping when checked-out rooms
+        // need to enter the cleaning process.
         this.frontDeskControl = new FrontDeskControl(
                 new FrontDeskCLI(), guestTable, roomList, loyaltyControl, housekeepingControl);
     }
 
     /**
-     * Launches the main screen and runs the main menu loop until the actor
-     * exits.
+     * Runs the main menu until the user chooses to exit.
      */
     public void run() {
         mainMenuCLI.displayWelcome();
@@ -242,23 +232,22 @@ public class MainMenuControl {
     }
 
     /**
-     * Reports 菜单——扁平列出全部11份报表,选哪个就直接呼叫该模块自己的报表方法
-     * (那些方法是package-private,只放宽到让同package的这里叫得到,boundary层还是碰不到)。
-     * 这里本身不装任何filter/sort逻辑,纯粹是分发,报表怎么算还是各模块自己的Control负责。
+     * Runs the Reports menu and routes each selection to the corresponding
+     * module control. Report filtering, sorting and calculations remain
+     * inside the module that owns the report.
      */
     private void runReportsMenu() {
         boolean running = true;
         while (running) {
             int choice = mainMenuCLI.displayReportsMenuAndGetChoice();
 
-            // 选到0是要离开,直接走人
+            // Return to the main menu.
             if (choice == 0) {
                 running = false;
                 continue;
             }
 
-            // 选项打错就当场重问,不要停下来等Enter——画面上什么结果都还没出现,
-            // 没有东西需要"先看一下"。Press Enter 只在真的印出一份报表之后才有意义。
+            // Invalid report selections are rejected before dispatching.
             if (choice < 1 || choice > REPORT_COUNT) {
                 mainMenuCLI.displayInvalidChoice();
                 continue;
@@ -296,12 +285,12 @@ public class MainMenuControl {
                     loyaltyControl.doTopRedeemedItemsReport();
                     break;
                 default:
-                    // 上面的范围检查已经挡掉所有不合法的选项,走不到这里
+                    // All invalid values are handled by the range check above.
                     break;
             }
 
-            // 到这里代表一份报表已经印完了,先停住让使用者看清楚,
-            // 按Enter才重画选单——不然报表会立刻被下一次的Reports菜单顶掉
+            // Pause after a report so the user can read it before the menu
+            // is displayed again.
             mainMenuCLI.promptContinue();
         }
     }

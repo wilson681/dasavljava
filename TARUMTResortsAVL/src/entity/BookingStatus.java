@@ -1,5 +1,5 @@
 package entity;
-/*
+/**
  * Represents the status of a booking.
  *
  * Status flow:

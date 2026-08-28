@@ -1,6 +1,6 @@
 package entity;
 
-/*
+/**
  * Represents one points redemption transaction.
  *
  * @author All

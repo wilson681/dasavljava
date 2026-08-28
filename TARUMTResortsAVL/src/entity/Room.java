@@ -1,6 +1,6 @@
 package entity;
 
-/*
+/**
  * Represents a hotel room and its current status.
  * Each room keeps its own status history.
  *
@@ -55,7 +55,7 @@ public class Room {
         return roomNumber + " | " + roomType + " | RM" + nightlyRate + " | " + status;
     }
 
-    // Same room number means the same room. （for hashcode can get same value)
+   // Room number is used to identify each room.
     @Override
     public boolean equals(Object obj) {
         if (this == obj) {

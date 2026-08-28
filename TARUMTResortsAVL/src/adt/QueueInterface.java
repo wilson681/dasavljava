@@ -9,9 +9,6 @@ import java.util.Iterator;
  *
  * @author jagathis
  *
- * Source: [if this spec is based on course sample code / textbook, note it here;
- *          if self-designed, delete this line]
- *
  * @param <T> element type stored
  */
 public interface QueueInterface<T> {

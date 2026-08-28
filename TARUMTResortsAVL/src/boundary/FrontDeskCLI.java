@@ -7,14 +7,13 @@ import java.util.Scanner;
 import utility.ValidationUtility;
 
 /**
- * FrontDeskCLI.java
- * Boundary for the Front-Desk Service module.
+ * Handles user input and output for the Front-Desk Service module.
  *
- * Responsible only for user input and output.
+ * @author Lim Wei Shern
  */
 public class FrontDeskCLI {
 
-    private static final int MAX_BAR_WIDTH = 20;   // 星号柱状图最多印几颗
+    private static final int MAX_BAR_WIDTH = 20; // Maximum number of stars in a report bar.
 
     private Scanner scanner;
 
@@ -49,26 +48,27 @@ public class FrontDeskCLI {
     public void displayCancelled() {
         System.out.println("Cancelled. Returning to menu.");
     }
-    
+
     public String promptConfirmationNumber() {
         System.out.print("Enter 8-digit confirmation number (blank to cancel): ");
         return scanner.nextLine().trim();
     }
 
     public void displayInvalidConfirmationNumber(String confirmationNumber) {
-        System.out.println("\"" + confirmationNumber + "\" is not a valid confirmation number. It must be exactly 8 digits.");
+        System.out.println(
+                "\"" + confirmationNumber + "\" is not a valid confirmation number. It must be exactly 8 digits.");
     }
 
-  public void displayGuestDetails(String confirmationNumber,
-                                    String name,
-                                    String phone,
-                                    String guestType,
-                                    String memberId,
-                                    String tier,
-                                    String vipStatus,
-                                    String recordCreatedAt,
-                                    String bookingLines,
-                                    int bookingCount) {
+    public void displayGuestDetails(String confirmationNumber,
+            String name,
+            String phone,
+            String guestType,
+            String memberId,
+            String tier,
+            String vipStatus,
+            String recordCreatedAt,
+            String bookingLines,
+            int bookingCount) {
 
         System.out.println();
         System.out.println("======================================================");
@@ -88,6 +88,7 @@ public class FrontDeskCLI {
         System.out.print(bookingLines);
         System.out.println("======================================================");
     }
+
     public void displayGuestNotFound() {
         System.out.println("Guest not found.");
     }
@@ -95,20 +96,15 @@ public class FrontDeskCLI {
     public void displayBillingRecordNotFound(String confirmationNumber) {
         System.out.println("No billing record found for confirmation number " + confirmationNumber + ".");
     }
-    /**
-     * Tells the user a menu option is not available yet.
-     *
-     * @param featureName the name of the feature
-     */
+
+    // Displays a placeholder for an unfinished feature.
     public void displayNotImplemented(String featureName) {
         System.out.println();
         System.out.println(featureName + " - coming soon.");
     }
-    /**
-     * Prints the header block of the billing details screen.
-     */
+
     public void displayBillingHeader(String confirmationNumber, String guestName,
-                                     String guestType, String tier) {
+            String guestType, String tier) {
         System.out.println();
         System.out.println("======================================================");
         System.out.println("                 BILLING DETAILS");
@@ -120,14 +116,11 @@ public class FrontDeskCLI {
     }
 
     /**
-     * Prints the charges for rooms the guest is still occupying.
-     *
-     * Only called when the guest has at least one room still checked in —
-     * FrontDeskControl skips this whole block entirely otherwise, instead of
-     * printing an empty section under a header that doesn't apply.
+     * Displays charges for rooms that are still checked in.
+     * Final discounts and extra charges are applied only at check-out.
      */
     public void displayCurrentCharges(String chargeLines, int roomCount,
-                                      int totalNights, double totalCharges) {
+            int totalNights, double totalCharges) {
         System.out.println("------------------------------------------------------");
         System.out.println("CURRENT CHARGES  (rooms still checked in)");
         System.out.println("------------------------------------------------------");
@@ -142,10 +135,10 @@ public class FrontDeskCLI {
     }
 
     /**
-     * Prints the bills already settled under this confirmation number.
+     * Displays bills already settled under the confirmation number.
      */
     public void displaySettledBills(String settledLines, int billCount,
-                                    double settledTotal, int totalPoints) {
+            double settledTotal, int totalPoints) {
         System.out.println("------------------------------------------------------");
         System.out.println("SETTLED BILLS  (" + billCount + ")");
         System.out.println("------------------------------------------------------");
@@ -161,23 +154,17 @@ public class FrontDeskCLI {
         System.out.printf("  Total points earned              %15d%n", totalPoints);
     }
 
-    /**
-     * Prints the closing line of the billing details screen.
-     */
     public void displayBillingFooter() {
         System.out.println("======================================================");
     }
-    
-    // ========== Room Availability ==========
+
+    // Room Availability
 
     /**
-     * Asks which room type to report on.
+     * Prompts for a room type filter.
+     * null represents all room types.
      *
-     * <p>Option 4 returns null, which countRooms() reads as the "any type"
-     * wildcard. Because null already carries that meaning, an invalid entry
-     * must never be allowed to reach it.</p>
-     *
-     * @return the room type name, or null when the user wants every type
+     * @return selected room type, or null for all types
      */
     public String promptRoomTypeFilter() {
         while (true) {
@@ -205,20 +192,16 @@ public class FrontDeskCLI {
             System.out.println("Invalid input, please enter 1 - 4.");
         }
     }
-   /**
-     * Prints the room availability query: which rooms are available right
-     * now, and how many are unavailable.
-     *
-     * <p>This is an operational lookup, not an analysis. Occupancy rates,
-     * revenue per room and idle capacity belong to the room utilisation report
-     * instead, so the two use cases stay distinct.</p>
+
+    /**
+     * Displays the current room availability and status breakdown.
      */
     public void displayRoomAvailability(String typeFilter,
-                                        String breakdownLines,
-                                        String availableLines,
-                                        int available,
-                                        int occupied,
-                                        int inHousekeeping) {
+            String breakdownLines,
+            String availableLines,
+            int available,
+            int occupied,
+            int inHousekeeping) {
 
         System.out.println();
         System.out.println("======================================================");
@@ -245,7 +228,7 @@ public class FrontDeskCLI {
                 + occupied + " occupied, " + inHousekeeping + " in housekeeping.");
         System.out.println("======================================================");
     }
-    // ========== Check-Out ==========
+    // Check-Out
 
     public void displayNoRoomsToCheckOut(String confirmationNumber) {
         System.out.println("No checked-in rooms found under confirmation number " + confirmationNumber + ".");
@@ -320,7 +303,7 @@ public class FrontDeskCLI {
     }
 
     public void displayCheckOutResult(BillingRecord billingRecord, int roomsCheckedOut,
-                                       double originalRoomFee, int discountPercent, String memberTier) {
+            double originalRoomFee, int discountPercent, String memberTier) {
         System.out.println();
         System.out.println("======================================================");
         System.out.println("                 CHECK-OUT COMPLETE");
@@ -339,7 +322,7 @@ public class FrontDeskCLI {
         System.out.println("======================================================");
     }
 
-    // ========== 报表共用输入 ==========
+    // Report Input
 
     public String promptReportFromDate() {
         while (true) {
@@ -381,9 +364,9 @@ public class FrontDeskCLI {
         System.out.println("======================================================");
     }
 
-    // ========== 报表1:Check-Out Revenue Report ==========
+    // Report 1: Check-Out Revenue Report
 
-   public String promptReportTierFilter() {
+    public String promptReportTierFilter() {
         while (true) {
             System.out.println();
             System.out.println("Tier Filter: 1) All  2) Standard  3) Elite  4) Platinum  5) Diamond");
@@ -407,7 +390,7 @@ public class FrontDeskCLI {
     }
 
     public void displayCheckOutRevenueReportHeader(String fromDate, String toDate,
-                                                    String tierFilter) {
+            String tierFilter) {
         System.out.println();
         System.out.println("======================================================");
         System.out.println("             CHECK-OUT REVENUE REPORT");
@@ -422,30 +405,28 @@ public class FrontDeskCLI {
     }
 
     /**
-     * 房费和额外消费分开印:酒店最在意的就是这个比例——房费是重资产、低毛利,
-     * 额外消费(餐饮、迷你吧)才是高毛利收入。只印总额会把这个资讯丢掉。
+     * Displays room charges and extra charges separately for each bill.
      */
     public void displayCheckOutRevenueReportRow(String billingId, String guestName, String tier,
-                                                 double roomFee, double extraCharges, double totalAmount) {
+            double roomFee, double extraCharges, double totalAmount) {
         System.out.printf("  %-10s %-18s %-9s %10.2f %11.2f %10.2f%n",
                 billingId, guestName, tier, roomFee, extraCharges, totalAmount);
     }
 
     /**
-     * 房费和额外消费不另外开一整块——明细表已经有那两栏了,再开一块加总只是
-     * 栏位求和,不算分析。并进 Total revenue 那一行,资讯留着、版面不浪费。
+     * Displays the main revenue totals and billing summary.
      */
     public void displayCheckOutRevenueReportSummary(int billCount, double totalRevenue,
-                                                     double roomRevenue, double extraRevenue,
-                                                     double averageRevenue, double highestSpend,
-                                                     String highestSpendGuest, int totalPoints) {
+            double roomRevenue, double extraRevenue,
+            double averageRevenue, double highestSpend,
+            String highestSpendGuest, int totalPoints) {
         System.out.println("------------------------------------------------------");
         System.out.printf("  Bills settled         : %d%n", billCount);
         System.out.printf("  Total revenue         : RM %10.2f   (room %.2f + extras %.2f)%n",
                 totalRevenue, roomRevenue, extraRevenue);
         System.out.printf("  Average per bill      : RM %10.2f%n", averageRevenue);
         System.out.printf("  Highest single bill   : RM %10.2f   (%s)%n", highestSpend, highestSpendGuest);
-        // 积分是负债不是收入:客人以后可以拿去兑换,所以要跟收入分开看
+        // Loyalty points are shown separately from revenue.
         System.out.printf("  Loyalty points issued : %13d%n", totalPoints);
     }
 
@@ -456,11 +437,10 @@ public class FrontDeskCLI {
     }
 
     /**
-     * 按会员等级看收入分布。最后一行直接讲结论——哪一级贡献最多,
-     * 不用读的人自己比柱状图长度。
+     * Displays revenue distribution by guest tier and the top contributor.
      */
     public void displayRevenueByTier(Iterator<String> tierNames, Iterator<Double> tierRevenue,
-                                      double totalRevenue, String topTierName, double topTierRevenue) {
+            double totalRevenue, String topTierName, double topTierRevenue) {
         System.out.println();
         System.out.println("REVENUE BY TIER   (each * = 5% of total)");
         while (tierNames.hasNext() && tierRevenue.hasNext()) {
@@ -472,19 +452,17 @@ public class FrontDeskCLI {
                 topTierName, topTierRevenue, topShare);
     }
 
-    // ========== 报表共用的显示工具 ==========
+    // Report Display Helpers
 
-    /**
-     * 报表产生的时间戳——报表是给管理层看的文件,一定要标明这份数字是什么时候的快照。
-     */
+    // Returns the timestamp used when generating a report.
     private String generatedAt() {
         return java.time.LocalDateTime.now().withNano(0)
                 .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
     }
 
     /**
-     * 星号柱状图:一颗星 = 5% 占比,数得出来。金额的量级差很大(几百到几千),
-     * 所以这里按百分比画,不像房间数那种可以一颗代表一间。
+     * Builds a percentage bar where each '*' represents 5%.
+     * The bar is limited to MAX_BAR_WIDTH stars.
      */
     private String bar(double percentage) {
         int stars = (int) (percentage / 5.0);
@@ -498,7 +476,7 @@ public class FrontDeskCLI {
         return result;
     }
 
-    // ========== 报表2:Room Utilisation & Status Report ==========
+    // Report 2: In-House Guests & Outstanding Charges
 
     public String promptReportRoomTypeFilter() {
         while (true) {
@@ -536,31 +514,29 @@ public class FrontDeskCLI {
     }
 
     /**
-     * 一行代表一间还被占用的房间。同一位客人订了两间房就会有两行——
-     * 前台和客房部关心的单位是房间,不是人。
+     * Displays one row for each occupied room.
+     * A guest with multiple rooms appears on multiple rows.
      *
-     * @param accrued 到目前为止累积的房费,还没结帐
+     * @param accrued room charges accumulated before check-out
      */
     public void displayInHouseReportRow(String guestName, String tier, String roomNumber,
-                                         String roomType, String checkOutDate,
-                                         int nights, double accrued) {
+            String roomType, String checkOutDate,
+            int nights, double accrued) {
         System.out.printf("  %-16s %-9s %-6s %-9s %-12s %7d %12.2f%n",
                 guestName, tier, roomNumber, roomType, checkOutDate, nights, accrued);
     }
 
     /**
-     * 汇总:三个部门各看一部分——
-     * 前台看有几位客人在店、谁最快要走;财务看未结款有多少;
-     * 客房部看占用率(还有多少房间被占着)。
+     * Displays occupancy and outstanding charge totals for in-house rooms.
      */
     public void displayInHouseSummary(int roomsOccupied, int totalRooms, double occupancyRate,
-                                       double totalAccrued, double averageAccrued,
-                                       String soonestGuest, String soonestDate, String soonestRoom) {
+            double totalAccrued, double averageAccrued,
+            String soonestGuest, String soonestDate, String soonestRoom) {
         System.out.println("------------------------------------------------------");
         System.out.printf("  Guests in house       : %d%n", roomsOccupied);
         System.out.printf("  Rooms occupied        : %d of %d   (%.1f%%)%n",
                 roomsOccupied, totalRooms, occupancyRate);
-        // 这笔钱还没进帐——客人还在住,帐单要等退房才产生
+        // Accrued charges are not settled until check-out.
         System.out.printf("  Total accrued charges : RM %10.2f   (not yet settled)%n", totalAccrued);
         System.out.printf("  Average per room      : RM %10.2f%n", averageAccrued);
         System.out.printf("  Departing soonest     : %s  (%s, room %s)%n",
@@ -575,6 +551,5 @@ public class FrontDeskCLI {
     public void displayDepartureScheduleRow(String checkOutDate, int roomCount, String roomNumbers) {
         System.out.printf("  %-12s %d room(s)   %s%n", checkOutDate, roomCount, roomNumbers);
     }
-
 
 }

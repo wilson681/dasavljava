@@ -1,6 +1,5 @@
 /**
- * Custom collection ADTs shared by the whole team.
- * Contains only generic interfaces, the AVL implementation and the traversal
- * callback. Must never import from the business layers.
+ * Generic collection ADTs and their implementations used across the system.
+ * This package is independent of the business and presentation layers.
  */
 package adt;

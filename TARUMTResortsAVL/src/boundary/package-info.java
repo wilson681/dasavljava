@@ -1,6 +1,5 @@
 /**
- * ECB Boundary layer: handles all actor input and output.
- * Scanner, console menus and display formatting live here. Must not touch AVL
- * nodes directly or decide business rules.
+ * Boundary classes responsible for user input, menus and display output.
+ * Business rules and data structure operations are handled by other layers.
  */
 package boundary;

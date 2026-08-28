@@ -4,26 +4,18 @@ import java.util.Iterator;
 import java.util.NoSuchElementException;
 
 /**
- * ChainingHashTable.java
- * HashTableInterface 的实现 —— 用数组当桶(bucket),每个桶用链表处理碰撞(separate chaining)。
+ * Hash table implementation using separate chaining.
+ * Each bucket stores a linked chain of entries that produce the same
+ * bucket index. Matching entries are identified using hashCode() and equals().
  *
- * @author 某某
- *
- * 说明:
- * - 给模块4(Front-Desk Service,用确认号瞬间查到完整客人资料)用
- * - 靠 T 自己的 hashCode() 换算成桶的 index,同一个桶碰撞的条目串成链表
- * - 不能用 java.util.HashMap/HashSet,hash 函数跟碰撞处理都要自己写
- * - 查找/删除时传进来的 T,不用是"树里真正那个物件",只要它的 hashCode()/equals()
- *   跟目标一致就能找到——比如 Guest 的 hashCode/equals 都只看 confirmationNumber,
- *   所以传一个"只填了confirmationNumber"的Guest当搜寻用的样板也能正确找到
- *
- * @param <T> 存放的元素类型,需要有意义的 hashCode() 和 equals() 实现
+ * @author Lim Wei Shern
+ * @param <T> type of entry stored in the hash table
  */
 public class ChainingHashTable<T> implements HashTableInterface<T> {
 
     private static final int DEFAULT_CAPACITY = 31;
-    private Node<T>[] buckets;    // 桶数组,每个桶是一条链表的起点(没东西就是null)
-    private int numberOfEntries;  // 目前有几个条目
+    private Node<T>[] buckets;    
+    private int numberOfEntries;  
 
     public ChainingHashTable() {
         buckets = createBucketArray(DEFAULT_CAPACITY);
@@ -31,7 +23,8 @@ public class ChainingHashTable<T> implements HashTableInterface<T> {
     }
 
     /**
-     * 开一个指定大小的桶阵列。用了跟ArrayBasedList一样的技巧绕过Java的泛型阵列限制。
+     * Creates the bucket array.
+     * Java does not allow direct creation of generic arrays.
      */
     @SuppressWarnings("unchecked")
     private Node<T>[] createBucketArray(int capacity) {
@@ -39,15 +32,12 @@ public class ChainingHashTable<T> implements HashTableInterface<T> {
     }
 
     /**
-     * Maps the entry's hashCode() onto a bucket index.
+     * Maps an entry's hash code to a valid bucket index.
+     * The sign bit is cleared so negative hash codes cannot produce
+     * a negative array index.
      *
-     * <p>hashCode() may be negative, and Math.abs() cannot be used here:
-     * Math.abs(Integer.MIN_VALUE) overflows and returns a negative value,
-     * which would then produce a negative index. Masking with 0x7FFFFFFF
-     * clears the sign bit instead, so the result is always non-negative.</p>
-     *
-     * @param entry the entry whose bucket index is required
-     * @return a bucket index in the range 0 to buckets.length - 1
+     * @param entry the entry to hash
+     * @return the bucket index
      */
     private int getBucketIndex(T entry) {
         return (entry.hashCode() & 0x7FFFFFFF) % buckets.length;
@@ -56,7 +46,7 @@ public class ChainingHashTable<T> implements HashTableInterface<T> {
     @Override
     public boolean add(T newEntry) {
         int index = getBucketIndex(newEntry);
-        // 新节点直接插在该桶链表的最前面,是O(1)的做法(不用找链表尾巴)
+        // Insert at the front of the bucket chain in O(1) time.
         Node<T> newNode = new Node<>(newEntry);
         newNode.next = buckets[index];
         buckets[index] = newNode;
@@ -71,8 +61,8 @@ public class ChainingHashTable<T> implements HashTableInterface<T> {
         Node<T> previous = null;
         while (current != null) {
             if (current.data.equals(anEntry)) {
+                 // Update the bucket head when removing the first node.
                 if (previous == null) {
-                    // 要移除的刚好是这个桶的第一个节点
                     buckets[index] = current.next;
                 } else {
                     previous.next = current.next;
@@ -122,8 +112,8 @@ public class ChainingHashTable<T> implements HashTableInterface<T> {
 
     @Override
     public Iterator<T> getIterator() {
-        // 依序走过每个桶、每条链表,填进一个普通阵列再包成Iterator——
-        // 跟AVLTree/CircularLinkedQueue的做法是同一套,只是走的路径不同
+        // Traverse each bucket chain and copy the entries into an array.
+        // Hash-table traversal order is not guaranteed.
         @SuppressWarnings("unchecked")
         T[] entries = (T[]) new Object[numberOfEntries];
         int position = 0;
@@ -139,7 +129,7 @@ public class ChainingHashTable<T> implements HashTableInterface<T> {
     }
 
     /**
-     * Node —— 桶内链表的节点,存资料 + 指向同一个桶下一个节点的引用
+     * Node used to link entries stored in the same bucket.
      */
     private class Node<E> {
         private E data;
@@ -151,7 +141,7 @@ public class ChainingHashTable<T> implements HashTableInterface<T> {
     }
 
     /**
-     * ArrayIterator —— 把遍历结果先存进一个普通阵列,再包成 Iterator 吐出去
+     * Iterates through the entries collected from the hash table.
      */
     private class ArrayIterator implements Iterator<T> {
         private T[] items;

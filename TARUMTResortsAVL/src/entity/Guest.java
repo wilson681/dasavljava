@@ -3,7 +3,7 @@ package entity;
 import adt.ArrayBasedList;
 import adt.ListInterface;
 
-/*
+/**
  * Represents a registered hotel guest and their stay details.
  * One guest may have multiple rooms, bookings and billing records.
  *

@@ -16,14 +16,11 @@ import utility.TierRankUtility;
 import utility.ValidationUtility;
 
 /**
- * FrontDeskControl.java - Control class for the Front-Desk Service module.
+ * Controls the main operations of the Front-Desk Service module.
+ * Guest records are searched using a hash table, while room data is
+ * searched through a list.
  *
- * <p>Guest identification runs through a chaining hash table keyed on the
- * 8-digit confirmation number, so an exact-match lookup costs O(1) on average.
- * Room lookups deliberately keep a linear scan as the O(n) control group for
- * the search efficiency report.</p>
- *
- * @author YOUR FULL NAME
+ * @author Lim Wei Shern
  */
 public class FrontDeskControl {
 
@@ -36,10 +33,10 @@ public class FrontDeskControl {
     private int billingCounter;
 
     public FrontDeskControl(FrontDeskCLI frontDeskCLI,
-                            HashTableInterface<Guest> guestTable,
-                            ListInterface<Room> roomList,
-                            LoyaltyControl loyaltyControl,
-                            HousekeepingControl housekeepingControl) {
+            HashTableInterface<Guest> guestTable,
+            ListInterface<Room> roomList,
+            LoyaltyControl loyaltyControl,
+            HousekeepingControl housekeepingControl) {
         this.frontDeskCLI = frontDeskCLI;
         this.guestTable = guestTable;
         this.roomList = roomList;
@@ -99,12 +96,12 @@ public class FrontDeskControl {
             return;
         }
 
-        // A guest carrying no member ID walked in off the street.
+        // Guests without a member ID are treated as walk-in guests.
         boolean isMember = foundGuest.getMemberId() != null;
         String guestType = isMember ? "Member" : "Walk-In Guest";
         String memberIdDisplay = isMember ? foundGuest.getMemberId() : "-  (not a member)";
 
-        // Any tier above Standard earns queue priority.
+        // Tiers above Standard are treated as VIP tiers.
         int rank = TierRankUtility.tierToRank(foundGuest.getTier());
         String vipStatus = (rank > 0)
                 ? "VIP  (tier rank " + rank + ")"
@@ -120,16 +117,12 @@ public class FrontDeskControl {
                 vipStatus,
                 orDash(foundGuest.getRegistrationTime()),
                 buildBookingLines(foundGuest),
-                foundGuest.getBookings().getNumberOfEntries()
-        );
+                foundGuest.getBookings().getNumberOfEntries());
     }
 
     /**
-     * Processes a check-out. One confirmation number can carry several rooms
-     * with different stay lengths, so this only settles the rooms the staff
-     * actually selects this time, not the guest's entire booking history —
-     * a later, separate check-out under the same confirmation number produces
-     * its own BillingRecord instead of overwriting this one.
+     * Processes check-out for selected rooms under one confirmation number.
+     * Each check-out creates a separate billing record.
      */
     private void doCheckOut() {
 
@@ -153,8 +146,7 @@ public class FrontDeskControl {
 
         frontDeskCLI.displayCheckedInBookings(checkedIn.getIterator());
 
-        // Staff picks which of the checked-in rooms are actually leaving this
-        // time — same room type v.s. "add another room" loop used at registration.
+        // Staff selects which checked-in rooms to check out.
         ListInterface<Booking> selected = new ArrayBasedList<>();
         double roomFee = 0.0;
         boolean continueSelecting = true;
@@ -173,8 +165,7 @@ public class FrontDeskControl {
                 frontDeskCLI.displayRoomSelected(roomNumber);
             }
 
-            // 这个确认号底下能退的房间已经全部选完了,没有剩下的可以再选,
-            // 不该再问"要不要继续退另一间"——问了使用者也没得选
+            // Stop asking once all checked-in rooms have been selected.
             if (selected.getNumberOfEntries() >= checkedIn.getNumberOfEntries()) {
                 frontDeskCLI.displayAllRoomsSelected();
                 continueSelecting = false;
@@ -190,15 +181,12 @@ public class FrontDeskControl {
 
         double extraCharges = promptValidExtraCharges();
         if (Double.isNaN(extraCharges)) {
-            // 房间已经选好了,但退房账单还没算、Booking状态也还没改成CHECKED_OUT,
-            // 这个时间点取消完全没有副作用要清理
+            // No booking or billing data has been changed yet, so cancellation is safe.
             frontDeskCLI.displayCancelled();
             return;
         }
 
-        // 等级折扣是"个性化促销"的一种,只影响价格计算,不碰房型/房间状态——
-        // 折扣用会员现在真正的等级算(不是Guest身上入住当天的快照),这样退房那一刻
-        // 算出来的价格才是准的,不会因为快照过期而算错
+        // Use the member's current tier when calculating the check-out discount.
         String currentTier = (guest.getMemberId() == null) ? null
                 : loyaltyControl.getTierByMemberId(guest.getMemberId());
         int discountPercent = TierRankUtility.tierToDiscountPercent(currentTier);
@@ -219,8 +207,7 @@ public class FrontDeskControl {
             Room room = findRoom(booking.getAssignedRoomNo());
             if (room != null) {
                 housekeepingControl.markRoomNeedsCleaning(
-                     room.getRoomNumber()
-                );
+                        room.getRoomNumber());
             }
         }
 
@@ -232,13 +219,8 @@ public class FrontDeskControl {
     }
 
     /**
-     * Shows the billing picture for one confirmation number: what the rooms
-     * currently checked in have accumulated, and what has already been settled.
-     *
-     * <p>Rooms still checked in are priced live from the nightly rate and the
-     * stay length held on each booking. Rooms already checked out are read from
-     * their BillingRecord instead, because the settled amount includes the tier
-     * discount and extra charges that were only known at check-out.</p>
+     * Displays current room charges and previously settled bills.
+     * Current charges do not include the final discount or extra charges.
      */
     private void viewBillingDetails() {
 
@@ -277,13 +259,10 @@ public class FrontDeskControl {
 
         frontDeskCLI.displayBillingFooter();
     }
-    
-  /**
-     * Answers the operational question "can I sell a room right now?".
-     *
-     * <p>Deliberately limited to current sellability. Occupancy rate, revenue
-     * per room and idle capacity are analytical measures and belong to the room
-     * utilisation report, so this query and that report do not overlap.</p>
+
+    /**
+     * Displays rooms that are currently available for sale.
+     * Rooms still in housekeeping are treated as unavailable.
      */
     private void checkRoomAvailability() {
 
@@ -301,19 +280,12 @@ public class FrontDeskControl {
                 countRooms(typeFilter, "OCCUPIED"),
                 inHousekeeping);
     }
-    // ========== 报表1:Check-Out Revenue Report ==========
+    // Report 1: Check-Out Revenue Report
 
     /**
-     * filter=日期区间+客人等级,按总额降序(merge sort)。
-     *
-     * 刻意不做"最低金额"筛选:那会让 Total revenue 变成筛选后的子集,
-     * 一份叫 Revenue Report 的东西,总收入不该因为筛选条件而失真。
-     *
-     * 这是给管理层看的营运报表,所以不做"单一客人"的筛选——那是
-     * "3) View Billing Details" 那个 use case 的事,报表不该重复它。
-     *
-     * 等级用 guest.getTier(),那是入住那天的等级快照,反映"这笔消费发生当下客人
-     * 是什么等级",不是现在的等级。
+     * Generates the check-out revenue report.
+     * Bills are filtered by date and guest tier, then sorted by total amount.
+     * The tier stored in the guest record is used for report grouping.
      */
     void doCheckOutRevenueReport() {
         String fromDate = frontDeskCLI.promptReportFromDate();
@@ -376,7 +348,7 @@ public class FrontDeskControl {
         }
 
         for (int i = 0; i < n; i++) {
-            // 帐单身上只有确认号,姓名/等级要靠它回查客人——hash table 查一次 O(1)
+            // Retrieve the bill owner through the guest hash table.
             Guest owner = findGuest(bills[i].getConfirmationNumber());
             frontDeskCLI.displayCheckOutRevenueReportRow(
                     bills[i].getBillingId(),
@@ -390,8 +362,7 @@ public class FrontDeskControl {
         frontDeskCLI.displayCheckOutRevenueReportSummary(n, totalRevenue, totalRoomFee, totalExtras,
                 totalRevenue / n, highestSpend, highestSpendGuest, totalPoints);
 
-        // 贡献最多的那一级要先算出来,不能让 boundary 一边印一边比——
-        // 那样它就得记住上一行的数字,变成在做业务判断了
+        // Find the tier with the highest revenue before displaying the report.
         int topTierPosition = findTopTierPosition(tierRevenue);
 
         frontDeskCLI.displayRevenueByTier(
@@ -402,11 +373,10 @@ public class FrontDeskControl {
     }
 
     /**
-     * 按tier把消费金额累加起来,tier数量不多、清单已知,用两条对应位置的清单存
-     * (名称/金额)做分组,不用Map。
+     * Groups revenue by tier using parallel lists for tier names and amounts.
      */
     private void addToTierRevenue(ListInterface<String> tierNames, ListInterface<Double> tierRevenue,
-                                   String tier, double amount) {
+            String tier, double amount) {
         int position = tierNames.indexOf(tier);
         if (position == -1) {
             tierNames.add(tier);
@@ -417,10 +387,10 @@ public class FrontDeskControl {
     }
 
     /**
-     * 找出收入最高的那一级在清单里的位置。金额一样时取先出现的那一级
-     * (等级本来就是按第一次出现的顺序加进清单的,不另外定优先)。
+     * Finds the position of the tier with the highest revenue.
+     * The first tier is kept when two totals are equal.
      *
-     * @return 位置(从1开始);清单是空的时回传1,呼叫方在 n==0 时已经提前 return 了
+     * @return the 1-based position of the highest-revenue tier
      */
     private int findTopTierPosition(ListInterface<Double> tierRevenue) {
         int topPosition = 1;
@@ -433,13 +403,8 @@ public class FrontDeskControl {
     }
 
     /**
-     * merge sort:按 totalAmount 由大到小。
-     *
-     * 以前要同时搬三个平行阵列(帐单/客人名/等级),因为姓名和等级没存在帐单身上。
-     * 现在改成印每一行时用确认号回查客人(hash table O(1)),就只剩一个阵列要搬,
-     * 合并的程式码短了一半,也不会有"第 i 笔的帐单对到别人的名字"这种风险。
-     *
-     * 合并时用 >= 而不是 >:金额一样的两笔,左半边的先取用,保持稳定排序。
+     * Sorts billing records by total amount in descending order using merge sort.
+     * Equal amounts keep their original order, making the sort stable.
      */
     private void mergeSortBillsByAmountDescending(BillingRecord[] bills, int left, int right) {
         if (left >= right) {
@@ -454,6 +419,7 @@ public class FrontDeskControl {
         int j = middle + 1;
         int k = 0;
         while (i <= middle && j <= right) {
+            // Take the left entry first when amounts are equal to preserve stability.
             if (bills[i].getTotalAmount() >= bills[j].getTotalAmount()) {
                 merged[k] = bills[i];
                 i++;
@@ -478,16 +444,14 @@ public class FrontDeskControl {
         }
     }
 
-    // ========== 报表2:Room Utilisation & Status Report ==========
+    // Report 2: In-House Guests & Outstanding Charges
 
     /**
-     * filter=预计退房日上限+房型,按预计退房日由近到远(merge sort)。
+     * Generates a report of guests who are still checked in.
+     * Records are filtered by room type and expected check-out date,
+     * then sorted by check-out date.
      *
-     * 这份报表看的是"现在还住在店里、还没结帐"的客人——跟报表1(Check-Out Revenue)
-     * 刚好互补:那份看已经收到的钱,这份看还没收的钱,合起来才是完整的财务图像。
-     *
-     * 一行代表一间还被占用的房间(同一位客人订了两间房就会有两行),因为前台和
-     * 客房部关心的单位是房间,不是人。
+     * Each row represents one occupied room.
      */
     void doInHouseGuestsReport() {
         String checkOutBefore = frontDeskCLI.promptReportToDate();
@@ -498,13 +462,8 @@ public class FrontDeskControl {
         ListInterface<String> guestNames = new ArrayBasedList<>();
         ListInterface<String> guestTiers = new ArrayBasedList<>();
 
-        /*
-         * Linear Search
-         *
-         * Filter 1 = 还住在店里(CHECKED_IN);已退房的归报表1管
-         * Filter 2 = 预计退房日在上限之前
-         * Filter 3 = 房型
-         */
+        // Linear search: keep checked-in bookings that match the
+        // check-out date and room type filters.
         Iterator<Guest> guestIterator = guestTable.getIterator();
         while (guestIterator.hasNext()) {
             Guest guest = guestIterator.next();
@@ -538,7 +497,7 @@ public class FrontDeskControl {
             }
         }
 
-        // Merge Sort:预计退房日由近到远——前台最先要处理的是今天就要走的客人
+        // Sort by expected check-out date so the earliest departures appear first.
         sortByCheckOutDate(inHouse, accrued, guestNames, guestTiers);
 
         frontDeskCLI.displayInHouseReportHeader(checkOutBefore, roomTypeFilter);
@@ -567,7 +526,7 @@ public class FrontDeskControl {
                     accrued.getEntry(i));
         }
 
-        // 排序后第一笔就是最快要走的那位
+        // The first booking after sorting is the earliest departure.
         Booking soonest = inHouse.getEntry(1);
         double occupancyRate = roomList.getNumberOfEntries() == 0
                 ? 0.0
@@ -584,8 +543,8 @@ public class FrontDeskControl {
     }
 
     /**
-     * 把在店订单按预计退房日分组,让客房部看得出哪一天会空出几间房。
-     * 资料已经按退房日排好序了,所以同一天的一定连在一起,扫一遍就能分组。
+     * Groups occupied rooms by expected check-out date.
+     * Since bookings are already sorted by date, equal dates are consecutive.
      */
     private void displayDepartureSchedule(ListInterface<Booking> inHouse) {
 
@@ -598,7 +557,7 @@ public class FrontDeskControl {
             String rooms = "";
             int count = 0;
 
-            // 同一天的连续几笔一起收掉
+            // Collect consecutive bookings with the same check-out date.
             while (i <= inHouse.getNumberOfEntries()
                     && date.equals(orDash(inHouse.getEntry(i).getCheckOutDate()))) {
                 rooms = rooms.isEmpty()
@@ -613,19 +572,18 @@ public class FrontDeskControl {
     }
 
     /**
-     * Merge Sort:预计退房日由近到远;同一天的房号小的排前面。
-     *
-     * 四条并行清单(订单/累计房费/客人名/等级)合并时必须一起搬,
-     * 否则第 i 笔的房号会对到别人的名字。
+     * Sorts bookings by expected check-out date using merge sort.
+     * Parallel lists are moved together to keep booking, charge, guest and
+     * tier data aligned.
      */
     private void sortByCheckOutDate(ListInterface<Booking> bookings, ListInterface<Double> accrued,
-                                     ListInterface<String> names, ListInterface<String> tiers) {
+            ListInterface<String> names, ListInterface<String> tiers) {
         mergeSortByCheckOutDate(bookings, accrued, names, tiers, 1, bookings.getNumberOfEntries());
     }
 
     private void mergeSortByCheckOutDate(ListInterface<Booking> bookings, ListInterface<Double> accrued,
-                                          ListInterface<String> names, ListInterface<String> tiers,
-                                          int left, int right) {
+            ListInterface<String> names, ListInterface<String> tiers,
+            int left, int right) {
         if (left >= right) {
             return;
         }
@@ -683,10 +641,12 @@ public class FrontDeskControl {
     }
 
     /**
-     * 排序规则:退房日早的排前面;同一天的房号小的排前面。
-     * 退房日是 "yyyy-MM-dd" 固定宽度,字串字典序刚好等于日期先后。
+     * Compares two bookings for report sorting.
+     * Earlier check-out dates come first, with room number as the tie-breaker.
+     * Non-null dates use yyyy-MM-dd format, so their string order matches date
+     * order.
      *
-     * @return true 代表 a 该排在 b 前面
+     * @return true if a should appear before b
      */
     private boolean departsFirst(Booking a, Booking b) {
         String dateA = orDash(a.getCheckOutDate());
@@ -699,8 +659,7 @@ public class FrontDeskControl {
     }
 
     /**
-     * Filters a guest's full booking history down to the ones still checked
-     * in right now — history already checked out or cancelled isn't eligible.
+     * Returns only bookings that are currently checked in.
      */
     private ListInterface<Booking> findCheckedInBookings(Guest guest) {
         ListInterface<Booking> result = new ArrayBasedList<>();
@@ -714,8 +673,7 @@ public class FrontDeskControl {
     }
 
     /**
-     * Finds the checked-in booking that matches a given room number, so the
-     * staff can select rooms to check out by number rather than booking ID.
+     * Finds a checked-in booking by its assigned room number.
      */
     private Booking findBookingByRoomNumber(ListInterface<Booking> bookings, String roomNumber) {
         for (int i = 1; i <= bookings.getNumberOfEntries(); i++) {
@@ -727,10 +685,11 @@ public class FrontDeskControl {
         return null;
     }
 
-    // ========== 输入重试(格式类校验失败就原地重问,不中止整个操作) ==========
+    // Input validation
 
     /**
-     * 空白代表使用者要取消(回传null),跟"打了但不是8位数字"这种要重问的情况分开。
+     * Re-prompts until a valid 8-digit confirmation number is entered.
+     * Blank input cancels the operation.
      */
     private String promptValidConfirmationNumber() {
         String confirmationNumber;
@@ -747,8 +706,8 @@ public class FrontDeskControl {
     }
 
     /**
-     * frontDeskCLI.promptExtraCharges()空白时回传Double.NaN代表取消,
-     * 跟"打了但是负数/格式不对"这种要重问的情况分开。
+     * Re-prompts until a valid non-negative amount is entered.
+     * Blank input is represented by NaN and cancels the operation.
      */
     private double promptValidExtraCharges() {
         double extraCharges;
@@ -765,23 +724,22 @@ public class FrontDeskControl {
     }
 
     /**
-     * Looks up a guest by confirmation number. The hash table derives the
-     * bucket from the key, so the cost stays O(1) on average no matter how many
-     * guests are registered.
+     * Searches for a guest by confirmation number using the hash table.
+     * Average lookup time is O(1).
      *
      * @param confirmationNumber the 8-digit confirmation number
-     * @return the guest, or null when no guest carries that number
+     * @return the matching guest, or null if not found
      */
     private Guest findGuest(String confirmationNumber) {
         return guestTable.getEntry(new Guest(confirmationNumber));
     }
 
     /**
-     * Finds a room by room number with a linear scan of the room list. Kept
-     * deliberately as the O(n) control group for the search efficiency report.
+     * Searches for a room by room number using a linear scan.
+     * The search takes O(n) time in the worst case.
      *
      * @param roomNumber the room number to find
-     * @return the room, or null when no such room exists
+     * @return the matching room, or null if not found
      */
     private Room findRoom(String roomNumber) {
         for (int i = 1; i <= roomList.getNumberOfEntries(); i++) {
@@ -793,23 +751,13 @@ public class FrontDeskControl {
         return null;
     }
 
-    /**
-     * Replaces a null field with a dash so the console never prints "null".
-     *
-     * @param value the value to display
-     * @return the value, or a dash when the value is null
-     */
+    // Displays "-" instead of null.
     private String orDash(String value) {
         return (value == null) ? "-" : value;
     }
 
     /**
-     * Builds one display block per booking linked to this guest. Each booking
-     * carries its own stay period, so the dates come from the booking rather
-     * than from the guest record.
-     *
-     * @param guest the guest whose bookings are listed
-     * @return the formatted booking lines, or a dash line when none exist
+     * Builds the formatted booking details for a guest.
      */
     private String buildBookingLines(Guest guest) {
 
@@ -843,9 +791,9 @@ public class FrontDeskControl {
         }
         return result;
     }
-    
+
     /**
-     * Builds one charge line per room the guest is still occupying.
+     * Builds one charge line for each room the guest is still occupying.
      */
     private String buildChargeLines(Guest guest) {
 
@@ -870,8 +818,7 @@ public class FrontDeskControl {
     }
 
     /**
-     * Sums the nightly rate times the stay length for every room still
-     * checked in.
+     * Calculates room charges for all currently checked-in bookings.
      */
     private double calculateCurrentCharges(Guest guest) {
 
@@ -890,9 +837,7 @@ public class FrontDeskControl {
         return total;
     }
 
-    /**
-     * @return how many rooms this guest is currently occupying
-     */
+    // Counts rooms currently occupied by the guest.
     private int countCheckedInRooms(Guest guest) {
 
         int count = 0;
@@ -904,9 +849,7 @@ public class FrontDeskControl {
         return count;
     }
 
-    /**
-     * @return the total nights across every room this guest is occupying
-     */
+    // Counts total nights across checked-in bookings.
     private int countCheckedInNights(Guest guest) {
 
         int nights = 0;
@@ -920,7 +863,7 @@ public class FrontDeskControl {
     }
 
     /**
-     * Builds one block per settled bill under this confirmation number.
+     * Builds the display lines for all settled billing records.
      */
     private String buildSettledLines(Guest guest) {
 
@@ -944,9 +887,6 @@ public class FrontDeskControl {
         return result;
     }
 
-    /**
-     * @return the sum of every settled bill under this confirmation number
-     */
     private double calculateSettledTotal(Guest guest) {
 
         double total = 0.0;
@@ -956,9 +896,6 @@ public class FrontDeskControl {
         return total;
     }
 
-    /**
-     * @return the loyalty points earned across every settled bill
-     */
     private int calculateTotalPoints(Guest guest) {
 
         int points = 0;
@@ -967,17 +904,14 @@ public class FrontDeskControl {
         }
         return points;
     }
-    
+
     /**
-     * Counts rooms matching an optional type and an optional status.
+     * Counts rooms matching the given type and status.
+     * A null filter means any value is accepted.
      *
-     * <p>Passing null for either filter means "any value", so this one method
-     * serves every count the availability screen and the utilisation report
-     * need, instead of one method per combination.</p>
-     *
-     * @param typeFilter the room type to match, or null for any type
-     * @param statusFilter the status to match, or null for any status
-     * @return how many rooms match both filters
+     * @param typeFilter   room type to match, or null for any type
+     * @param statusFilter room status to match, or null for any status
+     * @return number of rooms matching both filters
      */
     private int countRooms(String typeFilter, String statusFilter) {
 
@@ -998,14 +932,11 @@ public class FrontDeskControl {
     }
 
     /**
-     * Builds one line per room type: how many are available, how many are not.
-     *
-     * @param typeFilter the single type to report, or null for every type
-     * @return the formatted breakdown lines
+     * Builds the available and unavailable counts for each room type.
      */
     private String buildTypeBreakdownLines(String typeFilter) {
 
-        String[] allTypes = {"Standard", "Deluxe", "Suite"};
+        String[] allTypes = { "Standard", "Deluxe", "Suite" };
         String result = "";
 
         for (int i = 0; i < allTypes.length; i++) {
@@ -1022,15 +953,11 @@ public class FrontDeskControl {
         }
         return result;
     }
+
     /**
-     * Lists every room that is available right now.
-     *
-     * <p>Only an exact AVAILABLE status counts as available. Testing for "not
-     * OCCUPIED" instead would wrongly include rooms still in the housekeeping
-     * pipeline and lead to overselling.</p>
-     *
-     * @param typeFilter the room type to list, or null for every type
-     * @return the formatted room lines
+     * Builds the list of rooms that are currently available.
+     * Only rooms with AVAILABLE status can be sold; rooms still in
+     * housekeeping are excluded.
      */
     private String buildAvailableRoomLines(String typeFilter) {
 

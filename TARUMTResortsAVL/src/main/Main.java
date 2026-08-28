@@ -6,7 +6,7 @@ import control.MainMenuControl;
 /**
  * Main.java - Application entry point.
  *
- * @author 某某
+ * @author Lim Wei Shern
  */
 public class Main {
 
